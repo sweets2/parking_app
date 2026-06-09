@@ -513,6 +513,19 @@ ${contextFilePaths.join('\n')}`,
 const featureSpec = staticReads.featureSpec
 const agentMd     = staticReads.claudeMd
 
+// Filtered views of CLAUDE.md for agents that only need specific sections.
+// The spec linter and evaluator don't need the pipeline description, dependency
+// tables, or context-to-load table — only the constraints they enforce.
+const _hcStart          = agentMd.indexOf('\n## Hard constraints')
+const _hcEnd            = agentMd.indexOf('\n## ', _hcStart + 1)
+const hardConstraintsOnly = agentMd.slice(_hcStart, _hcEnd)
+
+// Evaluator also gets Known gotchas — needed to correctly judge feature-specific
+// implementation choices (e.g. F-01.9's Webflow CSS selectors).
+const _gotchasStart = agentMd.indexOf('\n## Known gotchas')
+const _gotchasEnd   = agentMd.indexOf('\n## ', _gotchasStart + 1)
+const evalMd        = hardConstraintsOnly + agentMd.slice(_gotchasStart, _gotchasEnd)
+
 // ─── Phase 1.5: Validate Spec ───────────────────────────────────────────────
 
 phase('Validate')
@@ -555,7 +568,7 @@ ${outputFiles.join('\n')}
 ${isMutationHint ? 'Yes — output_files includes at least one file already written by a DONE feature.' : 'No — all output files are new.'}
 
 === CLAUDE.md CONSTRAINTS ===
-${agentMd}
+${hardConstraintsOnly}
 
 === FEATURE SPEC ===
 ${featureSpec}`
@@ -757,7 +770,7 @@ while (revision <= MAX_REVISIONS) {
     ? `${EVALUATOR_TEMPLATE}
 
 === PROJECT PROCESS AND CONSTRAINTS (CLAUDE.md) ===
-${agentMd}
+${evalMd}
 
 This is a DISCOVERY feature — it produces documentation files, not TypeScript code. There are no tests to run.
 
@@ -785,7 +798,7 @@ Issue your verdict now.`
     : `${EVALUATOR_TEMPLATE}
 
 === PROJECT PROCESS AND CONSTRAINTS (CLAUDE.md) ===
-${agentMd}
+${evalMd}
 
 === FEATURE SPEC ===
 ${featureSpec}${preflightNotes ? `\n\n## Pre-flight Spec Notes\nThe spec linter flagged these ambiguities before the creator ran. The creator was aware of them — factor this in before flagging related implementation choices as wrong:\n${preflight.issues.map(i => `- ${i.text}`).join('\n')}` : ''}
