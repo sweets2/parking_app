@@ -5,3 +5,7 @@ data/latest.json
 data/street-cleaning.json
 harness/metrics.jsonl
 harness/stuck/
+generated_app/node_modules/
+generated_app/dist/
+generated_app/data/latest.json
+generated_app/data/street-cleaning.json

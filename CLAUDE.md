@@ -1,3 +1,5 @@
+> **Output directory:** All source files are written under `generated_app/`. Paths throughout this document are relative to that directory.
+
 # Agent Operating Procedure
 
 This document is the operating procedure for every agent that implements a feature in this project. Read it fully before writing any code.

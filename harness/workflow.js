@@ -12,6 +12,8 @@ export const meta = {
   ],
 }
 
+const OUTPUT_DIR = 'generated_app'
+
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
 const TEST_SCHEMA = {
@@ -91,6 +93,15 @@ function fmtRegressionAttribution(baseline, currentResult, owningFiles) {
     currentResult.testFailures.forEach(f => lines.push(`  ✗ ${f.test}\n    ${f.error}`))
   }
   return lines.join('\n')
+}
+
+// Prefix a file path with OUTPUT_DIR if it lives in the generated project.
+// Root-level scaffolding (docs/, data/, ARCHITECTURE.md, specs/) is not prefixed.
+const GENERATED_PREFIXES = ['app/', 'shared/', 'fetcher/', 'tests/', '.github/', 'package.json', 'tsconfig.json', 'vitest.config.ts']
+function toOutputPath(f) {
+  return GENERATED_PREFIXES.some(p => f.startsWith(p) || f === p.replace(/\/$/, ''))
+    ? `${OUTPUT_DIR}/${f}`
+    : f
 }
 
 // Strips sections from contextContent whose file paths overlap with outputFiles.
@@ -461,7 +472,9 @@ log(`Target: ${targetId} — ${targetName}`)
 log(`Output files expected: ${outputFiles.join(', ')}`)
 log(`Tokens spent: ${budget.spent().toLocaleString()}`)
 
-const featureTestFiles = outputFiles.filter(f => f.startsWith('tests/'))
+const featureTestFiles  = outputFiles.filter(f => f.startsWith('tests/'))
+const outputPaths       = outputFiles.map(f => `${OUTPUT_DIR}/${f}`)
+const featureTestPaths  = featureTestFiles.map(f => `${OUTPUT_DIR}/${f}`)
 
 // Detect mutation features: output files this feature modifies that were already written by a DONE feature.
 // Pure JS — no agent call needed.
@@ -479,6 +492,7 @@ for (const mutatedFile of mutatedFiles) {
   }
 }
 const isMutationFeature = mutatedFiles.length > 0 && owningTestFiles.length > 0
+const owningTestPaths   = owningTestFiles.map(f => `${OUTPUT_DIR}/${f}`)
 
 const tokensAtStart    = budget.spent()
 const metricVerdicts   = []   // e.g. ["FAIL", "NEEDS-REVISION", "PASS"]
@@ -505,7 +519,7 @@ If a file does not exist yet, write:
 === FILE: <path> === (FILE NOT YET CREATED)
 
 Files to read:
-${contextFilePaths.join('\n')}`,
+${contextFilePaths.map(toOutputPath).join('\n')}`,
         { label: `read-context:${targetId}`, phase: 'Setup' }
       )
     : Promise.resolve('(no context files for this feature)'),
@@ -604,10 +618,10 @@ let baselineResult = null
 if (isMutationFeature && runTests) {
   phase('Baseline')
   log(`Mutation feature — modifies: ${mutatedFiles.join(', ')}`)
-  log(`Recording baseline for owning tests: ${owningTestFiles.join(', ')}`)
+  log(`Recording baseline for owning tests: ${owningTestPaths.join(', ')}`)
   baselineResult = await agent(
-    `Run the following test files in the project root (the directory containing package.json, not harness/):
-npx vitest run ${owningTestFiles.join(' ')}
+    `Run the following test files from the project root:
+cd ${OUTPUT_DIR} && npx vitest run ${owningTestPaths.join(' ')}
 
 Return results.`,
     { schema: BASELINE_SCHEMA, label: `baseline:${targetId}`, phase: 'Baseline' }
@@ -640,7 +654,7 @@ ${contextContent}
 
 === EXPECTED OUTPUT FILES ===
 You must write all of these files to disk:
-${outputFiles.join('\n')}
+${outputPaths.join('\n')}
 
 Begin now. Write tests first, then implementation. Write every file using the Write or Edit tool.
 Do not produce any prose output — only write the files listed above.`,
@@ -658,14 +672,14 @@ If a file does not exist, write:
 === FILE: <path> === MISSING
 
 Files to read:
-${outputFiles.join('\n')}`
+${outputPaths.join('\n')}`
 
 let writtenFiles = await agent(
   READ_FILES_PROMPT,
   { label: `read-output:${targetId}:initial`, phase: 'Create' }
 )
 
-const missing = outputFiles.filter(f => writtenFiles.includes(`=== FILE: ${f} === MISSING`))
+const missing = outputPaths.filter(f => writtenFiles.includes(`=== FILE: ${f} === MISSING`))
 const allPresent = missing.length === 0
 
 if (!allPresent) {
@@ -679,7 +693,7 @@ let preEvalResult = null
 if (preEvalCommand && allPresent) {
   log(`Running pre-eval validation...`)
   preEvalResult = await agent(
-    `Run this command in the project root (the directory containing package.json, not harness/):
+    `Run this command in the ${OUTPUT_DIR}/ directory (cd ${OUTPUT_DIR} first — that's where package.json lives):
 ${preEvalCommand}
 
 Capture the full stdout and stderr combined. Return:
@@ -694,20 +708,20 @@ Capture the full stdout and stderr combined. Return:
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function buildVerifyPrompt(featureTestFiles) {
-  const hasFeatureTests = featureTestFiles.length > 0
-  return `Run the parking app test suite in the project root (directory containing package.json, not harness/).
+function buildVerifyPrompt(featureTestPaths) {
+  const hasFeatureTests = featureTestPaths.length > 0
+  return `Run the parking app test suite. All commands run from the ${OUTPUT_DIR}/ directory (cd ${OUTPUT_DIR} first — that's where package.json lives).
 
 Run these steps in order:
-1. test -d node_modules || npm install
+1. cd ${OUTPUT_DIR} && (test -d node_modules || npm install)
 ${hasFeatureTests
-  ? `2. npx vitest run ${featureTestFiles.join(' ')}
+  ? `2. cd ${OUTPUT_DIR} && npx vitest run ${featureTestPaths.join(' ')}
    (Feature tests only — isolates whether this feature's own implementation is correct)
-3. npm test
+3. cd ${OUTPUT_DIR} && npm test
    (Full suite — catches regressions in other features)
-4. npm run typecheck`
-  : `2. npm test
-3. npm run typecheck`}
+4. cd ${OUTPUT_DIR} && npm run typecheck`
+  : `2. cd ${OUTPUT_DIR} && npm test
+3. cd ${OUTPUT_DIR} && npm run typecheck`}
 
 Return:
 - featureTestsPassed: ${hasFeatureTests ? 'true if step 2 exits code 0' : 'omit this field (no feature test files for this feature)'}
@@ -743,7 +757,7 @@ if (!runTests) {
   }
 } else {
   testResult = await agent(
-    buildVerifyPrompt(featureTestFiles),
+    buildVerifyPrompt(featureTestPaths),
     { schema: TEST_SCHEMA, label: `verify:${targetId}`, phase: 'Verify' }
   )
   log(`Feature: ${testResult.featureTestsPassed == null ? 'n/a' : testResult.featureTestsPassed ? 'PASS ✓' : 'FAIL ✗'} | Suite: ${testResult.testsPassed ? 'PASS ✓' : 'FAIL ✗'} | Typecheck: ${testResult.typecheckPassed ? 'PASS ✓' : 'FAIL ✗'}`)
@@ -766,7 +780,7 @@ let revision = 0
 let noChangeDetected = false
 const MAX_REVISIONS = 2
 
-const hashFilesPrompt = `Run in the project root: sha256sum ${outputFiles.join(' ')} 2>/dev/null | sort\nReturn the raw stdout as "hashes".`
+const hashFilesPrompt = `Run in the project root: sha256sum ${outputPaths.join(' ')} 2>/dev/null | sort\nReturn the raw stdout as "hashes".`
 let prevHashes = (await agent(
   hashFilesPrompt,
   { schema: FILE_HASHES_SCHEMA, label: `hash-output:${targetId}:initial`, phase: 'Evaluate' }
@@ -846,7 +860,7 @@ Issue your verdict now.`
 ${agentMd}
 
 === CONTEXT FILES ===
-${filterContextForReviser(contextContent, outputFiles)}
+${filterContextForReviser(contextContent, outputPaths)}
 
 === CURRENT IMPLEMENTATION ===
 ${writtenFiles}
@@ -863,7 +877,7 @@ ${!runTests && preEvalResult
   ? (preEvalResult.passed
     ? `Structural validation: PASS ✓\n${preEvalResult.output}`
     : `Structural validation: FAIL ✗\n${preEvalResult.output}\n\nFix the above structural failures in your output files.`)
-  : fmtTestResults(testResult) + fmtRegressionAttribution(baselineResult, testResult, owningTestFiles)
+  : fmtTestResults(testResult) + fmtRegressionAttribution(baselineResult, testResult, owningTestPaths)
 }
 
 === AUTHORITATIVE FEATURE SPEC ===
@@ -893,7 +907,7 @@ ${featureSpec}`,
   // Re-run tests after revision (or re-run pre-eval validation for discovery features)
   if (!runTests && preEvalCommand) {
     preEvalResult = await agent(
-      `Run this command in the project root (the directory containing package.json, not harness/):
+      `Run this command in the ${OUTPUT_DIR}/ directory (cd ${OUTPUT_DIR} first — that's where package.json lives):
 ${preEvalCommand}
 
 Capture the full stdout and stderr combined. Return:
@@ -904,7 +918,7 @@ Capture the full stdout and stderr combined. Return:
     log(`Re-verify r${revision}: pre-eval ${preEvalResult.passed ? 'PASS ✓' : 'FAIL ✗'} — ${preEvalResult.output.split('\n')[0]}`)
   } else {
     testResult = await agent(
-      buildVerifyPrompt(featureTestFiles),
+      buildVerifyPrompt(featureTestPaths),
       { schema: TEST_SCHEMA, label: `reverify:${targetId}:r${revision}`, phase: 'Evaluate' }
     )
     log(`Re-verify r${revision}: Feature ${testResult.featureTestsPassed == null ? 'n/a' : testResult.featureTestsPassed ? 'PASS ✓' : 'FAIL ✗'} | Suite ${testResult.testsPassed ? 'PASS ✓' : 'FAIL ✗'} | Typecheck ${testResult.typecheckPassed ? 'PASS ✓' : 'FAIL ✗'}`)
@@ -950,7 +964,7 @@ METRICS_EOF`,
   if (postBuildCommand) {
     log(`Running post-build: ${postBuildCommand}`)
     await agent(
-      `Run this command in the project root (the directory containing package.json, not harness/):
+      `Run this command in the ${OUTPUT_DIR}/ directory (cd ${OUTPUT_DIR} first — that's where package.json lives):
 ${postBuildCommand}
 
 Capture the full output. If it succeeds, report success.

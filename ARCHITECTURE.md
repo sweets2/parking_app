@@ -66,30 +66,34 @@ Both layers run the same pipeline: fetch → filter → evaluate spot → update
 ## File Structure
 
 ```
-hoboken-parking/
-├── shared/
-│   ├── types.ts            sign types shared between fetcher and app
-│   ├── parking-logic.ts    all pure logic: filtering, distance, countdowns
-│   └── storage.ts          localStorage interface (injectable for tests)
-├── fetcher/
-│   └── fetch.ts            hits Hoboken API, validates, writes latest.json
-├── app/
-│   ├── index.html          single HTML shell
-│   ├── style.css           mobile-first styles
-│   ├── app.ts              state machine, wires all modules together
-│   ├── map.ts              Leaflet wrapper (only file that touches L.*)
-│   ├── ui.ts               DOM rendering helpers
-│   ├── geo.ts              street name lookup via Nominatim reverse geocoding
-│   ├── manifest.json       PWA install metadata
-│   └── sw.ts               service worker (offline caching)
-├── data/
-│   └── latest.json         written daily by fetcher, read by app
-├── docs/                   API and schema documentation written by discovery features
-├── harness/
-│   └── stuck/              stuck-reason files written when a feature exceeds MAX_REVISIONS
-├── specs/                  feature specs written before any code
-├── tests/                  Vitest test suite using latest.json as fixture
-└── .github/workflows/      GitHub Action: test → typecheck → fetch → deploy
+parking_app/                  ← repo root (scaffolding only)
+├── data/                     seed data read by fetcher and agents
+├── docs/                     API and schema documentation (discovery features)
+├── harness/                  workflow scripts and feature state
+│   └── stuck/                stuck-reason files when a feature exceeds MAX_REVISIONS
+├── specs/                    feature specs written before any code
+├── CLAUDE.md / ARCHITECTURE.md
+└── generated_app/            ← everything the harness builds (rm -rf to reset)
+    ├── shared/
+    │   ├── types.ts          sign types shared between fetcher and app
+    │   ├── parking-logic.ts  all pure logic: filtering, distance, countdowns
+    │   └── storage.ts        localStorage interface (injectable for tests)
+    ├── fetcher/
+    │   └── fetch.ts          hits Hoboken API, validates, writes latest.json
+    ├── app/
+    │   ├── index.html        single HTML shell
+    │   ├── style.css         mobile-first styles
+    │   ├── app.ts            state machine, wires all modules together
+    │   ├── map.ts            Leaflet wrapper (only file that touches L.*)
+    │   ├── ui.ts             DOM rendering helpers
+    │   ├── geo.ts            street name lookup via Nominatim reverse geocoding
+    │   ├── manifest.json     PWA install metadata
+    │   └── sw.ts             service worker (offline caching)
+    ├── tests/                Vitest test suite using latest.json as fixture
+    ├── package.json
+    ├── tsconfig.json
+    ├── vitest.config.ts
+    └── .github/workflows/    GitHub Action: test → typecheck → fetch → deploy
 ```
 
 ---
