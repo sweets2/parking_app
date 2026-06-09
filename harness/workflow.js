@@ -126,6 +126,24 @@ function filterContextForReviser(contextContent, outputFiles) {
   return result.trim() || '(all context files are covered by the current implementation block)'
 }
 
+// Marks a feature BLOCKED and writes its stuck-reason file in parallel.
+// label: optional suffix appended to agent labels (e.g. 'lint' → 'mark-blocked-lint').
+// Returns the standard { blocked: true, feature, reason, ...extra } result object.
+async function blockFeature(featureId, stuckContent, { label = '', phase, reason, ...returnExtra }) {
+  const labelSuffix = label ? `-${label}` : ''
+  await parallel([
+    () => agent(
+      `Run: node harness/update-status.js --feature ${featureId} --status BLOCKED`,
+      { label: `mark-blocked${labelSuffix}`, phase }
+    ),
+    () => agent(
+      `Write to harness/stuck/${featureId}_stuck_reason.md (create file, overwrite if exists):\n${stuckContent}`,
+      { label: `write-stuck${labelSuffix}`, phase }
+    ),
+  ])
+  return { blocked: true, feature: featureId, reason, ...returnExtra }
+}
+
 const VERDICT_SCHEMA = {
   type: 'object',
   required: ['result', 'brief', 'failures'],
@@ -514,17 +532,10 @@ if (!runTests) {
     const blockedSpecStuck = `# ${targetId} — Blocked at spec validation\n\n## Reason\nSpec validation failed before the Creator ran.\n\n## Issues\n${specValidation.issues.map(i => `- ${i}`).join('\n')}`
     // Mutate only the target feature's status field — avoids passing the full JSON blob
     // through an agent prompt, which risks reformatting or truncation.
-    await parallel([
-      () => agent(
-        `Run: node harness/update-status.js --feature ${targetId} --status BLOCKED`,
-        { label: 'mark-blocked-invalid-spec', phase: 'Validate' }
-      ),
-      () => agent(
-        `Write to harness/stuck/${targetId}_stuck_reason.md (create file, overwrite if exists):\n${blockedSpecStuck}`,
-        { label: 'write-stuck-invalid-spec', phase: 'Validate' }
-      ),
-    ])
-    return { blocked: true, feature: targetId, reason: 'Spec validation failed: ' + specValidation.issues.join('; ') }
+    return await blockFeature(targetId, blockedSpecStuck, {
+      label: 'invalid-spec', phase: 'Validate',
+      reason: 'Spec validation failed: ' + specValidation.issues.join('; '),
+    })
   }
   log('Spec valid ✓')
 }
@@ -559,17 +570,10 @@ ${featureSpec}`
     log(`Spec quality BLOCK — ${preflight.issues.filter(i => i.severity === 'ERROR').length} error(s) found`)
     preflight.issues.filter(i => i.severity === 'ERROR').forEach(i => log(`  ✗ ${i.text}`))
     const blockedLintStuck = `# ${targetId} — Blocked at spec quality lint\n\n## Reason\nSpec quality linter found structural problems before the Creator ran.\n\n## Issues\n${errorList}`
-    await parallel([
-      () => agent(
-        `Run: node harness/update-status.js --feature ${targetId} --status BLOCKED`,
-        { label: 'mark-blocked-lint', phase: 'Validate' }
-      ),
-      () => agent(
-        `Write to harness/stuck/${targetId}_stuck_reason.md (create file, overwrite if exists):\n${blockedLintStuck}`,
-        { label: 'write-stuck-lint', phase: 'Validate' }
-      ),
-    ])
-    return { blocked: true, feature: targetId, reason: 'Spec quality lint: ' + preflight.issues.filter(i => i.severity === 'ERROR').map(i => i.text).join('; ') }
+    return await blockFeature(targetId, blockedLintStuck, {
+      label: 'lint', phase: 'Validate',
+      reason: 'Spec quality lint: ' + preflight.issues.filter(i => i.severity === 'ERROR').map(i => i.text).join('; '),
+    })
   }
 
   if (preflight.verdict === 'WARN') {
@@ -979,18 +983,10 @@ If it fails, report the error — but this does NOT revert the DONE status; it i
       ? testResult.typecheckErrors.map(e => `- ${e}`).join('\n')
       : '(none)',
   ].join('\n')
-  await parallel([
-    () => agent(
-      `Run: node harness/update-status.js --feature ${targetId} --status BLOCKED`,
-      { label: 'mark-blocked', phase: 'Update' }
-    ),
-    () => agent(
-      `Write to harness/stuck/${targetId}_stuck_reason.md (create file, overwrite if exists):\n${stuckFileContent}`,
-      { label: 'write-stuck', phase: 'Update' }
-    ),
-  ])
   log(`✗ ${targetId} BLOCKED after ${revision} revision(s) — see harness/stuck/${targetId}_stuck_reason.md`)
   log(`  Reason: ${failReason}`)
   log(`Tokens used this run: ${budget.spent().toLocaleString()}`)
-  return { blocked: true, feature: targetId, revisions: revision, reason: failReason }
+  return await blockFeature(targetId, stuckFileContent, {
+    phase: 'Update', reason: failReason, revisions: revision,
+  })
 }
