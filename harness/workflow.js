@@ -1006,7 +1006,42 @@ If it fails, report the error — but this does NOT revert the DONE status; it i
   log(`✗ ${targetId} BLOCKED after ${revision} revision(s) — see harness/stuck/${targetId}_stuck_reason.md`)
   log(`  Reason: ${failReason}`)
   log(`Tokens used this run: ${budget.spent().toLocaleString()}`)
-  return await blockFeature(targetId, stuckFileContent, {
+  const blockedResult = await blockFeature(targetId, stuckFileContent, {
     phase: 'Update', reason: failReason, revisions: revision,
   })
+  // Cross-run spec analysis: if this feature has blocked before (≥2 records in metrics.jsonl
+  // including the current run), identify repeating failure strings and append targeted hints.
+  // Skipped on first-ever block — no prior runs to cross-reference.
+  await agent(
+    `Read harness/metrics.jsonl. Parse each line as JSON and collect all records where the "feature" field equals "${targetId}".
+
+If fewer than 2 records exist for this feature, do nothing and return immediately.
+
+If 2 or more records exist:
+1. Collect the "failures" arrays from every record for this feature.
+2. Find failure strings that appear in more than one record (repeating failures).
+3. If there are no repeating failures, do nothing and return immediately.
+4. Classify each repeating failure as one of:
+   - spec_ambiguity: the spec does not clearly define expected behavior for this case
+   - constraint_violation: a CLAUDE.md hard constraint is not prominently stated in the spec
+   - model_confusion: the model understands the spec but makes a reasoning error (hints cannot fix this)
+5. For spec_ambiguity and constraint_violation failures only, append the section below to specs/${targetId}.md.
+   Do NOT remove or replace any existing content (including any existing "## Hints for Retry" section).
+
+Section to append (fill in the <...> placeholders with actual content):
+
+## Auto-Analysis (recurring failures)
+
+> Auto-generated after multiple blocked runs. Additive only — does not change spec requirements.
+
+**Failures repeated across runs:** <comma-separated list of the repeating failure strings>
+
+### Suggested spec amendments
+<one bullet per spec_ambiguity or constraint_violation failure — each bullet must be a concrete suggestion: quote the ambiguous or missing clause and state exactly what the spec should say instead>
+
+If all repeating failures are model_confusion, note them without a Suggested amendments section.
+Do not write this section at all if there are no repeating failures.`,
+    { label: `spec-analyze:${targetId}`, phase: 'Update' }
+  )
+  return blockedResult
 }
