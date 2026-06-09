@@ -407,21 +407,21 @@ if (!runTests) {
   if (!specValidation.valid) {
     specValidation.issues.forEach(i => log(`  ⚠ ${i}`))
     log(`Spec invalid — fix specs/${targetId}.md before retrying ${targetId}`)
-    const blockedSpecJson = JSON.stringify(
-      allFrontMatter.map(f => f.id === targetId ? { ...f, status: 'BLOCKED' } : f),
-      null, 2
-    )
     const blockedSpecStuck = `# ${targetId} — Blocked at spec validation\n\n## Reason\nSpec validation failed before the Creator ran.\n\n## Issues\n${specValidation.issues.map(i => `- ${i}`).join('\n')}`
-    await agent(
-      `Write these two files exactly as given — do not alter any content:
-
-1. Write to harness/features.json (overwrite entire file):
-${blockedSpecJson}
-
-2. Write to harness/stuck/${targetId}_stuck_reason.md:
-${blockedSpecStuck}`,
-      { label: 'mark-blocked-invalid-spec', phase: 'Validate' }
-    )
+    // Mutate only the target feature's status field — avoids passing the full JSON blob
+    // through an agent prompt, which risks reformatting or truncation.
+    await parallel([
+      () => agent(
+        `Run these two commands in the project root:
+node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const f=d.find(f=>f.id==='${targetId}');if(!f)throw new Error('Feature not found');f.status='BLOCKED';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');"
+node -e "const d=JSON.parse(require('fs').readFileSync('harness/features.json','utf8'));const f=d.find(f=>f.id==='${targetId}');if(!f||f.status!=='BLOCKED')throw new Error('Verification failed: '+f?.status);console.log('Verified '+f.id+' = '+f.status);"`,
+        { label: 'mark-blocked-invalid-spec', phase: 'Validate' }
+      ),
+      () => agent(
+        `Write to harness/stuck/${targetId}_stuck_reason.md (create file, overwrite if exists):\n${blockedSpecStuck}`,
+        { label: 'write-stuck-invalid-spec', phase: 'Validate' }
+      ),
+    ])
     return { blocked: true, feature: targetId, reason: 'Spec validation failed: ' + specValidation.issues.join('; ') }
   }
   log('Spec valid ✓')
@@ -702,12 +702,10 @@ The file holds one JSON object per line. Do not modify existing lines — only a
 )
 
 if (verdict && verdict.result === 'PASS') {
-  const doneFeaturesJson = JSON.stringify(
-    allFrontMatter.map(f => f.id === targetId ? { ...f, status: 'DONE' } : f),
-    null, 2
-  )
   await agent(
-    `Write to harness/features.json (overwrite entire file — do not alter any content):\n${doneFeaturesJson}`,
+    `Run these two commands in the project root:
+node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const f=d.find(f=>f.id==='${targetId}');if(!f)throw new Error('Feature not found');f.status='DONE';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');"
+node -e "const d=JSON.parse(require('fs').readFileSync('harness/features.json','utf8'));const f=d.find(f=>f.id==='${targetId}');if(!f||f.status!=='DONE')throw new Error('Verification failed: '+f?.status);console.log('Verified '+f.id+' = '+f.status);"`,
     { label: 'mark-done', phase: 'Update' }
   )
   log(`✓ ${targetId} complete and marked DONE`)
@@ -735,10 +733,6 @@ If it fails, report the error — but this does NOT revert the DONE status; it i
     ? verdict.failures.map(f => `- ${f}`).join('\n')
     : '(none listed)'
 
-  const blockedFeaturesJson = JSON.stringify(
-    allFrontMatter.map(f => f.id === targetId ? { ...f, status: 'BLOCKED' } : f),
-    null, 2
-  )
   const stuckFileContent = [
     `# ${targetId} — Stuck after ${revision} revision(s)`,
     ``,
@@ -761,16 +755,18 @@ If it fails, report the error — but this does NOT revert the DONE status; it i
       ? testResult.typecheckErrors.map(e => `- ${e}`).join('\n')
       : '(none)',
   ].join('\n')
-  await agent(
-    `Write these two files exactly as given — do not alter any content:
-
-1. Write to harness/features.json (overwrite entire file):
-${blockedFeaturesJson}
-
-2. Write to harness/stuck/${targetId}_stuck_reason.md:
-${stuckFileContent}`,
-    { label: 'mark-blocked', phase: 'Update' }
-  )
+  await parallel([
+    () => agent(
+      `Run these two commands in the project root:
+node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const f=d.find(f=>f.id==='${targetId}');if(!f)throw new Error('Feature not found');f.status='BLOCKED';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');"
+node -e "const d=JSON.parse(require('fs').readFileSync('harness/features.json','utf8'));const f=d.find(f=>f.id==='${targetId}');if(!f||f.status!=='BLOCKED')throw new Error('Verification failed: '+f?.status);console.log('Verified '+f.id+' = '+f.status);"`,
+      { label: 'mark-blocked', phase: 'Update' }
+    ),
+    () => agent(
+      `Write to harness/stuck/${targetId}_stuck_reason.md (create file, overwrite if exists):\n${stuckFileContent}`,
+      { label: 'write-stuck', phase: 'Update' }
+    ),
+  ])
   log(`✗ ${targetId} BLOCKED after ${revision} revision(s) — see harness/stuck/${targetId}_stuck_reason.md`)
   log(`  Reason: ${failReason}`)
   log(`Tokens used this run: ${budget.spent().toLocaleString()}`)
