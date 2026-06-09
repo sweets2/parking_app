@@ -681,7 +681,7 @@ Return:
   log(`Feature: ${testResult.featureTestsPassed == null ? 'n/a' : testResult.featureTestsPassed ? 'PASS ✓' : 'FAIL ✗'} | Suite: ${testResult.testsPassed ? 'PASS ✓' : 'FAIL ✗'} | Typecheck: ${testResult.typecheckPassed ? 'PASS ✓' : 'FAIL ✗'}`)
   log(`Tokens spent: ${budget.spent().toLocaleString()}`)
 }
-metricTestRuns.push({ revision: 0, featureTestsPassed: testResult.featureTestsPassed ?? null, featurePassed: testResult.featurePassedCount ?? null, featureFailed: testResult.featureFailedCount ?? null, passed: testResult.passedCount ?? null, failed: testResult.failedCount ?? null, typecheckPassed: testResult.typecheckPassed })
+metricTestRuns.push({ revision: 0, featureTestsPassed: testResult.featureTestsPassed ?? null, featurePassedCount: testResult.featurePassedCount ?? null, featureFailedCount: testResult.featureFailedCount ?? null, passed: testResult.passedCount ?? null, failed: testResult.failedCount ?? null, typecheckPassed: testResult.typecheckPassed })
 
 // ─── Phase 4: Evaluate ──────────────────────────────────────────────────────
 
@@ -841,7 +841,7 @@ Return the same fields as the initial verify run:
     )
     log(`Re-verify r${revision}: Feature ${testResult.featureTestsPassed == null ? 'n/a' : testResult.featureTestsPassed ? 'PASS ✓' : 'FAIL ✗'} | Suite ${testResult.testsPassed ? 'PASS ✓' : 'FAIL ✗'} | Typecheck ${testResult.typecheckPassed ? 'PASS ✓' : 'FAIL ✗'}`)
   }
-  metricTestRuns.push({ revision, featureTestsPassed: testResult.featureTestsPassed ?? null, featurePassed: testResult.featurePassedCount ?? null, featureFailed: testResult.featureFailedCount ?? null, passed: testResult.passedCount ?? null, failed: testResult.failedCount ?? null, typecheckPassed: testResult.typecheckPassed })
+  metricTestRuns.push({ revision, featureTestsPassed: testResult.featureTestsPassed ?? null, featurePassedCount: testResult.featurePassedCount ?? null, featureFailedCount: testResult.featureFailedCount ?? null, passed: testResult.passedCount ?? null, failed: testResult.failedCount ?? null, typecheckPassed: testResult.typecheckPassed })
 
   // Re-read what the Reviser wrote — feeds the next iteration's evaluator
   writtenFiles = await agent(

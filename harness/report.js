@@ -327,7 +327,7 @@ function printFeatureDrill(byFeature, id) {
         const ft = t.featureTestsPassed == null ? "—" : t.featureTestsPassed ? "✓" : "✗";
         const full = t.typecheckPassed ? "✓ typecheck" : "✗ typecheck";
         console.log(
-          `    rev ${t.revision}: feature ${ft} (${t.featurePassed ?? "?"}/${(t.featurePassed ?? 0) + (t.featureFailed ?? 0)})` +
+          `    rev ${t.revision}: feature ${ft} (${t.featurePassedCount ?? "?"}/${(t.featurePassedCount ?? 0) + (t.featureFailedCount ?? 0)})` +
           `  full suite ${t.passed ?? "?"}/${(t.passed ?? 0) + (t.failed ?? 0)}` +
           `  ${full}`
         );
