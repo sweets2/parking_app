@@ -301,11 +301,11 @@ for (const diagnosis of retryQueue) {
 
   log(`Resetting ${id} to TODO and deleting stuck file...`)
 
-  // Reset status to TODO + delete stuck file (two deterministic node commands)
+  // Reset status to TODO via update-status.js (validates transition), then delete stuck file
   await agent(
-    `Run these two commands in the project root:
-node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const f=d.find(f=>f.id==='${id}');if(!f)throw new Error('Feature not found');f.status='TODO';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');console.log('Reset ${id} to TODO');"
-node -e "const fs=require('fs'),p='harness/stuck/${id}_stuck_reason.md';if(fs.existsSync(p)){fs.unlinkSync(p);console.log('Deleted '+p);}else{console.log('No stuck file to delete');}"`,
+    `In the project root, run these two commands:
+node harness/update-status.js --feature ${id} --status TODO
+rm -f harness/stuck/${id}_stuck_reason.md`,
     { label: `reset:${id}`, phase: 'Retry' }
   )
 

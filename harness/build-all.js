@@ -14,8 +14,12 @@ const blockedFeatures = []
 if (retryBlocked) {
   log('retryBlocked=true — resetting all BLOCKED features to TODO...')
   await agent(
-    `Run this command in the project root:
-node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const blocked=d.filter(f=>f.status==='BLOCKED');blocked.forEach(f=>{f.status='TODO';const sp='harness/stuck/'+f.id+'_stuck_reason.md';if(fs.existsSync(sp)){fs.unlinkSync(sp);}});fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');console.log('Reset '+blocked.length+' feature(s): '+blocked.map(f=>f.id).join(', '));"`,
+    `In the project root, reset all BLOCKED features to TODO using update-status.js.
+Steps:
+1. Read harness/features.json and collect the ids of all features where status === "BLOCKED".
+2. For each id, run: node harness/update-status.js --feature <id> --status TODO
+3. For each id, run: rm -f harness/stuck/<id>_stuck_reason.md
+Log each command and its output.`,
     { label: 'retry-blocked-reset', phase: 'Build' }
   )
 }
