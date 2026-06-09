@@ -323,6 +323,14 @@ if (requestedFeature) {
     log(`Blocked: unmet dependencies: ${unmetDeps.join(', ')}`)
     return { done: true, reason: `Unmet deps: ${unmetDeps.join(', ')}` }
   }
+  if (args && args.retry === true && target.status === 'BLOCKED') {
+    log(`Retrying BLOCKED feature ${target.id} — resetting to TODO`)
+    await agent(
+      `Run this command in the project root:
+node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const f=d.find(f=>f.id==='${target.id}');if(!f)throw new Error('Feature not found');f.status='TODO';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');"`,
+      { label: `retry-reset:${target.id}`, phase: 'Setup' }
+    )
+  }
 } else {
   target = features.find(f => {
     if (f.status !== 'TODO') return false
@@ -769,6 +777,11 @@ node -e "const d=JSON.parse(require('fs').readFileSync('harness/features.json','
     { label: 'mark-done', phase: 'Update' }
   )
   log(`✓ ${targetId} complete and marked DONE`)
+  await agent(
+    `Run this command in the project root:
+node -e "const fs=require('fs'),p='harness/stuck/${targetId}_stuck_reason.md';if(fs.existsSync(p)){fs.unlinkSync(p);console.log('Deleted '+p);}else{console.log('No stuck file');}"`,
+    { label: `cleanup-stuck:${targetId}`, phase: 'Update' }
+  )
 
   // Run post-build command if this feature has one (e.g., npm install, npm run fetch)
   if (postBuildCommand) {

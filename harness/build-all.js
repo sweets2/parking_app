@@ -7,8 +7,18 @@ export const meta = {
 phase('Build')
 
 const stopOnBlocked = args && args.stopOnBlocked === true
+const retryBlocked = args && args.retryBlocked === true
 let completed = 0
 const blockedFeatures = []
+
+if (retryBlocked) {
+  log('retryBlocked=true — resetting all BLOCKED features to TODO...')
+  await agent(
+    `Run this command in the project root:
+node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const blocked=d.filter(f=>f.status==='BLOCKED');blocked.forEach(f=>{f.status='TODO';const sp='harness/stuck/'+f.id+'_stuck_reason.md';if(fs.existsSync(sp)){fs.unlinkSync(sp);}});fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');console.log('Reset '+blocked.length+' feature(s): '+blocked.map(f=>f.id).join(', '));"`,
+    { label: 'retry-blocked-reset', phase: 'Build' }
+  )
+}
 
 while (true) {
   const result = await workflow({ scriptPath: 'harness/workflow.js' })
