@@ -566,7 +566,7 @@ ${featureSpec}`
 
   preflight = await agent(
     `${SPEC_LINTER_TEMPLATE}\n\n${specLinterPayload}`,
-    { schema: PREFLIGHT_SCHEMA, label: `spec-lint:${targetId}`, phase: 'Validate', model: 'claude-sonnet-4-6' }
+    { schema: PREFLIGHT_SCHEMA, label: `spec-lint:${targetId}`, phase: 'Validate' }
   )
 
   if (preflight.verdict === 'BLOCK') {
