@@ -189,21 +189,27 @@ const PRE_EVAL_VALIDATION_SCHEMA = {
 }
 
 const FRONT_MATTER_SCHEMA = {
-  type: 'array',
-  items: {
-    type: 'object',
-    required: ['id', 'name', 'status', 'order', 'depends_on', 'context_files', 'output_files'],
-    properties: {
-      id:                { type: 'string' },
-      name:              { type: 'string' },
-      status:            { type: 'string' },
-      order:             { type: 'number' },
-      depends_on:        { type: 'array', items: { type: 'string' } },
-      context_files:     { type: 'array', items: { type: 'string' } },
-      output_files:      { type: 'array', items: { type: 'string' } },
-      post_build_command: { type: 'string' },
-      pre_eval_command:   { type: 'string' },
-      run_tests:          { type: 'boolean' },
+  type: 'object',
+  required: ['features'],
+  properties: {
+    features: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'name', 'status', 'order', 'depends_on', 'context_files', 'output_files'],
+        properties: {
+          id:                { type: 'string' },
+          name:              { type: 'string' },
+          status:            { type: 'string' },
+          order:             { type: 'number' },
+          depends_on:        { type: 'array', items: { type: 'string' } },
+          context_files:     { type: 'array', items: { type: 'string' } },
+          output_files:      { type: 'array', items: { type: 'string' } },
+          post_build_command: { type: 'string' },
+          pre_eval_command:   { type: 'string' },
+          run_tests:          { type: 'boolean' },
+        },
+      },
     },
   },
 }
@@ -415,13 +421,18 @@ phase('Setup')
 const requestedFeature = args && args.feature ? String(args.feature) : null
 
 // Step 1: Read all spec front matter (one agent call)
-const allFrontMatter = await agent(
-  `Read the file harness/features.json and return its parsed contents as a JSON array. Return only the JSON array, no prose.`,
+const allFrontMatterResult = await agent(
+  `Read the file harness/features.json and return its parsed contents as a JSON object with a "features" key containing the array. Return only the JSON object, no prose.`,
   { schema: FRONT_MATTER_SCHEMA, label: 'read-features-json', phase: 'Setup' }
 )
 
 // Step 2: Select target feature — pure JS, deterministic
-const features = [...allFrontMatter].sort((a, b) => (a.order || 999) - (b.order || 999))
+const features = [...(allFrontMatterResult ? allFrontMatterResult.features : [])].sort((a, b) => (a.order || 999) - (b.order || 999))
+
+if (!features.length) {
+  log('Failed to read features.json — aborting.')
+  return { done: true, reason: 'Failed to read features.json' }
+}
 
 let target
 if (requestedFeature) {
