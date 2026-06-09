@@ -734,31 +734,7 @@ if (!runTests) {
   }
 } else {
   testResult = await agent(
-    `Run the parking app test suite in the project root (directory containing package.json, not harness/).
-
-Run these steps in order:
-1. test -d node_modules || npm install
-${featureTestFiles.length > 0
-  ? `2. npx vitest run ${featureTestFiles.join(' ')}
-   (Feature tests only — isolates whether this feature's own implementation is correct)
-3. npm test
-   (Full suite — catches regressions in other features)
-4. npm run typecheck`
-  : `2. npm test
-3. npm run typecheck`}
-
-Return:
-- featureTestsPassed: ${featureTestFiles.length > 0 ? 'true if step 2 exits code 0' : 'omit this field (no feature test files for this feature)'}
-- featureTestOutput: ${featureTestFiles.length > 0 ? 'full stdout+stderr of step 2' : 'omit'}
-- featurePassedCount / featureFailedCount: ${featureTestFiles.length > 0 ? 'parsed from step 2' : 'omit'}
-- featureTestFailures: ${featureTestFiles.length > 0 ? '[{test, error}] for each failure in step 2' : 'omit'}
-- testsPassed: true if npm test exits code 0
-- testOutput: full stdout+stderr of npm test
-- passedCount / failedCount: parsed from npm test output
-- testFailures: [{test, error}] for each failure in npm test
-- typecheckPassed: true if typecheck exits code 0
-- typecheckOutput: full stdout+stderr of typecheck
-- typecheckErrors: one string per TypeScript error (file + line + message)`,
+    buildVerifyPrompt(featureTestFiles),
     { schema: TEST_SCHEMA, label: `verify:${targetId}`, phase: 'Verify' }
   )
   log(`Feature: ${testResult.featureTestsPassed == null ? 'n/a' : testResult.featureTestsPassed ? 'PASS ✓' : 'FAIL ✗'} | Suite: ${testResult.testsPassed ? 'PASS ✓' : 'FAIL ✗'} | Typecheck: ${testResult.typecheckPassed ? 'PASS ✓' : 'FAIL ✗'}`)
@@ -893,23 +869,7 @@ Capture the full stdout and stderr combined. Return:
     log(`Re-verify r${revision}: pre-eval ${preEvalResult.passed ? 'PASS ✓' : 'FAIL ✗'} — ${preEvalResult.output.split('\n')[0]}`)
   } else {
     testResult = await agent(
-      `Run the parking app test suite in the project root (directory containing package.json, not harness/).
-
-Run these steps in order:
-1. test -d node_modules || npm install
-${featureTestFiles.length > 0
-  ? `2. npx vitest run ${featureTestFiles.join(' ')}
-   (Feature tests only)
-3. npm test
-   (Full suite)
-4. npm run typecheck`
-  : `2. npm test
-3. npm run typecheck`}
-
-Return the same fields as the initial verify run:
-- featureTestsPassed / featureTestOutput / featurePassedCount / featureFailedCount / featureTestFailures ${featureTestFiles.length > 0 ? '(from step 2)' : '(omit — no feature test files)'}
-- testsPassed / testOutput / passedCount / failedCount / testFailures (from npm test)
-- typecheckPassed / typecheckOutput / typecheckErrors (from typecheck)`,
+      buildVerifyPrompt(featureTestFiles),
       { schema: TEST_SCHEMA, label: `reverify:${targetId}:r${revision}`, phase: 'Evaluate' }
     )
     log(`Re-verify r${revision}: Feature ${testResult.featureTestsPassed == null ? 'n/a' : testResult.featureTestsPassed ? 'PASS ✓' : 'FAIL ✗'} | Suite ${testResult.testsPassed ? 'PASS ✓' : 'FAIL ✗'} | Typecheck ${testResult.typecheckPassed ? 'PASS ✓' : 'FAIL ✗'}`)
