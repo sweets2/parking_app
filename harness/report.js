@@ -10,6 +10,7 @@ const path = require("path");
 
 const METRICS_PATH = path.join(__dirname, "metrics.jsonl");
 const FEATURES_PATH = path.join(__dirname, "features.json");
+const RUNS_PATH = path.join(__dirname, "build-runs.jsonl");
 const STOPWORDS = new Set([
   "the","and","for","not","that","this","with","from","are","was","has",
   "have","had","but","its","will","been","were","they","them","their",
@@ -45,6 +46,17 @@ function loadFeatures() {
   if (!fs.existsSync(FEATURES_PATH)) return [];
   try { return JSON.parse(fs.readFileSync(FEATURES_PATH, "utf8")); }
   catch { return []; }
+}
+
+function loadRuns() {
+  if (!fs.existsSync(RUNS_PATH)) return [];
+  return fs.readFileSync(RUNS_PATH, "utf8")
+    .split("\n").filter(Boolean)
+    .map((line, i) => {
+      try { return JSON.parse(line); }
+      catch { process.stderr.write(`Warning: bad JSON in build-runs.jsonl line ${i + 1}\n`); return null; }
+    })
+    .filter(Boolean);
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
@@ -273,6 +285,60 @@ function printPreflightCorrelation(byFeature) {
   }
 }
 
+function fmtDuration(ms) {
+  if (!ms) return "—";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function printBuildRuns(runs) {
+  console.log();
+  console.log(bold(hr()));
+  console.log(bold("Build Run History"));
+  console.log(dim(hr()));
+
+  if (runs.length === 0) {
+    console.log(dim("  No build runs recorded yet."));
+    return;
+  }
+
+  let cumTokens = 0, cumDuration = 0, cumCompleted = 0;
+
+  for (let i = 0; i < runs.length; i++) {
+    const r = runs[i];
+    const partial = r.partial ? dim(" [partial]") : "";
+    const taskLabel = r.taskId ? dim(` (${r.taskId})`) : "";
+    const dateStr = r.date ? r.date.replace("T", " ").replace(/\.\d+Z$/, " UTC") : "unknown date";
+    const tokens = r.subagentTokens ?? r.budgetSpent ?? 0;
+    const tokenLabel = r.subagentTokens
+      ? fmtNum(r.subagentTokens) + " tokens"
+      : fmtNum(r.budgetSpent) + " tokens (output only)";
+
+    cumTokens    += tokens;
+    cumDuration  += r.durationMs ?? 0;
+    cumCompleted += r.completed  ?? 0;
+
+    console.log(
+      `  Run ${i + 1}${partial}  ${dim(dateStr)}${taskLabel}\n` +
+      `    Duration:  ${bold(fmtDuration(r.durationMs))}\n` +
+      `    Tokens:    ${bold(tokenLabel)}\n` +
+      `    Completed: ${r.completed ?? "?"} features  Blocked: ${(r.blocked ?? []).length}`
+    );
+    console.log();
+  }
+
+  if (runs.length > 1) {
+    console.log(dim("  ─── Cumulative ───────────────────────────────────────"));
+  }
+  console.log(`  Total time:     ${bold(fmtDuration(cumDuration))}`);
+  console.log(`  Total tokens:   ${bold(fmtNum(cumTokens))}`);
+  console.log(`  Total features: ${bold(cumCompleted)}`);
+}
+
 function printMultiRunFeatures(byFeature) {
   const multi = [...byFeature.entries()].filter(([, runs]) => runs.length > 1);
   if (multi.length === 0) return;
@@ -346,8 +412,9 @@ function printFeatureDrill(byFeature, id) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 const records = loadMetrics();
+const buildRuns = loadRuns();
 
-if (records.length === 0) {
+if (records.length === 0 && buildRuns.length === 0) {
   console.log("No metrics recorded yet. Run the harness to generate data.");
   process.exit(0);
 }
@@ -360,11 +427,14 @@ if (featureFilter) {
 } else if (failuresOnly) {
   printFailureAnalysis(byFeature);
 } else {
-  printSummary(byFeature);
-  printFeatureTable(byFeature, featuresMeta);
-  printFailureAnalysis(byFeature);
-  printPreflightCorrelation(byFeature);
-  printMultiRunFeatures(byFeature);
+  printBuildRuns(buildRuns);
+  if (records.length > 0) {
+    printSummary(byFeature);
+    printFeatureTable(byFeature, featuresMeta);
+    printFailureAnalysis(byFeature);
+    printPreflightCorrelation(byFeature);
+    printMultiRunFeatures(byFeature);
+  }
 }
 
 console.log();
