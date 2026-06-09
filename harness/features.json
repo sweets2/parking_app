@@ -2,11 +2,20 @@
   {
     "id": "F-00",
     "name": "Project Bootstrap",
-    "status": "TODO",
+    "status": "DONE",
     "order": 0,
     "depends_on": [],
-    "context_files": ["ARCHITECTURE.md"],
-    "output_files": ["package.json", "tsconfig.json", "vitest.config.ts", "app/index.html", "app/style.css", "app/manifest.json"],
+    "context_files": [
+      "ARCHITECTURE.md"
+    ],
+    "output_files": [
+      "package.json",
+      "tsconfig.json",
+      "vitest.config.ts",
+      "app/index.html",
+      "app/style.css",
+      "app/manifest.json"
+    ],
     "post_build_command": "npm install"
   },
   {
@@ -15,193 +24,364 @@
     "status": "DONE",
     "note": "Pre-seeded DONE before F-00 was formalized; depends_on preserved so fresh runs enforce correct order.",
     "order": 1,
-    "depends_on": ["F-00"],
+    "depends_on": [
+      "F-00"
+    ],
     "context_files": [],
-    "output_files": ["docs/api-discovery.md"],
+    "output_files": [
+      "docs/api-discovery.md"
+    ],
     "run_tests": false,
-    "pre_eval_command": "node -e \"const fs=require('fs'),dns=require('dns');const md=fs.readFileSync('docs/api-discovery.md','utf8');const m=md.match(/https?:\\/\\/[^\\s\\)>\\`'\\\"\\\\[\\\\]]+/);if(!m){console.error('VALIDATION FAIL: no URL found in docs/api-discovery.md');process.exit(1);}let u;try{u=new URL(m[0]);}catch(e){console.error('VALIDATION FAIL: invalid URL: '+m[0]);process.exit(1);}dns.resolve(u.hostname,function(err){if(err){console.error('VALIDATION FAIL: host does not resolve: '+u.hostname+' — '+err.message);process.exit(1);}else{console.log('PASS: URL valid, host resolves: '+u.hostname);process.exit(0);}});\""
+    "pre_eval_command": "node -e \"const fs=require('fs'),dns=require('dns');const md=fs.readFileSync('docs/api-discovery.md','utf8');const m=md.match(/https?:\\/\\/[^\\s\\)>\\`'\\\"\\\\[\\\\]]+/);if(!m){console.error('VALIDATION FAIL: no URL found in docs/api-discovery.md');process.exit(1);}let u;try{u=new URL(m[0]);}catch(e){console.error('VALIDATION FAIL: invalid URL: '+m[0]);process.exit(1);}dns.resolve(u.hostname,function(err){if(err){console.error('VALIDATION FAIL: host does not resolve: '+u.hostname+' \u2014 '+err.message);process.exit(1);}else{console.log('PASS: URL valid, host resolves: '+u.hostname);process.exit(0);}});\""
   },
   {
     "id": "F-D2",
     "name": "Data Schema Analysis",
     "status": "DONE",
     "order": 2,
-    "depends_on": ["F-D1"],
-    "context_files": ["docs/api-discovery.md"],
-    "output_files": ["docs/data-schema.md", "data/latest.json"],
+    "depends_on": [
+      "F-D1"
+    ],
+    "context_files": [
+      "docs/api-discovery.md"
+    ],
+    "output_files": [
+      "docs/data-schema.md",
+      "data/latest.json"
+    ],
     "run_tests": false,
-    "pre_eval_command": "node -e \"const fs=require('fs');let raw;try{raw=fs.readFileSync('data/latest.json','utf8');}catch(e){console.error('VALIDATION FAIL: data/latest.json unreadable: '+e.message);process.exit(1);}let d;try{d=JSON.parse(raw);}catch(e){console.error('VALIDATION FAIL: not valid JSON: '+e.message);process.exit(1);}const errs=[];if(typeof d.fetched_at!=='string'||!d.fetched_at)errs.push('fetched_at missing or not a non-empty string');if(typeof d.count!=='number')errs.push('count missing or not a number');if(!Array.isArray(d.signs))errs.push('signs missing or not an array');else{if(d.signs.length===0)errs.push('signs array is empty — real fetched data required');if(typeof d.count==='number'&&d.count!==d.signs.length)errs.push('count ('+d.count+') does not match signs.length ('+d.signs.length+')');if(d.signs.length>0&&Object.keys(d.signs[0]).length<4)errs.push('signs[0] has fewer than 4 keys — appears to be a placeholder object');}if(errs.length>0){console.error('VALIDATION FAIL:\\n'+errs.map(function(e){return'  - '+e;}).join('\\n'));process.exit(1);}console.log('PASS: '+d.signs.length+' signs, fetched_at='+d.fetched_at);process.exit(0);\""
+    "pre_eval_command": "node -e \"const fs=require('fs');let raw;try{raw=fs.readFileSync('data/latest.json','utf8');}catch(e){console.error('VALIDATION FAIL: data/latest.json unreadable: '+e.message);process.exit(1);}let d;try{d=JSON.parse(raw);}catch(e){console.error('VALIDATION FAIL: not valid JSON: '+e.message);process.exit(1);}const errs=[];if(typeof d.fetched_at!=='string'||!d.fetched_at)errs.push('fetched_at missing or not a non-empty string');if(typeof d.count!=='number')errs.push('count missing or not a number');if(!Array.isArray(d.signs))errs.push('signs missing or not an array');else{if(d.signs.length===0)errs.push('signs array is empty \u2014 real fetched data required');if(typeof d.count==='number'&&d.count!==d.signs.length)errs.push('count ('+d.count+') does not match signs.length ('+d.signs.length+')');if(d.signs.length>0&&Object.keys(d.signs[0]).length<4)errs.push('signs[0] has fewer than 4 keys \u2014 appears to be a placeholder object');}if(errs.length>0){console.error('VALIDATION FAIL:\\n'+errs.map(function(e){return'  - '+e;}).join('\\n'));process.exit(1);}console.log('PASS: '+d.signs.length+' signs, fetched_at='+d.fetched_at);process.exit(0);\""
   },
   {
     "id": "F-00.5",
     "name": "Test Fixture",
-    "status": "TODO",
+    "status": "DONE",
     "order": 3,
-    "depends_on": ["F-D2", "F-02"],
-    "context_files": ["data/latest.json", "docs/data-schema.md", "shared/types.ts"],
-    "output_files": ["tests/fixtures/signs.ts"]
+    "depends_on": [
+      "F-D2",
+      "F-02"
+    ],
+    "context_files": [
+      "data/latest.json",
+      "docs/data-schema.md",
+      "shared/types.ts"
+    ],
+    "output_files": [
+      "tests/fixtures/signs.ts"
+    ]
   },
   {
     "id": "F-02",
     "name": "Shared Types Contract",
-    "status": "TODO",
+    "status": "DONE",
     "order": 4,
-    "depends_on": ["F-00", "F-D2"],
-    "context_files": ["docs/data-schema.md"],
-    "output_files": ["shared/types.ts"]
+    "depends_on": [
+      "F-00",
+      "F-D2"
+    ],
+    "context_files": [
+      "docs/data-schema.md"
+    ],
+    "output_files": [
+      "shared/types.ts"
+    ]
   },
   {
     "id": "F-02.5",
     "name": "Street Cleaning Types",
-    "status": "TODO",
+    "status": "DONE",
     "order": 5,
-    "depends_on": ["F-02"],
-    "context_files": ["shared/types.ts"],
-    "output_files": ["shared/types.ts"]
+    "depends_on": [
+      "F-02"
+    ],
+    "context_files": [
+      "shared/types.ts"
+    ],
+    "output_files": [
+      "shared/types.ts"
+    ]
   },
   {
     "id": "F-03",
     "name": "Shared Pure Logic",
     "status": "TODO",
     "order": 6,
-    "depends_on": ["F-02"],
-    "context_files": ["shared/types.ts", "tests/fixtures/signs.ts"],
-    "output_files": ["shared/parking-logic.ts", "tests/unit/parking-logic.test.ts", "tests/integration/pipeline.test.ts"]
+    "depends_on": [
+      "F-02"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "tests/fixtures/signs.ts"
+    ],
+    "output_files": [
+      "shared/parking-logic.ts",
+      "tests/unit/parking-logic.test.ts",
+      "tests/integration/pipeline.test.ts"
+    ]
   },
   {
     "id": "F-04",
     "name": "Shared Storage Module",
-    "status": "TODO",
+    "status": "DONE",
     "order": 7,
-    "depends_on": ["F-02"],
-    "context_files": ["shared/types.ts"],
-    "output_files": ["shared/storage.ts", "tests/unit/storage.test.ts"]
+    "depends_on": [
+      "F-02"
+    ],
+    "context_files": [
+      "shared/types.ts"
+    ],
+    "output_files": [
+      "shared/storage.ts",
+      "tests/unit/storage.test.ts"
+    ]
   },
   {
     "id": "F-05",
     "name": "GitHub Actions CI/CD",
-    "status": "TODO",
+    "status": "DONE",
     "order": 8,
-    "depends_on": ["F-00"],
+    "depends_on": [
+      "F-00"
+    ],
     "context_files": [],
-    "output_files": [".github/workflows/fetch_daily.yml"]
+    "output_files": [
+      ".github/workflows/fetch_daily.yml"
+    ]
   },
   {
     "id": "F-06",
     "name": "App State Machine",
     "status": "TODO",
     "order": 9,
-    "depends_on": ["F-02", "F-03", "F-04"],
-    "context_files": ["shared/types.ts", "shared/parking-logic.ts", "shared/storage.ts"],
-    "output_files": ["app/app.ts"]
+    "depends_on": [
+      "F-02",
+      "F-03",
+      "F-04"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "shared/storage.ts"
+    ],
+    "output_files": [
+      "app/app.ts"
+    ]
   },
   {
     "id": "F-07",
     "name": "Map Module",
     "status": "TODO",
     "order": 10,
-    "depends_on": ["F-02", "F-03"],
-    "context_files": ["shared/types.ts", "shared/parking-logic.ts"],
-    "output_files": ["app/map.ts"]
+    "depends_on": [
+      "F-02",
+      "F-03"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/parking-logic.ts"
+    ],
+    "output_files": [
+      "app/map.ts"
+    ]
   },
   {
     "id": "F-08.4",
     "name": "Street Name Lookup",
-    "status": "TODO",
+    "status": "DONE",
     "order": 11,
     "depends_on": [],
     "context_files": [],
-    "output_files": ["app/geo.ts", "tests/unit/geo.test.ts"]
+    "output_files": [
+      "app/geo.ts",
+      "tests/unit/geo.test.ts"
+    ]
   },
   {
     "id": "F-09",
     "name": "UI Rendering Module",
     "status": "TODO",
     "order": 13,
-    "depends_on": ["F-02", "F-03"],
-    "context_files": ["shared/types.ts", "shared/parking-logic.ts"],
-    "output_files": ["app/ui.ts"]
+    "depends_on": [
+      "F-02",
+      "F-03"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/parking-logic.ts"
+    ],
+    "output_files": [
+      "app/ui.ts"
+    ]
   },
   {
     "id": "F-16",
     "name": "Next Violation Window",
     "status": "TODO",
     "order": 14,
-    "depends_on": ["F-03"],
-    "context_files": ["shared/types.ts", "shared/parking-logic.ts", "tests/fixtures/signs.ts"],
-    "output_files": ["shared/parking-logic.ts", "tests/unit/parking-logic.test.ts"]
+    "depends_on": [
+      "F-03"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "tests/fixtures/signs.ts"
+    ],
+    "output_files": [
+      "shared/parking-logic.ts",
+      "tests/unit/parking-logic.test.ts"
+    ]
   },
   {
     "id": "F-13",
     "name": "Data Freshness Check",
     "status": "TODO",
     "order": 15,
-    "depends_on": ["F-03", "F-09"],
-    "context_files": ["shared/parking-logic.ts", "app/ui.ts"],
-    "output_files": ["shared/parking-logic.ts", "app/ui.ts", "tests/unit/parking-logic.test.ts"]
+    "depends_on": [
+      "F-03",
+      "F-09"
+    ],
+    "context_files": [
+      "shared/parking-logic.ts",
+      "app/ui.ts"
+    ],
+    "output_files": [
+      "shared/parking-logic.ts",
+      "app/ui.ts",
+      "tests/unit/parking-logic.test.ts"
+    ]
   },
   {
     "id": "F-14",
     "name": "Auto Re-Fetch on Open",
     "status": "TODO",
     "order": 16,
-    "depends_on": ["F-06", "F-13"],
-    "context_files": ["app/app.ts", "shared/parking-logic.ts"],
-    "output_files": ["app/app.ts"]
+    "depends_on": [
+      "F-06",
+      "F-13"
+    ],
+    "context_files": [
+      "app/app.ts",
+      "shared/parking-logic.ts"
+    ],
+    "output_files": [
+      "app/app.ts"
+    ]
   },
   {
     "id": "F-15",
     "name": "Manual Refresh Button",
     "status": "TODO",
     "order": 17,
-    "depends_on": ["F-06", "F-09", "F-14"],
-    "context_files": ["app/app.ts", "app/ui.ts", "shared/parking-logic.ts"],
-    "output_files": ["app/app.ts", "app/ui.ts"]
+    "depends_on": [
+      "F-06",
+      "F-09",
+      "F-14"
+    ],
+    "context_files": [
+      "app/app.ts",
+      "app/ui.ts",
+      "shared/parking-logic.ts"
+    ],
+    "output_files": [
+      "app/app.ts",
+      "app/ui.ts"
+    ]
   },
   {
     "id": "F-10",
-    "name": "Flow 1 — Just Parked",
+    "name": "Flow 1 \u2014 Just Parked",
     "status": "TODO",
     "order": 18,
-    "depends_on": ["F-06", "F-07", "F-09"],
-    "context_files": ["app/index.html", "app/style.css", "app/app.ts", "app/map.ts", "app/ui.ts", "app/main.ts"],
-    "output_files": ["app/main.ts", "app/app.ts"]
+    "depends_on": [
+      "F-06",
+      "F-07",
+      "F-09"
+    ],
+    "context_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/app.ts",
+      "app/map.ts",
+      "app/ui.ts",
+      "app/main.ts"
+    ],
+    "output_files": [
+      "app/main.ts",
+      "app/app.ts"
+    ]
   },
   {
     "id": "F-11",
-    "name": "Flow 2 — Returning",
+    "name": "Flow 2 \u2014 Returning",
     "status": "TODO",
     "order": 19,
-    "depends_on": ["F-06", "F-07", "F-09"],
-    "context_files": ["app/index.html", "app/style.css", "app/app.ts", "app/map.ts", "app/ui.ts", "app/main.ts"],
-    "output_files": ["app/main.ts"]
+    "depends_on": [
+      "F-06",
+      "F-07",
+      "F-09"
+    ],
+    "context_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/app.ts",
+      "app/map.ts",
+      "app/ui.ts",
+      "app/main.ts"
+    ],
+    "output_files": [
+      "app/main.ts"
+    ]
   },
   {
     "id": "F-12",
     "name": "PWA Shell",
     "status": "TODO",
     "order": 21,
-    "depends_on": ["F-06"],
-    "context_files": ["app/app.ts"],
-    "output_files": ["app/manifest.json", "app/sw.ts"]
+    "depends_on": [
+      "F-06"
+    ],
+    "context_files": [
+      "app/app.ts"
+    ],
+    "output_files": [
+      "app/manifest.json",
+      "app/sw.ts"
+    ]
   },
   {
     "id": "F-01",
     "name": "Data Fetcher",
     "status": "TODO",
     "order": 22,
-    "depends_on": ["F-00", "F-02", "F-00.5"],
-    "context_files": ["shared/types.ts", "docs/api-discovery.md", "docs/data-schema.md"],
-    "output_files": ["fetcher/fetch.ts", "tests/unit/fetcher.test.ts"]
+    "depends_on": [
+      "F-00",
+      "F-02",
+      "F-00.5"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "docs/api-discovery.md",
+      "docs/data-schema.md"
+    ],
+    "output_files": [
+      "fetcher/fetch.ts",
+      "tests/unit/fetcher.test.ts"
+    ]
   },
   {
     "id": "F-01.9",
     "name": "Street Cleaning Data Scraper",
     "status": "TODO",
     "order": 23,
-    "depends_on": ["F-02.5"],
-    "context_files": ["shared/types.ts"],
-    "output_files": ["fetcher/fetch-street-cleaning.ts"],
+    "depends_on": [
+      "F-02.5"
+    ],
+    "context_files": [
+      "shared/types.ts"
+    ],
+    "output_files": [
+      "fetcher/fetch-street-cleaning.ts"
+    ],
     "post_build_command": "npm run fetch-cleaning"
   },
   {
@@ -209,17 +389,36 @@
     "name": "Street Click Popup",
     "status": "TODO",
     "order": 24,
-    "depends_on": ["F-02.5", "F-07"],
-    "context_files": ["shared/types.ts", "app/map.ts"],
-    "output_files": ["app/map.ts"]
+    "depends_on": [
+      "F-02.5",
+      "F-07"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "app/map.ts"
+    ],
+    "output_files": [
+      "app/map.ts"
+    ]
   },
   {
     "id": "F-17.5",
     "name": "Street Popup Click Wiring",
     "status": "TODO",
     "order": 25,
-    "depends_on": ["F-07.6", "F-08.4", "F-01.9"],
-    "context_files": ["app/main.ts", "app/map.ts", "app/geo.ts", "shared/types.ts"],
-    "output_files": ["app/main.ts"]
+    "depends_on": [
+      "F-07.6",
+      "F-08.4",
+      "F-01.9"
+    ],
+    "context_files": [
+      "app/main.ts",
+      "app/map.ts",
+      "app/geo.ts",
+      "shared/types.ts"
+    ],
+    "output_files": [
+      "app/main.ts"
+    ]
   }
 ]
