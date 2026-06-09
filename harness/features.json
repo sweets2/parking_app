@@ -12,7 +12,7 @@
   {
     "id": "F-D1",
     "name": "API Discovery",
-    "status": "TODO",
+    "status": "DONE",
     "order": 1,
     "depends_on": ["F-00"],
     "context_files": [],
@@ -23,7 +23,7 @@
   {
     "id": "F-D2",
     "name": "Data Schema Analysis",
-    "status": "TODO",
+    "status": "DONE",
     "order": 2,
     "depends_on": ["F-D1"],
     "context_files": ["docs/api-discovery.md"],

@@ -1,0 +1,19 @@
+{
+  "captured_at": "2026-06-09T13:52:50.509612Z",
+  "endpoint": "https://api-hpuvp.hobokennj.gov/api/v1/parking",
+  "required_fields": [
+    "id",
+    "address",
+    "start_date",
+    "start_time",
+    "stop_date",
+    "end_time",
+    "reason",
+    "permit_number",
+    "latitude",
+    "longitude"
+  ],
+  "known_reasons": ["CONSTRUCTION", "DELIVERY", "EVENT", "MOVING"],
+  "sign_count_baseline": 112,
+  "_note": "Used by F-01 fetcher to detect schema drift. Warn if required_fields disappear or count drops below 50% of sign_count_baseline."
+}
