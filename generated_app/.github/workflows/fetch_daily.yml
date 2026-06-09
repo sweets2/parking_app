@@ -1,0 +1,57 @@
+name: Daily Data Fetch
+
+on:
+  schedule:
+    # 11:00 UTC = 6:00 AM ET during EDT (Eastern Daylight Time, UTC-5)
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: generated_app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: generated_app
+        run: npm ci
+
+      - name: Run tests
+        working-directory: generated_app
+        run: npm test
+
+      - name: Typecheck
+        working-directory: generated_app
+        run: npx tsc --noEmit
+
+      - name: Fetch latest data
+        working-directory: generated_app
+        run: npm run fetch
+
+      - name: Check for changes
+        id: diff
+        working-directory: generated_app
+        run: |
+          git diff --quiet data/latest.json || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push updated data
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: generated_app
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/latest.json
+          git commit -m "data: update latest.json [skip ci]"
+          git push
