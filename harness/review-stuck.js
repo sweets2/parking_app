@@ -65,31 +65,6 @@ const DIAGNOSIS_SCHEMA = {
   },
 }
 
-// ─── Embedded constraint summary (avoids a CLAUDE.md read per diagnoser agent) ─
-
-const CONSTRAINT_SUMMARY = `
-## CLAUDE.md hard constraints (summary for diagnoser)
-
-TypeScript (all .ts files):
-- No \`as any\` casts anywhere
-- No \`!\` non-null assertion operator anywhere
-- All exported symbols must use named exports — no default exports
-- strict: true is always on
-
-Pure logic module (shared/parking-logic.ts):
-- Every time-sensitive function accepts \`now: Date\` as a parameter — never calls new Date() internally
-- No browser globals (window, document, navigator, localStorage), no fetch, no fs reads
-
-Storage module (shared/storage.ts):
-- Must not call localStorage at module scope — only inside the returned factory object
-- Uses injectable backend: createSpotStorage(backend: StorageBackend)
-
-App entry point: app/app.ts exports state machine only — no side effects, no DOM access
-Map module (app/map.ts): the ONLY file that may touch L.* (Leaflet)
-
-Tests: use NOW_STABLE, NOW_AFTER_EXPIRED, FETCH_TIME from tests/fixtures/signs.ts — never new Date()
-`.trim()
-
 // ─── Phase 1: Scan ────────────────────────────────────────────────────────────
 
 phase('Scan')
@@ -97,10 +72,16 @@ phase('Scan')
 const requestedFeature = args && args.feature ? String(args.feature) : null
 const dryRun = args && args.dryRun === true
 
-const allFeatures = await agent(
-  `Read the file harness/features.json and return its parsed contents as a JSON array. Return only the JSON array, no prose.`,
-  { schema: FRONT_MATTER_SCHEMA, label: 'read-features-json', phase: 'Scan' }
-)
+const [allFeatures, claudeMd] = await parallel([
+  () => agent(
+    `Read the file harness/features.json and return its parsed contents as a JSON array. Return only the JSON array, no prose.`,
+    { schema: FRONT_MATTER_SCHEMA, label: 'read-features-json', phase: 'Scan' }
+  ),
+  () => agent(
+    `Read the file CLAUDE.md and return its full contents as a plain string. Return only the file contents — no prose, no wrapping.`,
+    { label: 'read-claude-md', phase: 'Scan' }
+  ),
+])
 
 const sorted = [...allFeatures].sort((a, b) => (a.order || 999) - (b.order || 999))
 
@@ -187,8 +168,8 @@ ${scan.spec}
 ## Stuck reason (evaluator + test output after max revisions)
 ${scan.stuckReason}
 
-## Project hard constraints
-${CONSTRAINT_SUMMARY}
+## Project hard constraints (CLAUDE.md)
+${claudeMd}
 
 ## Your task
 Classify why this feature is BLOCKED and extract concrete, actionable hints that will help the Creator agent succeed on the next attempt.
