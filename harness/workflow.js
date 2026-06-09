@@ -375,7 +375,7 @@ if (requestedFeature) {
     log(`Retrying BLOCKED feature ${target.id} — resetting to TODO`)
     await agent(
       `Run this command in the project root:
-node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const f=d.find(f=>f.id==='${target.id}');if(!f)throw new Error('Feature not found');f.status='TODO';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');"`,
+node -e "const fs=require('fs'),p='harness/features.json',d=JSON.parse(fs.readFileSync(p,'utf8'));const f=d.find(f=>f.id==='${target.id}');if(!f)throw new Error('Feature not found');f.status='TODO';const sp='harness/stuck/${target.id}_stuck_reason.md';if(fs.existsSync(sp)){fs.unlinkSync(sp);}fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n');"`,
       { label: `retry-reset:${target.id}`, phase: 'Setup' }
     )
   }
