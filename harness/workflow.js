@@ -835,7 +835,7 @@ ${featureTestFiles.length > 0
 3. npm run typecheck`}
 
 Return the same fields as the initial verify run:
-- featureTestsPassed / featureTestOutput / featurePassedCount / featureFailedCount / featureTestFailures ${featureTestFiles.length > 0 ? '(from step 1)' : '(omit — no feature test files)'}
+- featureTestsPassed / featureTestOutput / featurePassedCount / featureFailedCount / featureTestFailures ${featureTestFiles.length > 0 ? '(from step 2)' : '(omit — no feature test files)'}
 - testsPassed / testOutput / passedCount / failedCount / testFailures (from npm test)
 - typecheckPassed / typecheckOutput / typecheckErrors (from typecheck)`,
       { schema: TEST_SCHEMA, label: `reverify:${targetId}:r${revision}`, phase: 'Evaluate' }
