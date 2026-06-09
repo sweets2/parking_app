@@ -17,7 +17,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const RUNS_FILE = join(__dirname, 'build-runs.jsonl')
+const RUNS_FILE = join(__dirname, '..', 'generated_app', 'build-runs.jsonl')
 
 function parseArgs() {
   const args = process.argv.slice(2)

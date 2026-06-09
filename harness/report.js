@@ -10,7 +10,7 @@ const path = require("path");
 
 const METRICS_PATH = path.join(__dirname, "metrics.jsonl");
 const FEATURES_PATH = path.join(__dirname, "features.json");
-const RUNS_PATH = path.join(__dirname, "build-runs.jsonl");
+const RUNS_PATH = path.join(__dirname, "..", "generated_app", "build-runs.jsonl");
 const STOPWORDS = new Set([
   "the","and","for","not","that","this","with","from","are","was","has",
   "have","had","but","its","will","been","were","they","them","their",
