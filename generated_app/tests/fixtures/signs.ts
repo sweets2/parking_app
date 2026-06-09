@@ -80,18 +80,14 @@ function toIso(date: string, time: string): string {
 }
 
 /**
- * Determine active_at_fetch by comparing end_iso (local ET) to FETCH_TIME
- * (UTC).  FETCH_TIME is 2026-06-09T09:52:50 ET.  We treat the local ISO
- * string as if it were UTC for a conservative comparison (any sign ending
- * after 09:52 ET on June 9 will have end_iso >= "2026-06-09T09:52:50").
- * In practice this means a sign is active if its local end datetime string
- * lexicographically exceeds the fetch UTC instant.
+ * Determine active_at_fetch by checking that the sign's window contains the
+ * fetch instant: start_iso <= fetchLocalStr <= end_iso.  Both bounds are
+ * compared as local-time strings (ET).  FETCH_TIME is 2026-06-09T13:52:50Z
+ * which is 2026-06-09T09:52:50 ET.
  */
-function isActiveAtFetch(endIso: string): boolean {
-  // FETCH_TIME as a comparable local-time string (ET offset from UTC is -4h):
-  // 2026-06-09T13:52:50Z  =>  2026-06-09T09:52:50 ET
+function isActiveAtFetch(startIso: string, endIso: string): boolean {
   const fetchLocalStr = "2026-06-09T09:52:50";
-  return endIso >= fetchLocalStr;
+  return startIso <= fetchLocalStr && endIso >= fetchLocalStr;
 }
 
 /** Validate reason field against the known enum values. */
@@ -120,7 +116,7 @@ function transform(raw: RawJsonSign): Sign {
     end_time: raw.end_time,
     start_iso: startIso,
     end_iso: endIso,
-    active_at_fetch: isActiveAtFetch(endIso),
+    active_at_fetch: isActiveAtFetch(startIso, endIso),
   };
 }
 
@@ -178,11 +174,11 @@ export const SIGN_PERMANENT: Sign | undefined = ALL_SIGNS.find(
 );
 
 /**
- * A sign that is clearly active at fetch time.
- * Raw record id 214861 — "200-214 4TH ST".
+ * A sign that is clearly active at fetch time (start_iso <= fetch <= end_iso).
+ * Raw record id 213435 — "306-310 SINATRA DR", window 2026-04-01 to 2026-11-30.
  */
 export const SIGN_ACTIVE: Sign | undefined = ALL_SIGNS.find(
-  (s) => s.id === "214861"
+  (s) => s.id === "213435"
 );
 
 /**

@@ -32,7 +32,7 @@
       "docs/api-discovery.md"
     ],
     "run_tests": false,
-    "pre_eval_command": "node -e \"const fs=require('fs'),dns=require('dns');const md=fs.readFileSync('docs/api-discovery.md','utf8');const m=md.match(/https?:\\/\\/[^\\s\\)>\\`'\\\"\\\\[\\\\]]+/);if(!m){console.error('VALIDATION FAIL: no URL found in docs/api-discovery.md');process.exit(1);}let u;try{u=new URL(m[0]);}catch(e){console.error('VALIDATION FAIL: invalid URL: '+m[0]);process.exit(1);}dns.resolve(u.hostname,function(err){if(err){console.error('VALIDATION FAIL: host does not resolve: '+u.hostname+' \u2014 '+err.message);process.exit(1);}else{console.log('PASS: URL valid, host resolves: '+u.hostname);process.exit(0);}});\""
+    "pre_eval_command": "node -e \"const fs=require('fs'),dns=require('dns');const md=fs.readFileSync('docs/api-discovery.md','utf8');const m=md.match(/https?:\\/\\/[^\\s\\)>\\`'\\\"\\\\[\\\\]]+/);if(!m){console.error('VALIDATION FAIL: no URL found in docs/api-discovery.md');process.exit(1);}let u;try{u=new URL(m[0]);}catch(e){console.error('VALIDATION FAIL: invalid URL: '+m[0]);process.exit(1);}dns.resolve(u.hostname,function(err){if(err){console.error('VALIDATION FAIL: host does not resolve: '+u.hostname+' — '+err.message);process.exit(1);}else{console.log('PASS: URL valid, host resolves: '+u.hostname);process.exit(0);}});\""
   },
   {
     "id": "F-D2",
@@ -50,7 +50,7 @@
       "data/latest.json"
     ],
     "run_tests": false,
-    "pre_eval_command": "node -e \"const fs=require('fs');let raw;try{raw=fs.readFileSync('data/latest.json','utf8');}catch(e){console.error('VALIDATION FAIL: data/latest.json unreadable: '+e.message);process.exit(1);}let d;try{d=JSON.parse(raw);}catch(e){console.error('VALIDATION FAIL: not valid JSON: '+e.message);process.exit(1);}const errs=[];if(typeof d.fetched_at!=='string'||!d.fetched_at)errs.push('fetched_at missing or not a non-empty string');if(typeof d.count!=='number')errs.push('count missing or not a number');if(!Array.isArray(d.signs))errs.push('signs missing or not an array');else{if(d.signs.length===0)errs.push('signs array is empty \u2014 real fetched data required');if(typeof d.count==='number'&&d.count!==d.signs.length)errs.push('count ('+d.count+') does not match signs.length ('+d.signs.length+')');if(d.signs.length>0&&Object.keys(d.signs[0]).length<4)errs.push('signs[0] has fewer than 4 keys \u2014 appears to be a placeholder object');}if(errs.length>0){console.error('VALIDATION FAIL:\\n'+errs.map(function(e){return'  - '+e;}).join('\\n'));process.exit(1);}console.log('PASS: '+d.signs.length+' signs, fetched_at='+d.fetched_at);process.exit(0);\""
+    "pre_eval_command": "node -e \"const fs=require('fs');let raw;try{raw=fs.readFileSync('data/latest.json','utf8');}catch(e){console.error('VALIDATION FAIL: data/latest.json unreadable: '+e.message);process.exit(1);}let d;try{d=JSON.parse(raw);}catch(e){console.error('VALIDATION FAIL: not valid JSON: '+e.message);process.exit(1);}const errs=[];if(typeof d.fetched_at!=='string'||!d.fetched_at)errs.push('fetched_at missing or not a non-empty string');if(typeof d.count!=='number')errs.push('count missing or not a number');if(!Array.isArray(d.signs))errs.push('signs missing or not an array');else{if(d.signs.length===0)errs.push('signs array is empty — real fetched data required');if(typeof d.count==='number'&&d.count!==d.signs.length)errs.push('count ('+d.count+') does not match signs.length ('+d.signs.length+')');if(d.signs.length>0&&Object.keys(d.signs[0]).length<4)errs.push('signs[0] has fewer than 4 keys — appears to be a placeholder object');}if(errs.length>0){console.error('VALIDATION FAIL:\\n'+errs.map(function(e){return'  - '+e;}).join('\\n'));process.exit(1);}console.log('PASS: '+d.signs.length+' signs, fetched_at='+d.fetched_at);process.exit(0);\""
   },
   {
     "id": "F-00.5",
@@ -289,7 +289,7 @@
   },
   {
     "id": "F-10",
-    "name": "Flow 1 \u2014 Just Parked",
+    "name": "Flow 1 — Just Parked",
     "status": "TODO",
     "order": 18,
     "depends_on": [
@@ -312,7 +312,7 @@
   },
   {
     "id": "F-11",
-    "name": "Flow 2 \u2014 Returning",
+    "name": "Flow 2 — Returning",
     "status": "TODO",
     "order": 19,
     "depends_on": [
@@ -351,7 +351,7 @@
   {
     "id": "F-01",
     "name": "Data Fetcher",
-    "status": "TODO",
+    "status": "DONE",
     "order": 22,
     "depends_on": [
       "F-00",
@@ -371,7 +371,7 @@
   {
     "id": "F-01.9",
     "name": "Street Cleaning Data Scraper",
-    "status": "TODO",
+    "status": "DONE",
     "order": 23,
     "depends_on": [
       "F-02.5"
