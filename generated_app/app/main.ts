@@ -39,9 +39,6 @@ import {
   renderBrowsingMode,
   renderWarningBanner,
   renderClearBanner,
-  renderRefreshButton,
-  setRefreshLoading,
-  showRefreshError,
 } from "./ui";
 
 // ─── Module state ─────────────────────────────────────────────────────────────
@@ -49,7 +46,7 @@ import {
 let cleaningEntries: StreetCleaningEntry[] = [];
 let appMode: "browsing" | "parked" = "browsing";
 
-/** ISO string of when sign data was last successfully fetched — used by renderRefreshButton. */
+/** ISO string of when sign data was last successfully fetched — used for staleness detection. */
 let _fetchedAt: string = new Date().toISOString();
 
 /**
@@ -171,14 +168,39 @@ function renderState(state: AppState): void {
       renderClearBanner();
     }
 
-    // F-15: Show refresh button with freshness label in parked mode.
-    renderRefreshButton(_fetchedAt, now);
-
     // Show all active sign pins in parked mode (not just nearby ones).
     renderSignPins(filterActive(state.allSigns, now), now);
     renderSpotMarker(state.spot);
     clearPositionMarker();
     return;
+  }
+}
+
+// ─── Silent auto-refresh ──────────────────────────────────────────────────────
+
+async function silentRefresh(app: App, now: Date): Promise<void> {
+  try {
+    const res = await fetch("data/latest.json", { cache: "no-cache" });
+    const json = await res.json() as { fetched_at: string; signs: Sign[] };
+    _fetchedAt = json.fetched_at;
+    const filtered = filterLoadTimeNoise(json.signs, new Date(json.fetched_at));
+    const activeNow = filterActive(filtered, now);
+    const state = app.getState();
+    if (state.mode === "parked") {
+      const nearby = filterNearby(filtered, state.spot.lat, state.spot.lng, 150, now);
+      renderSignPins(nearby, now);
+      if (nearby.length > 0) {
+        renderWarningBanner(nearby, now);
+      } else {
+        renderClearBanner();
+      }
+    } else if (state.mode === "browsing") {
+      renderSignPins(activeNow, now);
+      renderBrowsingMode(activeNow, now);
+    }
+    app.tick(now);
+  } catch {
+    // Silent — cached data remains in use
   }
 }
 
@@ -266,45 +288,6 @@ export async function initBrowserApp(): Promise<void> {
     });
   }
 
-  // Wire refresh button — F-15: re-fetches sign data without cache and re-evaluates.
-  const refreshBtn = document.getElementById("refresh-btn");
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
-      void (async () => {
-        setRefreshLoading(true);
-        try {
-          const res = await fetch("data/latest.json", { cache: "no-cache" });
-          const json = await res.json() as { fetched_at: string; signs: Sign[] };
-          _fetchedAt = json.fetched_at;
-          // Run the fetch pipeline on the fresh signs
-          const now = new Date();
-          const filteredSigns = filterLoadTimeNoise(json.signs, new Date(json.fetched_at));
-          const activeNow = filterActive(filteredSigns, now);
-          // Re-render based on current mode using fresh data
-          const state = app.getState();
-          if (state.mode === "parked") {
-            const nearby = filterNearby(filteredSigns, state.spot.lat, state.spot.lng, 150, now);
-            renderSignPins(nearby, now);
-            if (nearby.length > 0) {
-              renderWarningBanner(nearby, now);
-            } else {
-              renderClearBanner();
-            }
-          } else if (state.mode === "browsing") {
-            renderSignPins(activeNow, now);
-            renderBrowsingMode(activeNow, now);
-          }
-          renderRefreshButton(_fetchedAt, now);
-          app.tick(now);
-        } catch {
-          showRefreshError();
-        } finally {
-          setRefreshLoading(false);
-        }
-      })();
-    });
-  }
-
   // Wire map click handler — every click saves (or moves) the spot.
   registerMapClickHandler((lat: number, lng: number) => {
     // Reset so renderState re-centers and re-opens the popup for the new location.
@@ -318,9 +301,16 @@ export async function initBrowserApp(): Promise<void> {
     app.onSaveSpot(spot);
   });
 
-  // Start 60-second tick
+  // Start 60-second tick; auto-refresh data when it's from a previous UTC calendar day.
   setInterval(() => {
-    app.tick(new Date());
+    const now = new Date();
+    const fetched = new Date(_fetchedAt);
+    const stale =
+      fetched.getUTCFullYear() !== now.getUTCFullYear() ||
+      fetched.getUTCMonth() !== now.getUTCMonth() ||
+      fetched.getUTCDate() !== now.getUTCDate();
+    if (stale) void silentRefresh(app, now);
+    app.tick(now);
   }, 60_000);
 
   // F-12.2: Register service worker for PWA offline support.

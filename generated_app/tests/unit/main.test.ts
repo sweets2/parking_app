@@ -47,10 +47,6 @@ const mockHideLoading = vi.fn();
 const mockRenderBrowsingMode = vi.fn();
 const mockRenderWarningBanner = vi.fn();
 const mockRenderClearBanner = vi.fn();
-const mockRenderRefreshButton = vi.fn();
-const mockSetRefreshLoading = vi.fn();
-const mockShowRefreshError = vi.fn();
-
 vi.mock("../../app/ui", () => ({
   showSpotToast: mockShowSpotToast,
   renderLoading: mockRenderLoading,
@@ -58,9 +54,6 @@ vi.mock("../../app/ui", () => ({
   renderBrowsingMode: mockRenderBrowsingMode,
   renderWarningBanner: mockRenderWarningBanner,
   renderClearBanner: mockRenderClearBanner,
-  renderRefreshButton: mockRenderRefreshButton,
-  setRefreshLoading: mockSetRefreshLoading,
-  showRefreshError: mockShowRefreshError,
   TOAST_DURATION_MS: 4000,
 }));
 
@@ -1341,39 +1334,25 @@ describe("F-14 automatic re-fetch on open", () => {
   });
 });
 
-// ─── F-15 Refresh Button Click Handler ───────────────────────────────────────
+// ─── Auto-refresh staleness check ────────────────────────────────────────────
 //
-// Tests for the refresh button click handler wired in initBrowserApp.
-// Verifies fetch is called with correct args, renderSignPins/renderWarningBanner
-// is invoked on success, and showRefreshError + setRefreshLoading(false) on failure.
+// When the 60-second tick fires and _fetchedAt is from a previous UTC calendar
+// day, silentRefresh should fetch data/latest.json with cache: "no-cache".
 
-describe("F-15 refresh button click handler", () => {
-  function makeMockButton(id: string): HTMLButtonElement & { click(): void } {
-    const listeners: Record<string, (() => void)[]> = {};
-    const btn = {
+describe("auto-refresh staleness check", () => {
+  function makeMockButton(id: string) {
+    return {
       id,
       style: { display: "" as string },
       disabled: false as boolean,
-      addEventListener(event: string, fn: () => void) {
-        if (!listeners[event]) listeners[event] = [];
-        (listeners[event] as (() => void)[]).push(fn);
-      },
-      click() {
-        (listeners["click"] ?? []).forEach((fn) => fn());
-      },
-    } as unknown as HTMLButtonElement & { click(): void };
-    return btn;
+      addEventListener: vi.fn(),
+    };
   }
 
-  let refreshBtnEl: ReturnType<typeof makeMockButton>;
-
-  function installDocumentMock15(): void {
-    refreshBtnEl = makeMockButton("refresh-btn");
+  function installDocumentMockAR(): void {
     const elements: Record<string, unknown> = {
-      "save-btn": makeMockButton("save-btn"),
       "clear-btn": makeMockButton("clear-btn"),
       "here-btn": makeMockButton("here-btn"),
-      "refresh-btn": refreshBtnEl,
       "banner": { style: { display: "none" }, textContent: "" },
     };
     (globalThis as Record<string, unknown>)["document"] = {
@@ -1388,18 +1367,10 @@ describe("F-15 refresh button click handler", () => {
     };
   }
 
-  function removeDocumentMock15(): void {
+  function removeDocumentMockAR(): void {
     delete (globalThis as Record<string, unknown>)["document"];
     delete (globalThis as Record<string, unknown>)["localStorage"];
   }
-
-  const parkedSpot: SavedSpot = {
-    lat: 40.744,
-    lng: -74.032,
-    side: "N",
-    savedAt: "2026-06-09T12:00:00.000Z",
-    address: null,
-  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1407,12 +1378,7 @@ describe("F-15 refresh button click handler", () => {
     mockFetchImpl = null;
     vi.resetModules();
 
-    mockAppState = {
-      mode: "parked",
-      spot: parkedSpot,
-      allSigns: [],
-      nearbySigns: [],
-    };
+    mockAppState = { mode: "browsing", allSigns: [], nearbySigns: [] } as unknown as AppState;
     mockAppGetState.mockImplementation(() => mockAppState);
     capturedRenderState = null;
     mockCreateApp.mockImplementation((deps: { storage: unknown; renderState: (state: AppState) => void }) => {
@@ -1431,7 +1397,7 @@ describe("F-15 refresh button click handler", () => {
       save: mockStorageSave,
       clear: mockStorageClear,
     }));
-    mockStorageLoad.mockImplementation(() => parkedSpot);
+    mockStorageLoad.mockImplementation(() => null);
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
       if (mockFetchImpl) return mockFetchImpl();
@@ -1440,193 +1406,50 @@ describe("F-15 refresh button click handler", () => {
   });
 
   afterEach(() => {
-    removeDocumentMock15();
+    removeDocumentMockAR();
   });
 
-  it("F-15.2 GIVEN the refresh button click handler fires and the fetch resolves, THEN fetch was called with 'data/latest.json' and { cache: 'no-cache' }", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+  it("GIVEN _fetchedAt is from a previous UTC day, WHEN the 60s tick fires, THEN fetch is called with data/latest.json and cache: no-cache", async () => {
+    // Initial fetch returns data timestamped yesterday so the staleness check fires
+    const yesterdayPayload = { fetched_at: "2026-06-08T11:00:00Z", signs: [] };
+    const todayPayload = { fetched_at: "2026-06-09T11:00:00Z", signs: [] };
+
+    // Capture the 60-second tick callback by temporarily replacing setInterval
+    const capturedCallbacks: Array<() => void> = [];
+    const origSetInterval = globalThis.setInterval.bind(globalThis) as typeof setInterval;
+    (globalThis as Record<string, unknown>)["setInterval"] = (fn: () => void, delay: number) => {
+      if (delay === 60_000) { capturedCallbacks.push(fn); return 0; }
+      return origSetInterval(fn as TimerHandler, delay);
+    };
+
     mockFetchImpl = () =>
-      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
+      Promise.resolve({ ok: true, json: async () => yesterdayPayload } as Response);
 
     const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock15();
+    installDocumentMockAR();
     await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => origSetInterval(resolve as TimerHandler, 0));
+
+    // Restore setInterval
+    (globalThis as Record<string, unknown>)["setInterval"] = origSetInterval;
 
     const fetchSpy = global.fetch as ReturnType<typeof vi.fn>;
     fetchSpy.mockClear();
 
-    // Set up fresh fetch for the click
     mockFetchImpl = () =>
-      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
-    fetchSpy.mockImplementation(() => mockFetchImpl ? mockFetchImpl() : Promise.reject(new Error("not configured")));
+      Promise.resolve({ ok: true, json: async () => todayPayload } as Response);
+    fetchSpy.mockImplementation(() => mockFetchImpl ? mockFetchImpl() : Promise.reject(new Error()));
 
-    refreshBtnEl.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Fire the tick manually and allow async fetch to settle
+    const tick = capturedCallbacks[0];
+    if (tick) tick();
+    await new Promise<void>((resolve) => origSetInterval(resolve as TimerHandler, 10));
 
-    const calls = fetchSpy.mock.calls;
-    const noCacheCall = calls.find((call) => {
-      const opts = call[1] as RequestInit | undefined;
+    const calls = fetchSpy.mock.calls as [string, RequestInit | undefined][];
+    const staleRefreshCall = calls.find((call) => {
+      const opts = call[1];
       return call[0] === "data/latest.json" && opts?.cache === "no-cache";
     });
-    expect(noCacheCall).toBeDefined();
-  });
-
-  it("F-15.2 GIVEN fetch resolves with 3 signs, WHEN the handler completes, THEN renderSignPins is called", async () => {
-    const threeSignPayload = {
-      fetched_at: "2026-06-09T12:00:00Z",
-      signs: Array.from({ length: 3 }, (_, i) => ({
-        id: `sign-${i}`,
-        address: `${i} Test St`,
-        reason: "CONSTRUCTION",
-        permit_number: `P${i}`,
-        lat: 40.744 + i * 0.0001,
-        lng: -74.032,
-        start_date: "6/1/2026",
-        start_time: "00:00:00",
-        stop_date: "12/31/2026",
-        end_time: "23:59:59",
-        start_iso: "2026-06-01T00:00:00",
-        end_iso: "2026-12-31T23:59:59",
-        active_at_fetch: true,
-      })),
-    };
-
-    mockFetchImpl = () =>
-      Promise.resolve({ ok: true, json: async () => threeSignPayload } as Response);
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock15();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    mockRenderSignPins.mockClear();
-
-    const fetchSpy = global.fetch as ReturnType<typeof vi.fn>;
-    fetchSpy.mockImplementation(() =>
-      Promise.resolve({ ok: true, json: async () => threeSignPayload } as Response)
-    );
-
-    refreshBtnEl.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    // renderSignPins should have been called (either directly or via renderWarningBanner)
-    expect(mockRenderSignPins).toHaveBeenCalled();
-  });
-
-  it("F-15.2 GIVEN setRefreshLoading(true) is called, THEN the refresh button has disabled === true", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    mockFetchImpl = () =>
-      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock15();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // Use the mock directly — setRefreshLoading is mocked in the ui mock
-    // but we can verify the mock was called with true during a fetch
-    const fetchSpy = global.fetch as ReturnType<typeof vi.fn>;
-    // Set up a slow fetch to capture the loading state
-    let resolveFetch: ((value: Response) => void) | null = null;
-    fetchSpy.mockImplementation(() =>
-      new Promise<Response>((resolve) => { resolveFetch = resolve; })
-    );
-
-    refreshBtnEl.click();
-    // Give a tick for the async handler to start
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // setRefreshLoading(true) should have been called
-    expect(mockSetRefreshLoading).toHaveBeenCalledWith(true);
-
-    // Resolve the fetch to avoid hanging
-    (resolveFetch as ((v: Response) => void) | null)?.({ ok: true, json: async () => signsPayload } as Response);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  });
-
-  it("F-15.2 GIVEN setRefreshLoading(false) is called, THEN the refresh button has disabled === false", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    mockFetchImpl = () =>
-      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock15();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const fetchSpy = global.fetch as ReturnType<typeof vi.fn>;
-    fetchSpy.mockImplementation(() =>
-      Promise.resolve({ ok: true, json: async () => signsPayload } as Response)
-    );
-
-    refreshBtnEl.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    // After successful fetch, setRefreshLoading(false) should have been called
-    const calls = mockSetRefreshLoading.mock.calls;
-    const hasFalseCalls = calls.some((call) => call[0] === false);
-    expect(hasFalseCalls).toBe(true);
-  });
-
-  it("F-15.2 GIVEN the fetch fails with a network error, THEN showRefreshError is called and setRefreshLoading(false) is called after the error", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    // Initial loads succeed
-    let callCount = 0;
-    mockFetchImpl = () => {
-      callCount++;
-      if (callCount <= 2) {
-        return Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
-      }
-      return Promise.reject(new Error("Network error"));
-    };
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock15();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // Refresh click — fetch fails
-    const fetchSpy = global.fetch as ReturnType<typeof vi.fn>;
-    fetchSpy.mockImplementation(() => Promise.reject(new Error("Network error")));
-
-    mockShowRefreshError.mockClear();
-    mockSetRefreshLoading.mockClear();
-
-    refreshBtnEl.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    expect(mockShowRefreshError).toHaveBeenCalled();
-    // setRefreshLoading(false) should have been called after the error
-    const calls = mockSetRefreshLoading.mock.calls;
-    const hasFalseCalls = calls.some((call) => call[0] === false);
-    expect(hasFalseCalls).toBe(true);
-  });
-
-  it("F-15.2 GIVEN showRefreshError is called, THEN a DOM element containing the exact text is in the document body (via mock)", async () => {
-    // showRefreshError is mocked in main.test.ts, so we verify the mock was invoked
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    let callCount = 0;
-    mockFetchImpl = () => {
-      callCount++;
-      if (callCount <= 2) {
-        return Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
-      }
-      return Promise.reject(new Error("Network error"));
-    };
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock15();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const fetchSpy = global.fetch as ReturnType<typeof vi.fn>;
-    fetchSpy.mockImplementation(() => Promise.reject(new Error("Network error")));
-
-    mockShowRefreshError.mockClear();
-    refreshBtnEl.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    expect(mockShowRefreshError).toHaveBeenCalledOnce();
+    expect(staleRefreshCall).toBeDefined();
   });
 });

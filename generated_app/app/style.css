@@ -6,7 +6,7 @@ html, body {
 }
 
 #map {
-  height: calc(100vh - 180px);
+  height: 100vh;
   width: 100%;
 }
 
@@ -19,9 +19,7 @@ html, body {
 }
 
 #sign-list {
-  overflow-y: auto;
-  max-height: 120px;
-  padding: 0 8px;
+  display: none;
 }
 
 #controls {

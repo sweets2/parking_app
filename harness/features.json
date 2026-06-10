@@ -273,7 +273,7 @@
   {
     "id": "F-15",
     "name": "Manual Refresh Button",
-    "status": "TODO",
+    "status": "DONE",
     "order": 17,
     "depends_on": [
       "F-06",
@@ -429,6 +429,27 @@
     ],
     "output_files": [
       "app/main.ts"
+    ]
+  },
+  {
+    "id": "F-18",
+    "name": "Deployment Readiness",
+    "status": "DONE",
+    "order": 26,
+    "depends_on": [
+      "F-12",
+      "F-07"
+    ],
+    "context_files": [
+      "app/index.html",
+      "app/manifest.json"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/icon-192.png",
+      "app/icon-512.png",
+      "package.json",
+      "netlify.toml"
     ]
   }
 ]

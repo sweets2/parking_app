@@ -7,7 +7,7 @@
     "fetch-cleaning": "tsx fetcher/fetch-street-cleaning.ts",
     "test":           "vitest run",
     "typecheck":      "tsc --noEmit",
-    "build":          "esbuild app/main.ts --bundle --outfile=app/app.js && mkdir -p app/data && cp data/latest.json app/data/latest.json && cp data/street-cleaning.json app/data/street-cleaning.json",
+    "build":          "esbuild app/main.ts --bundle --outfile=app/app.js && esbuild app/sw.ts --bundle --outfile=app/sw.js --platform=browser && mkdir -p app/data && cp data/latest.json app/data/latest.json && cp data/street-cleaning.json app/data/street-cleaning.json",
     "dev":            "esbuild app/main.ts --bundle --outfile=app/app.js --watch"
   },
   "dependencies": {

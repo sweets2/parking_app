@@ -41,6 +41,9 @@ const TEST_SCHEMA = {
       },
     }},
     typecheckErrors: { type: 'array', description: 'One entry per TypeScript error line', items: { type: 'string' } },
+    // Build step (npm run build) — null when skipped due to absent data files
+    buildPassed:  { type: 'boolean', description: 'true if npm run build succeeded, false if it failed, null/omit if skipped' },
+    buildOutput:  { type: 'string',  description: 'stdout+stderr of npm run build, or SKIP_BUILD message if skipped' },
   },
 }
 
@@ -53,10 +56,14 @@ function fmtTestResults(r) {
     ? `${r.featureTestsPassed ? 'PASS ✓' : 'FAIL ✗'} (${r.featurePassedCount ?? '?'} passed, ${r.featureFailedCount ?? '?'} failed)`
     : 'skipped (no feature test files)'
   const suiteSuffix = regressionOnly ? '  ← REGRESSION (feature tests pass; failure is in another feature\'s tests)' : ''
+  const buildLine = r.buildPassed == null
+    ? 'SKIPPED (data files absent)'
+    : r.buildPassed ? 'PASS ✓' : 'FAIL ✗'
   const lines = [
     `Feature tests: ${featureLine}`,
     `Full suite:    ${r.testsPassed ? 'PASS ✓' : 'FAIL ✗'} (${r.passedCount ?? '?'} passed, ${r.failedCount ?? '?'} failed)${suiteSuffix}`,
     `Typecheck:     ${r.typecheckPassed ? 'PASS ✓' : 'FAIL ✗'}`,
+    `Build:         ${buildLine}`,
   ]
   if (r.featureTestFailures && r.featureTestFailures.length > 0) {
     lines.push('\nFEATURE TEST FAILURES:')
@@ -71,6 +78,10 @@ function fmtTestResults(r) {
   if (r.typecheckErrors && r.typecheckErrors.length > 0) {
     lines.push('\nTYPECHECK ERRORS:')
     r.typecheckErrors.forEach(e => lines.push(`  ${e}`))
+  }
+  if (r.buildPassed === false && r.buildOutput) {
+    lines.push('\nBUILD FAILURE:')
+    lines.push('  ' + r.buildOutput.split('\n').slice(0, 10).join('\n  '))
   }
   return lines.join('\n')
 }
@@ -275,7 +286,7 @@ You are implementing ONE feature. Your only output is the files listed under EXP
 2. **Read CLAUDE.md** (provided under PROJECT PROCESS AND CONSTRAINTS) — it contains the hard constraints and architecture rules for this project. They are non-negotiable.
 3. **Write tests first** — one test per Given/When/Then in the spec. Tests must be written before the implementation exists. Do not skip this step. (Skip this step for discovery features that produce documentation, not code.)
 4. **Write the implementation** — make the tests pass. Do not change the tests to make a broken implementation pass.
-5. **Write all files to disk** using the Write or Edit tools.
+5. **Write all files to disk** using the Write or Edit tools. Never run `npm run build` — it produces `app/app.js` and `app/sw.js` which shadow TypeScript sources and break vitest module resolution for all future tests.
 
 ---
 
@@ -299,7 +310,7 @@ You are the quality gate. Be strict. A feature that silently ignores a spec requ
 
 **PASS** — All of the following are true:
 - Every Given/When/Then test case in the spec has a corresponding test (for code features) or the documentation is complete (for discovery features)
-- For TypeScript features: \`npm test\` passed (all tests green) and \`npm run typecheck\` passed (zero TypeScript errors in \`.ts\` files)
+- For TypeScript features: \`npm test\` passed (all tests green), \`npm run typecheck\` passed (zero TypeScript errors in \`.ts\` files), and \`npm run build\` passed or was skipped (data files absent)
 - All project hard constraints from CLAUDE.md are met for the relevant file types
 - No spec requirement is silently omitted
 - All expected output files exist
@@ -313,6 +324,7 @@ You are the quality gate. Be strict. A feature that silently ignores a spec requ
 **FAIL** — One or more of:
 - \`npm test\` failed (any test red) — for TypeScript features only
 - \`npm run typecheck\` failed (any \`.ts\` error) — for TypeScript features only
+- \`npm run build\` failed (esbuild or file-copy error) — for TypeScript features only; skipped result is not a failure
 - A project hard constraint from CLAUDE.md is violated
 - A Given/When/Then case from the spec has no test at all (missing, not just weak)
 - An expected output file is missing entirely
@@ -721,31 +733,37 @@ Capture the full stdout and stderr combined. Return:
 
 function buildVerifyPrompt(featureTestPaths) {
   const hasFeatureTests = featureTestPaths.length > 0
-  return `Run the parking app test suite. All commands run from the ${OUTPUT_DIR}/ directory (cd ${OUTPUT_DIR} first — that's where package.json lives).
+  return `Run the parking app test suite. All commands run from the project root unless noted.
 
 Run these steps in order:
-1. cd ${OUTPUT_DIR} && (test -d node_modules || npm install)
+1. rm -f ${OUTPUT_DIR}/app/app.js ${OUTPUT_DIR}/app/sw.js
+   (Remove build artifacts — they shadow TypeScript sources in vitest and cause "is not a function" errors)
+2. cd ${OUTPUT_DIR} && (test -d node_modules || npm install)
 ${hasFeatureTests
-  ? `2. cd ${OUTPUT_DIR} && npx vitest run ${featureTestPaths.join(' ')}
+  ? `3. cd ${OUTPUT_DIR} && npx vitest run ${featureTestPaths.join(' ')}
    (Feature tests only — isolates whether this feature's own implementation is correct)
-3. cd ${OUTPUT_DIR} && npm test
+4. cd ${OUTPUT_DIR} && npm test
    (Full suite — catches regressions in other features)
-4. cd ${OUTPUT_DIR} && npm run typecheck`
-  : `2. cd ${OUTPUT_DIR} && npm test
-3. cd ${OUTPUT_DIR} && npm run typecheck`}
+5. cd ${OUTPUT_DIR} && npm run typecheck
+6. cd ${OUTPUT_DIR} && ([ -f data/latest.json ] && npm run build || echo "SKIP_BUILD: data/latest.json not present")`
+  : `3. cd ${OUTPUT_DIR} && npm test
+4. cd ${OUTPUT_DIR} && npm run typecheck
+5. cd ${OUTPUT_DIR} && ([ -f data/latest.json ] && npm run build || echo "SKIP_BUILD: data/latest.json not present")`}
 
 Return:
-- featureTestsPassed: ${hasFeatureTests ? 'true if step 2 exits code 0' : 'omit this field (no feature test files for this feature)'}
-- featureTestOutput: ${hasFeatureTests ? 'full stdout+stderr of step 2' : 'omit'}
-- featurePassedCount / featureFailedCount: ${hasFeatureTests ? 'parsed from step 2' : 'omit'}
-- featureTestFailures: ${hasFeatureTests ? '[{test, error}] for each failure in step 2' : 'omit'}
+- featureTestsPassed: ${hasFeatureTests ? 'true if step 3 exits code 0' : 'omit this field (no feature test files for this feature)'}
+- featureTestOutput: ${hasFeatureTests ? 'full stdout+stderr of step 3' : 'omit'}
+- featurePassedCount / featureFailedCount: ${hasFeatureTests ? 'parsed from step 3' : 'omit'}
+- featureTestFailures: ${hasFeatureTests ? '[{test, error}] for each failure in step 3' : 'omit'}
 - testsPassed: true if npm test exits code 0
 - testOutput: full stdout+stderr of npm test
 - passedCount / failedCount: parsed from npm test output
 - testFailures: [{test, error}] for each failure in npm test
 - typecheckPassed: true if typecheck exits code 0
 - typecheckOutput: full stdout+stderr of typecheck
-- typecheckErrors: one string per TypeScript error (file + line + message)`
+- typecheckErrors: one string per TypeScript error (file + line + message)
+- buildPassed: true if npm run build succeeded, false if it failed, omit/null if SKIP_BUILD was printed
+- buildOutput: full stdout+stderr of the build step (or the SKIP_BUILD message)`
 }
 
 // ─── Phase 3: Verify ────────────────────────────────────────────────────────
