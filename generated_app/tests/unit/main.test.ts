@@ -606,25 +606,25 @@ describe("F-10.2 map tap sets position marker", () => {
   });
 });
 
-// ─── F-10.3 signColor ─────────────────────────────────────────────────────────
+// ─── F-10.3 signEmoji ─────────────────────────────────────────────────────────
 //
-// signColor is exported from app/map.ts. Since the top-level vi.mock replaces
+// signEmoji is exported from app/map.ts. Since the top-level vi.mock replaces
 // app/map for main.ts tests, we use vi.importActual to access the real module.
 
-describe("F-10.3 signColor", () => {
-  it("signColor('CONSTRUCTION') returns '#e53e3e'", async () => {
+describe("F-10.3 signEmoji", () => {
+  it("signEmoji('CONSTRUCTION') returns '🚧'", async () => {
     const actual = await vi.importActual<typeof import("../../app/map")>("../../app/map");
-    expect(actual.signColor("CONSTRUCTION")).toBe("#e53e3e");
+    expect(actual.signEmoji("CONSTRUCTION")).toBe("🚧");
   });
 
-  it("signColor('DELIVERY') returns '#3182ce'", async () => {
+  it("signEmoji('DELIVERY') returns '📦'", async () => {
     const actual = await vi.importActual<typeof import("../../app/map")>("../../app/map");
-    expect(actual.signColor("DELIVERY")).toBe("#3182ce");
+    expect(actual.signEmoji("DELIVERY")).toBe("📦");
   });
 
-  it("signColor('UNKNOWN_REASON') returns '#718096' (grey fallback)", async () => {
+  it("signEmoji('UNKNOWN_REASON') returns '⚠️' (fallback)", async () => {
     const actual = await vi.importActual<typeof import("../../app/map")>("../../app/map");
-    expect(actual.signColor("UNKNOWN_REASON")).toBe("#718096");
+    expect(actual.signEmoji("UNKNOWN_REASON")).toBe("⚠️");
   });
 
   it("F-10.3 GIVEN browsing mode with 3 active signs, WHEN renderState fires, THEN renderSignPins is called with array of length 3", async () => {

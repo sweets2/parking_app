@@ -10,6 +10,14 @@ html, body {
   width: 100%;
 }
 
+.sign-emoji-marker {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+}
+
 #banner {
   display: none;
   padding: 8px 16px;

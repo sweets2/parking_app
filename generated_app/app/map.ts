@@ -44,6 +44,10 @@ interface LeafletMap {
   off(event: string): LeafletMap;
 }
 
+interface LeafletIcon {
+  _html: string;
+}
+
 interface LeafletStatic {
   map(elementId: string): LeafletMap;
   tileLayer(
@@ -54,6 +58,16 @@ interface LeafletStatic {
     latlng: [number, number],
     options: Record<string, unknown>
   ): LeafletLayer;
+  marker(
+    latlng: [number, number],
+    options: { icon: LeafletIcon }
+  ): LeafletLayer;
+  divIcon(options: {
+    html: string;
+    className: string;
+    iconSize: [number, number];
+    iconAnchor: [number, number];
+  }): LeafletIcon;
   popup(): LeafletPopup;
 }
 
@@ -69,25 +83,25 @@ let _positionMarker: LeafletLayer | null = null;
 let _spotMarker: LeafletLayer | null = null;
 let _streetPopup: LeafletPopup | null = null;
 
-// ─── Color palette ────────────────────────────────────────────────────────────
+// ─── Emoji palette ────────────────────────────────────────────────────────────
 
-const REASON_COLOR: Record<string, string> = {
-  CONSTRUCTION: "#e53e3e",
-  MOVING:       "#dd6b20",
-  EVENT:        "#d69e2e",
-  DELIVERY:     "#3182ce",
+const REASON_EMOJI: Record<string, string> = {
+  CONSTRUCTION: "🚧",
+  MOVING:       "🚛",
+  EVENT:        "🎪",
+  DELIVERY:     "📦",
 };
 
-const SPOT_COLOR = "#38a169"; // green — visually distinct from all reason colors
+const SPOT_COLOR = "#38a169"; // green — visually distinct from sign markers
 
-// ─── F-10.3 signColor ─────────────────────────────────────────────────────────
+// ─── F-10.3 signEmoji ─────────────────────────────────────────────────────────
 
 /**
- * Maps a sign reason string to a hex color string.
- * Returns "#718096" (grey) for unknown reasons.
+ * Maps a sign reason string to an emoji character.
+ * Returns "⚠️" for unknown reasons.
  */
-export function signColor(reason: string): string {
-  return REASON_COLOR[reason] ?? "#718096";
+export function signEmoji(reason: string): string {
+  return REASON_EMOJI[reason] ?? "⚠️";
 }
 
 // ─── F-07.1 initMap ───────────────────────────────────────────────────────────
@@ -136,15 +150,15 @@ export function renderSignPins(signs: Sign[], _now: Date): void {
   const L = getL();
 
   for (const sign of signs) {
-    const color = REASON_COLOR[sign.reason] ?? "#718096";
+    const emoji = REASON_EMOJI[sign.reason] ?? "⚠️";
 
-    const marker = L.circleMarker([sign.lat, sign.lng], {
-      radius: 8,
-      fillColor: color,
-      color: "#ffffff",
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.85,
+    const marker = L.marker([sign.lat, sign.lng], {
+      icon: L.divIcon({
+        html: emoji,
+        className: "sign-emoji-marker",
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      }),
     });
 
     const popupHtml = buildSignPopup(sign);

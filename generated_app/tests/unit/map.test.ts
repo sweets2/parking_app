@@ -232,6 +232,13 @@ function installLeafletMock(): void {
     circleMarker: vi.fn((latlng: [number, number], opts: Record<string, unknown> = {}) => {
       return createMockMarker(latlng[0], latlng[1], opts);
     }),
+    divIcon: vi.fn((opts: Record<string, unknown>) => {
+      return { _html: opts["html"] as string };
+    }),
+    marker: vi.fn((latlng: [number, number], opts: Record<string, unknown> = {}) => {
+      const icon = opts["icon"] as { _html: string } | undefined;
+      return createMockMarker(latlng[0], latlng[1], { html: icon?._html ?? "" });
+    }),
     popup: vi.fn(() => {
       return createMockPopup();
     }),
@@ -286,44 +293,44 @@ describe("F-07 map module", () => {
       expect(mockMapInstance._layers.length).toBe(3);
     });
 
-    it("CONSTRUCTION sign marker has fill color #e53e3e", async () => {
+    it("CONSTRUCTION sign marker uses 🚧 emoji", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "CONSTRUCTION" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["fillColor"]).toBe("#e53e3e");
+      expect(marker._options["html"]).toBe("🚧");
     });
 
-    it("MOVING sign marker has fill color #dd6b20", async () => {
+    it("MOVING sign marker uses 🚛 emoji", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "MOVING" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["fillColor"]).toBe("#dd6b20");
+      expect(marker._options["html"]).toBe("🚛");
     });
 
-    it("EVENT sign marker has fill color #d69e2e", async () => {
+    it("EVENT sign marker uses 🎪 emoji", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "EVENT" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["fillColor"]).toBe("#d69e2e");
+      expect(marker._options["html"]).toBe("🎪");
     });
 
-    it("DELIVERY sign marker has fill color #3182ce", async () => {
+    it("DELIVERY sign marker uses 📦 emoji", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "DELIVERY" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["fillColor"]).toBe("#3182ce");
+      expect(marker._options["html"]).toBe("📦");
     });
 
     it("clicking a pin shows a popup containing address, start date, end date, permit number", async () => {
@@ -465,7 +472,7 @@ describe("F-07 map module", () => {
       expect(marker._lng).toBeCloseTo(-74.0303, 5);
     });
 
-    it("spot marker and sign pin are visually distinct (different fillColor)", async () => {
+    it("spot marker and sign pin are visually distinct (emoji vs fillColor)", async () => {
       const { initMap, renderSignPins, renderSpotMarker } = await import("../../app/map");
       initMap();
       renderSignPins(
@@ -475,10 +482,9 @@ describe("F-07 map module", () => {
       renderSpotMarker({ lat: 40.7503, lng: -74.0303, side: "N", savedAt: "2026-06-09T12:00:00Z", address: null });
       expect(mockMapInstance._layers.length).toBe(2);
       const [signMarker, spotMarker] = mockMapInstance._layers;
-      // They must differ in at least one visual property
-      const signColor = signMarker._options["fillColor"];
-      const spotColor = spotMarker._options["fillColor"];
-      expect(signColor).not.toBe(spotColor);
+      // Sign uses emoji divIcon (html property), spot uses circleMarker (fillColor)
+      expect(signMarker._options["html"]).toBeDefined();
+      expect(spotMarker._options["fillColor"]).toBeDefined();
     });
 
     it("clearSpotMarker removes the spot marker without throwing", async () => {
