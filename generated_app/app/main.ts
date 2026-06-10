@@ -132,9 +132,9 @@ function buildDetectSegmentCallback(
       const crossStreets = extractCrossStreets(location);
       if (crossStreets === null) continue;
       const [from, to] = crossStreets;
-      const fromCoord = await geocodeCrossStreet(from);
+      const fromCoord = await geocodeCrossStreet(normalizeStreet(from));
       if (fromCoord === null) continue;
-      const toCoord = await geocodeCrossStreet(to);
+      const toCoord = await geocodeCrossStreet(normalizeStreet(to));
       if (toCoord === null) continue;
       if (detectMatchingSegment(clickLat, clickLng, fromCoord, toCoord)) {
         return location;
