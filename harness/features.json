@@ -254,7 +254,7 @@
   {
     "id": "F-14",
     "name": "Auto Re-Fetch on Open",
-    "status": "TODO",
+    "status": "DONE",
     "order": 16,
     "depends_on": [
       "F-06",
@@ -281,19 +281,21 @@
       "F-14"
     ],
     "context_files": [
-      "app/app.ts",
+      "app/main.ts",
       "app/ui.ts",
-      "shared/parking-logic.ts"
+      "shared/parking-logic.ts",
+      "tests/fixtures/signs.ts"
     ],
     "output_files": [
-      "app/app.ts",
-      "app/ui.ts"
+      "app/main.ts",
+      "app/ui.ts",
+      "tests/unit/ui.test.ts"
     ]
   },
   {
     "id": "F-10",
     "name": "Flow 1 — Just Parked",
-    "status": "TODO",
+    "status": "DONE",
     "order": 18,
     "depends_on": [
       "F-06",
