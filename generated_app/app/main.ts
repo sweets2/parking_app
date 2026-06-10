@@ -80,12 +80,29 @@ let _centeredOnSpot = false;
 export function normalizeStreet(s: string): string {
   return s
     .toLowerCase()
+    .replace(/\./g, "")
     .replace(/\bst\b/g, "street")
     .replace(/\bave\b/g, "avenue")
     .replace(/\bblvd\b/g, "boulevard")
     .replace(/\bdr\b/g, "drive")
     .replace(/\bpl\b/g, "place")
-    .replace(/\bhwy\b/g, "highway");
+    .replace(/\bhwy\b/g, "highway")
+    .replace(/\bfirst\b/g, "1st")
+    .replace(/\bsecond\b/g, "2nd")
+    .replace(/\bthird\b/g, "3rd")
+    .replace(/\bfourth\b/g, "4th")
+    .replace(/\bfifth\b/g, "5th")
+    .replace(/\bsixth\b/g, "6th")
+    .replace(/\bseventh\b/g, "7th")
+    .replace(/\beighth\b/g, "8th")
+    .replace(/\bninth\b/g, "9th")
+    .replace(/\btenth\b/g, "10th")
+    .replace(/\beleventh\b/g, "11th")
+    .replace(/\btwelfth\b/g, "12th")
+    .replace(/\bthirteenth\b/g, "13th")
+    .replace(/\bfourteenth\b/g, "14th")
+    .replace(/\bfifteenth\b/g, "15th")
+    .replace(/\bsixteenth\b/g, "16th");
 }
 
 /**
