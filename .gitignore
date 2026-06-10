@@ -1,11 +1,11 @@
 .claude/
 node_modules/
 dist/
-data/latest.json
-data/street-cleaning.json
+data/
 harness/metrics.jsonl
 harness/stuck/
 generated_app/node_modules/
 generated_app/dist/
-generated_app/data/latest.json
-generated_app/data/street-cleaning.json
+generated_app/app/data/
+generated_app/app/app.js
+generated_app/app/sw.js
