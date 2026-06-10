@@ -199,7 +199,7 @@
   {
     "id": "F-09",
     "name": "UI Rendering Module",
-    "status": "TODO",
+    "status": "DONE",
     "order": 13,
     "depends_on": [
       "F-02",
@@ -242,7 +242,8 @@
     ],
     "context_files": [
       "shared/parking-logic.ts",
-      "app/ui.ts"
+      "app/ui.ts",
+      "tests/fixtures/signs.ts"
     ],
     "output_files": [
       "shared/parking-logic.ts",
@@ -307,7 +308,8 @@
     ],
     "output_files": [
       "app/main.ts",
-      "app/app.ts"
+      "app/map.ts",
+      "tests/unit/main.test.ts"
     ]
   },
   {
@@ -329,7 +331,8 @@
       "app/main.ts"
     ],
     "output_files": [
-      "app/main.ts"
+      "app/main.ts",
+      "tests/unit/f11.test.ts"
     ]
   },
   {
@@ -341,11 +344,14 @@
       "F-06"
     ],
     "context_files": [
-      "app/app.ts"
+      "app/app.ts",
+      "app/main.ts",
+      "app/manifest.json"
     ],
     "output_files": [
       "app/manifest.json",
-      "app/sw.ts"
+      "app/sw.ts",
+      "app/main.ts"
     ]
   },
   {
