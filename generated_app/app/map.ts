@@ -97,7 +97,7 @@ const REASON_EMOJI: Record<string, string> = {
   DELIVERY:     icon(`<rect x="1" y="1" width="10" height="10" fill="${TOW_RED}" stroke="white" stroke-width="1" stroke-linejoin="round"/>`),
 };
 
-const SPOT_COLOR = "#38a169"; // green — visually distinct from sign markers
+const SPOT_COLOR = "#1d6fe3"; // blue — visually distinct from sign markers
 
 // ─── F-10.3 signEmoji ─────────────────────────────────────────────────────────
 
