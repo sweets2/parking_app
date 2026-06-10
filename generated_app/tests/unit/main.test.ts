@@ -41,7 +41,6 @@ vi.mock("../../app/map", () => ({
 
 // ─── Mock app/ui ──────────────────────────────────────────────────────────────
 
-const mockShowStreetSidePicker = vi.fn();
 const mockShowSpotToast = vi.fn();
 const mockRenderLoading = vi.fn();
 const mockHideLoading = vi.fn();
@@ -53,7 +52,6 @@ const mockSetRefreshLoading = vi.fn();
 const mockShowRefreshError = vi.fn();
 
 vi.mock("../../app/ui", () => ({
-  showStreetSidePicker: mockShowStreetSidePicker,
   showSpotToast: mockShowSpotToast,
   renderLoading: mockRenderLoading,
   hideLoading: mockHideLoading,
@@ -572,27 +570,7 @@ describe("F-10.2 map tap sets position marker", () => {
     removeDocumentMock();
   });
 
-  it("F-10.2 GIVEN browsing mode, WHEN map click handler fires with (40.744, -74.032), THEN renderPositionMarker is called with those exact coordinates", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    mockFetchImpl = () =>
-      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // Get the click handler registered via registerMapClickHandler
-    const handler = getCapturedClickHandler();
-    expect(handler).not.toBeNull();
-    if (handler === null) return;
-
-    await handler(40.744, -74.032);
-
-    expect(mockRenderPositionMarker).toHaveBeenCalledWith(40.744, -74.032);
-  });
-
-  it("F-10.2 GIVEN map click fires twice at different coordinates, THEN renderPositionMarker is called twice", async () => {
+  it("F-10.2 GIVEN browsing mode, WHEN map click fires, THEN onSaveSpot is called with the clicked coordinates", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
@@ -607,24 +585,15 @@ describe("F-10.2 map tap sets position marker", () => {
     if (handler === null) return;
 
     await handler(40.744, -74.032);
-    await handler(40.745, -74.033);
 
-    expect(mockRenderPositionMarker).toHaveBeenCalledTimes(2);
-    expect(mockRenderPositionMarker).toHaveBeenNthCalledWith(1, 40.744, -74.032);
-    expect(mockRenderPositionMarker).toHaveBeenNthCalledWith(2, 40.745, -74.033);
+    expect(mockAppOnSaveSpot).toHaveBeenCalledOnce();
+    const savedSpot = mockAppOnSaveSpot.mock.calls[0]?.[0] as SavedSpot;
+    expect(savedSpot.lat).toBeCloseTo(40.744, 5);
+    expect(savedSpot.lng).toBeCloseTo(-74.032, 5);
+    expect(savedSpot.address).toBeNull();
   });
 
-  it("F-10.2 GIVEN no tap has occurred (userLat/userLng are null), WHEN SAVE MY SPOT is tapped, THEN showStreetSidePicker is not called", async () => {
-    // State with null position
-    mockAppState = {
-      mode: "browsing",
-      userLat: null,
-      userLng: null,
-      allSigns: [],
-      activeSigns: [],
-    };
-    mockAppGetState.mockImplementation(() => mockAppState);
-
+  it("F-10.2 GIVEN browsing mode, WHEN map click fires, THEN renderPositionMarker is NOT called", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
@@ -634,12 +603,13 @@ describe("F-10.2 map tap sets position marker", () => {
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Click save button — no position, picker should not appear
-    const saveBtnEl = (globalThis as Record<string, unknown>)["document"] as { getElementById(id: string): { click?: () => void } | null };
-    // Trigger via registered click handlers via getCapturedClickHandler approach won't work here.
-    // Instead re-import with the mock for save-btn
-    // The save btn has null userLat/userLng so showStreetSidePicker should NOT be called
-    expect(mockShowStreetSidePicker).not.toHaveBeenCalled();
+    const handler = getCapturedClickHandler();
+    expect(handler).not.toBeNull();
+    if (handler === null) return;
+
+    await handler(40.744, -74.032);
+
+    expect(mockRenderPositionMarker).not.toHaveBeenCalled();
   });
 });
 
@@ -859,14 +829,12 @@ describe("F-10.3b findCleaningEntries spec cases", () => {
   });
 });
 
-// ─── F-10.4 initBrowserApp wiring ────────────────────────────────────────────
+// ─── F-10.4 initBrowserApp map-click auto-save ───────────────────────────────
 //
-// These tests call initBrowserApp() with a minimal mock document to verify
-// that the save-button click handler correctly triggers the street-side picker,
-// the spot marker, sign-pin updates, and the confirmation toast.
+// These tests verify that clicking the map in browsing mode immediately calls
+// onSaveSpot (auto-save), and that renderState correctly renders the parked UI.
 
-describe("F-10.4 initBrowserApp save-button wiring", () => {
-  // Minimal mock button
+describe("F-10.4 initBrowserApp map-click auto-save", () => {
   function makeMockButton(id: string): HTMLButtonElement & { click(): void } {
     const listeners: Record<string, (() => void)[]> = {};
     const btn = {
@@ -884,30 +852,15 @@ describe("F-10.4 initBrowserApp save-button wiring", () => {
     return btn;
   }
 
-  // Set up a minimal global.document mock for each test
-  let saveBtnEl: ReturnType<typeof makeMockButton>;
-  let clearBtnEl: ReturnType<typeof makeMockButton>;
-  let hereBtnEl: ReturnType<typeof makeMockButton>;
-  let bannerEl: { style: { display: string }; textContent: string };
-
   function installDocumentMock(): void {
-    saveBtnEl = makeMockButton("save-btn");
-    clearBtnEl = makeMockButton("clear-btn");
-    hereBtnEl = makeMockButton("here-btn");
-    bannerEl = { style: { display: "none" }, textContent: "" };
-
     const elements: Record<string, unknown> = {
-      "save-btn": saveBtnEl,
-      "clear-btn": clearBtnEl,
-      "here-btn": hereBtnEl,
-      "banner": bannerEl,
+      "clear-btn": makeMockButton("clear-btn"),
+      "here-btn": makeMockButton("here-btn"),
+      "banner": { style: { display: "none" }, textContent: "" },
     };
-
     (globalThis as Record<string, unknown>)["document"] = {
       getElementById: (id: string) => elements[id] ?? null,
     };
-
-    // Mock localStorage (Node doesn't have it)
     const store = new Map<string, string>();
     (globalThis as Record<string, unknown>)["localStorage"] = {
       getItem: (k: string) => store.get(k) ?? null,
@@ -918,7 +871,6 @@ describe("F-10.4 initBrowserApp save-button wiring", () => {
   }
 
   function removeDocumentMock(): void {
-    // Remove browser globals so Node-env tests don't accidentally see them
     delete (globalThis as Record<string, unknown>)["document"];
     delete (globalThis as Record<string, unknown>)["localStorage"];
   }
@@ -929,11 +881,10 @@ describe("F-10.4 initBrowserApp save-button wiring", () => {
     mockFetchImpl = null;
     vi.resetModules();
 
-    // Reset mock app state to browsing with a position set
     mockAppState = {
       mode: "browsing",
-      userLat: 40.744,
-      userLng: -74.032,
+      userLat: null,
+      userLng: null,
       allSigns: [],
       activeSigns: [],
     };
@@ -953,177 +904,72 @@ describe("F-10.4 initBrowserApp save-button wiring", () => {
         onHereNow: mockAppOnHereNow,
       };
     });
-
     mockCreateSpotStorage.mockImplementation(() => ({
       load: mockStorageLoad,
       save: mockStorageSave,
       clear: mockStorageClear,
     }));
     mockStorageLoad.mockImplementation(() => null);
-
-    // Re-set fetch mock after reset
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      if (mockFetchImpl) {
-        return mockFetchImpl();
-      }
+      if (mockFetchImpl) return mockFetchImpl();
       return Promise.reject(new Error("fetch not configured"));
     });
-
-    // Do NOT install document mock here — it is installed per-test AFTER the
-    // dynamic import, so the module-level `typeof document !== "undefined"`
-    // guard does not fire automatically at import time.
   });
 
   afterEach(() => {
     removeDocumentMock();
   });
 
-  it("F-10.4 GIVEN user has tapped a position, WHEN SAVE MY SPOT is tapped, THEN showStreetSidePicker is called", async () => {
+  it("F-10.4 GIVEN browsing mode, WHEN map click fires, THEN onSaveSpot is called with clicked lat/lng", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
-      Promise.resolve({
-        ok: true,
-        json: async () => signsPayload,
-      } as Response);
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    // Import BEFORE installing document so the module-level guard doesn't auto-fire
     const { initBrowserApp } = await import("../../app/main");
     installDocumentMock();
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // State is browsing with userLat/userLng set (non-null)
-    expect(mockAppGetState()).toMatchObject({ mode: "browsing", userLat: 40.744 });
+    const handler = getCapturedClickHandler();
+    expect(handler).not.toBeNull();
+    if (handler === null) return;
 
-    // Trigger the save button click
-    saveBtnEl.click();
-
-    expect(mockShowStreetSidePicker).toHaveBeenCalledOnce();
-  });
-
-  it("F-10.4 GIVEN save button is tapped and user selects N side, THEN renderSpotMarker and renderSignPins are called", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    mockFetchImpl = () =>
-      Promise.resolve({
-        ok: true,
-        json: async () => signsPayload,
-      } as Response);
-
-    // Simulate picker resolving immediately with side "N"
-    mockShowStreetSidePicker.mockImplementation(
-      (onSelect: (side: string | null) => void) => {
-        onSelect("N");
-      }
-    );
-
-    // Import BEFORE installing document so the module-level guard doesn't auto-fire
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // capturedRenderState should have been set by mockCreateApp
-    expect(capturedRenderState).not.toBeNull();
-
-    // Trigger save button — onSaveSpot is called, mockAppState transitions to parked
-    saveBtnEl.click();
+    await handler(40.744, -74.032);
 
     expect(mockAppOnSaveSpot).toHaveBeenCalledOnce();
     const savedSpot = mockAppOnSaveSpot.mock.calls[0]?.[0] as SavedSpot;
-    expect(savedSpot.side).toBe("N");
-    // lat offset applied for N side: lat + 0.00009
-    expect(savedSpot.lat).toBeCloseTo(40.744 + 0.00009, 6);
-    expect(savedSpot.lng).toBeCloseTo(-74.032, 6);
+    expect(savedSpot.lat).toBeCloseTo(40.744, 5);
+    expect(savedSpot.lng).toBeCloseTo(-74.032, 5);
+    expect(savedSpot.address).toBeNull();
+  });
 
-    // Now simulate the app calling renderState with the parked state (as the real app would),
-    // and verify that renderSpotMarker and renderSignPins are invoked by main's renderState.
+  it("F-10.4 GIVEN browsing mode map click fires, WHEN renderState fires with parked state, THEN renderSpotMarker and renderSignPins are called", async () => {
+    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+    mockFetchImpl = () =>
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
+    mockGetStreetName.mockResolvedValue(null);
+
+    const { initBrowserApp } = await import("../../app/main");
+    installDocumentMock();
+    await initBrowserApp();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(capturedRenderState).not.toBeNull();
+
+    const handler = getCapturedClickHandler();
+    expect(handler).not.toBeNull();
+    if (handler === null) return;
+
+    // Click triggers onSaveSpot which updates mockAppState to parked
+    await handler(40.744, -74.032);
+
+    // Simulate renderState being called with the parked state
     if (capturedRenderState !== null) {
       capturedRenderState(mockAppState);
     }
 
-    // renderState in main.ts calls renderSpotMarker and renderSignPins when mode=parked
-    expect(mockRenderSpotMarker).toHaveBeenCalledWith(savedSpot);
+    expect(mockRenderSpotMarker).toHaveBeenCalled();
     expect(mockRenderSignPins).toHaveBeenCalled();
-  });
-
-  it("F-10.4 GIVEN save button is tapped and user selects N, THEN showSpotToast is called", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    mockFetchImpl = () =>
-      Promise.resolve({
-        ok: true,
-        json: async () => signsPayload,
-      } as Response);
-
-    mockShowStreetSidePicker.mockImplementation(
-      (onSelect: (side: string | null) => void) => {
-        onSelect("N");
-      }
-    );
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    saveBtnEl.click();
-
-    expect(mockShowSpotToast).toHaveBeenCalledOnce();
-    const [_address, side] = mockShowSpotToast.mock.calls[0] as [string, string];
-    expect(side).toBe("N");
-  });
-
-  it("F-10.4 GIVEN save button is tapped and user cancels picker (null), THEN onSaveSpot is not called", async () => {
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    mockFetchImpl = () =>
-      Promise.resolve({
-        ok: true,
-        json: async () => signsPayload,
-      } as Response);
-
-    mockShowStreetSidePicker.mockImplementation(
-      (onSelect: (side: string | null) => void) => {
-        onSelect(null);
-      }
-    );
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    saveBtnEl.click();
-
-    expect(mockAppOnSaveSpot).not.toHaveBeenCalled();
-    expect(mockShowSpotToast).not.toHaveBeenCalled();
-  });
-
-  it("F-10.4 GIVEN app is in browsing mode with no position (null), WHEN save is tapped, THEN showStreetSidePicker is not called (button disabled logic)", async () => {
-    // Reset state to browsing with null position
-    mockAppState = {
-      mode: "browsing",
-      userLat: null,
-      userLng: null,
-      allSigns: [],
-      activeSigns: [],
-    };
-    mockAppGetState.mockImplementation(() => mockAppState);
-
-    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
-    mockFetchImpl = () =>
-      Promise.resolve({
-        ok: true,
-        json: async () => signsPayload,
-      } as Response);
-
-    const { initBrowserApp } = await import("../../app/main");
-    installDocumentMock();
-    await initBrowserApp();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // Click save — no position, so picker should not appear
-    saveBtnEl.click();
-
-    expect(mockShowStreetSidePicker).not.toHaveBeenCalled();
   });
 });
 
@@ -1218,6 +1064,9 @@ describe("F-14 automatic re-fetch on open", () => {
     // Default: storage has a saved spot
     mockStorageLoad.mockImplementation(() => savedSpot);
 
+    // Default: getStreetName returns null (prevents TypeError when renderState auto-opens popup)
+    mockGetStreetName.mockResolvedValue(null);
+
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
       if (mockFetchImpl) {
         return mockFetchImpl();
@@ -1266,16 +1115,18 @@ describe("F-14 automatic re-fetch on open", () => {
   it("F-14.1 GIVEN a saved spot exists and the no-cache fetch fails, WHEN initBrowserApp runs, THEN createApp is still called and mock app reaches parked state", async () => {
     const firstPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
 
+    // call 1 = street-cleaning fire-and-forget, call 2 = data/latest.json (succeeds),
+    // call 3 = data/latest.json no-cache (fails)
     let callCount = 0;
     mockFetchImpl = () => {
       callCount++;
-      if (callCount === 1) {
+      if (callCount <= 2) {
         return Promise.resolve({
           ok: true,
           json: async () => firstPayload,
         } as Response);
       }
-      // Second call (no-cache) fails
+      // Third call (no-cache) fails
       return Promise.reject(new Error("Network error on no-cache fetch"));
     };
 

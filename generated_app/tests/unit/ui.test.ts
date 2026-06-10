@@ -506,59 +506,8 @@ describe("F-09 ui.ts", () => {
     });
   });
 
-  // ─── F-09.6 Street-Side Picker ────────────────────────────────────────────
-
-  describe("F-09.6 Street-Side Picker", () => {
-    it("GIVEN showStreetSidePicker is called, THEN the picker is visible with four side buttons", async () => {
-      const { showStreetSidePicker } = await import("../../app/ui");
-      showStreetSidePicker(() => {});
-      const doc = (globalThis as Record<string, unknown>)["document"] as {
-        body: FakeElement;
-      };
-      const picker = doc.body.querySelector("#side-picker");
-      expect(picker).not.toBeNull();
-      // Check for N, S, E, W buttons
-      const buttons = picker?.querySelectorAll("button") ?? [];
-      const labels = buttons.map((b) => b.textContent.trim());
-      expect(labels).toContain("N");
-      expect(labels).toContain("S");
-      expect(labels).toContain("E");
-      expect(labels).toContain("W");
-    });
-
-    it("GIVEN the user taps N, THEN onSelect is called with 'N'", async () => {
-      const { showStreetSidePicker } = await import("../../app/ui");
-      const onSelect = vi.fn();
-      showStreetSidePicker(onSelect);
-      const doc = (globalThis as Record<string, unknown>)["document"] as {
-        body: FakeElement;
-      };
-      const picker = doc.body.querySelector("#side-picker");
-      const buttons = picker?.querySelectorAll("button") ?? [];
-      const nBtn = buttons.find((b) => b.textContent.trim() === "N");
-      expect(nBtn).not.toBeUndefined();
-      nBtn?._fireClick();
-      expect(onSelect).toHaveBeenCalledWith("N");
-    });
-
-    it("GIVEN the user dismisses the picker without selecting, THEN onSelect is called with null", async () => {
-      const { showStreetSidePicker } = await import("../../app/ui");
-      const onSelect = vi.fn();
-      showStreetSidePicker(onSelect);
-      const doc = (globalThis as Record<string, unknown>)["document"] as {
-        body: FakeElement;
-      };
-      const picker = doc.body.querySelector("#side-picker");
-      // Find a cancel/dismiss button
-      const buttons = picker?.querySelectorAll("button") ?? [];
-      const cancelBtn = buttons.find(
-        (b) => !["N", "S", "E", "W"].includes(b.textContent.trim())
-      );
-      expect(cancelBtn).not.toBeUndefined();
-      cancelBtn?._fireClick();
-      expect(onSelect).toHaveBeenCalledWith(null);
-    });
-  });
+  // F-09.6 (Street-Side Picker) removed — showStreetSidePicker was deleted when
+  // the feature changed to auto-save on map click.
 
   // ─── F-13.2 Stale Data UI Warning ─────────────────────────────────────────
 
@@ -613,33 +562,33 @@ describe("F-09 ui.ts", () => {
   // ─── F-09.7 Spot Confirmation Toast ───────────────────────────────────────
 
   describe("F-09.7 Spot Confirmation Toast", () => {
-    it("GIVEN address falls back to coordinate string and side is N, WHEN toast renders, THEN it contains 'north' and the coordinate string", async () => {
+    it("GIVEN address is provided, WHEN toast renders, THEN it contains the address", async () => {
       const { showSpotToast } = await import("../../app/ui");
-      showSpotToast("40.7503, -74.0303", "N");
+      showSpotToast("259 11th St");
       const doc = (globalThis as Record<string, unknown>)["document"] as {
         body: FakeElement;
       };
       const toast = doc.body.querySelector("#spot-toast");
       expect(toast).not.toBeNull();
       const text = toast?.textContent ?? "";
-      expect(text.toLowerCase()).toContain("north");
-      expect(text).toContain("40.7503, -74.0303");
+      expect(text).toContain("259 11th St");
     });
 
-    it("GIVEN reverse geocoding returned '259 11th St', WHEN the toast renders, THEN it contains '259 11th St'", async () => {
+    it("GIVEN address is null, WHEN toast renders, THEN it shows a generic saved message", async () => {
       const { showSpotToast } = await import("../../app/ui");
-      showSpotToast("259 11th St", "N");
+      showSpotToast(null);
       const doc = (globalThis as Record<string, unknown>)["document"] as {
         body: FakeElement;
       };
       const toast = doc.body.querySelector("#spot-toast");
+      expect(toast).not.toBeNull();
       const text = toast?.textContent ?? "";
-      expect(text).toContain("259 11th St");
+      expect(text.toLowerCase()).toContain("saved");
     });
 
     it("GIVEN the toast appears, THEN it is removed from the DOM after exactly TOAST_DURATION_MS milliseconds", async () => {
       const { showSpotToast, TOAST_DURATION_MS } = await import("../../app/ui");
-      showSpotToast("259 11th St", "N");
+      showSpotToast("259 11th St");
       const doc = (globalThis as Record<string, unknown>)["document"] as {
         body: FakeElement;
       };

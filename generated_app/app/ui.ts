@@ -6,10 +6,6 @@ import {
 } from "../shared/parking-logic";
 import type { Sign } from "../shared/types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export type Side = "N" | "S" | "E" | "W";
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Duration the spot confirmation toast is visible before auto-hiding. */
@@ -19,15 +15,6 @@ export const TOAST_DURATION_MS = 4000;
 
 function getEl(id: string): HTMLElement | null {
   return document.getElementById(id);
-}
-
-function sideLabel(side: Side): string {
-  switch (side) {
-    case "N": return "north";
-    case "S": return "south";
-    case "E": return "east";
-    case "W": return "west";
-  }
 }
 
 // ─── F-09.1 Loading State ─────────────────────────────────────────────────────
@@ -114,10 +101,6 @@ export function renderSignCards(signs: Sign[], now: Date): void {
 // ─── F-09.3 Browsing Mode UI ──────────────────────────────────────────────────
 
 export function renderBrowsingMode(activeSigns: Sign[], now: Date): void {
-  // Show the SAVE MY SPOT button
-  const saveBtn = getEl("save-btn");
-  if (saveBtn) saveBtn.style.display = "";
-
   // Hide parked-only buttons
   const clearBtn = getEl("clear-btn");
   if (clearBtn) clearBtn.style.display = "none";
@@ -161,10 +144,6 @@ export function renderClearBanner(): void {
 
   const hereBtn = getEl("here-btn");
   if (hereBtn) hereBtn.style.display = "";
-
-  // Hide browsing-mode button
-  const saveBtn = getEl("save-btn");
-  if (saveBtn) saveBtn.style.display = "none";
 }
 
 // ─── F-09.5 Parked Mode — Warning Banner ─────────────────────────────────────
@@ -214,56 +193,9 @@ export function renderWarningBanner(nearbySigns: Sign[], now: Date): void {
 
   const hereBtn = getEl("here-btn");
   if (hereBtn) hereBtn.style.display = "";
-
-  // Hide browsing-mode button
-  const saveBtn = getEl("save-btn");
-  if (saveBtn) saveBtn.style.display = "none";
 }
 
-// ─── F-09.6 Street-Side Picker ────────────────────────────────────────────────
-
-export function showStreetSidePicker(onSelect: (side: Side | null) => void): void {
-  // Remove any existing picker
-  const existing = document.getElementById("side-picker");
-  if (existing) existing.remove();
-
-  const overlay = document.createElement("div");
-  overlay.id = "side-picker";
-  overlay.className = "side-picker-overlay";
-
-  const title = document.createElement("div");
-  title.className = "side-picker-title";
-  title.textContent = "Which side of the street?";
-  overlay.appendChild(title);
-
-  const sides: Side[] = ["N", "S", "E", "W"];
-  for (const side of sides) {
-    const btn = document.createElement("button");
-    btn.className = "side-picker-btn";
-    btn.textContent = side;
-    btn.addEventListener("click", () => {
-      overlay.remove();
-      onSelect(side);
-    });
-    overlay.appendChild(btn);
-  }
-
-  // Cancel button
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "side-picker-cancel";
-  cancelBtn.textContent = "Cancel";
-  cancelBtn.addEventListener("click", () => {
-    overlay.remove();
-    onSelect(null);
-  });
-  overlay.appendChild(cancelBtn);
-
-  document.body.appendChild(overlay);
-}
-
-// ─── F-09.7 Spot Confirmation Toast ──────────────────────────────────────────
-
-export function showSpotToast(address: string, side: Side): void {
+export function showSpotToast(address: string | null): void {
   // Remove any existing toast
   const existing = document.getElementById("spot-toast");
   if (existing) existing.remove();
@@ -271,7 +203,7 @@ export function showSpotToast(address: string, side: Side): void {
   const toast = document.createElement("div");
   toast.id = "spot-toast";
   toast.className = "spot-toast";
-  toast.textContent = `Spot saved — ${address}, ${sideLabel(side)} side.`;
+  toast.textContent = address !== null ? `Spot saved — ${address}.` : "Spot saved.";
 
   document.body.appendChild(toast);
 

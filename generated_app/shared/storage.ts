@@ -7,7 +7,7 @@ export interface StorageBackend {
 export interface SavedSpot {
   lat: number;
   lng: number;
-  side: "N" | "S" | "E" | "W";
+  side?: "N" | "S" | "E" | "W";
   savedAt: string;
   address: string | null;
 }

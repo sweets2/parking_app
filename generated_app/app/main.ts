@@ -42,10 +42,7 @@ import {
   renderRefreshButton,
   setRefreshLoading,
   showRefreshError,
-  showStreetSidePicker,
-  showSpotToast,
 } from "./ui";
-import type { Side } from "./ui";
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 
@@ -116,32 +113,6 @@ export function findCleaningEntries(roadName: string): StreetCleaningEntry[] {
   );
 }
 
-// ─── Street-side offset ───────────────────────────────────────────────────────
-
-/** ~10 meters in degrees at Hoboken's latitude. */
-const SIDE_OFFSET = 0.00009;
-
-/**
- * Apply a small positional offset based on which side of the street the user
- * is parked on.
- */
-function applyStreetSideOffset(
-  lat: number,
-  lng: number,
-  side: Side
-): { lat: number; lng: number } {
-  switch (side) {
-    case "N":
-      return { lat: lat + SIDE_OFFSET, lng };
-    case "S":
-      return { lat: lat - SIDE_OFFSET, lng };
-    case "E":
-      return { lat, lng: lng + SIDE_OFFSET };
-    case "W":
-      return { lat, lng: lng - SIDE_OFFSET };
-  }
-}
-
 // ─── renderState callback ─────────────────────────────────────────────────────
 
 /**
@@ -174,12 +145,6 @@ function renderState(state: AppState): void {
     _centeredOnSpot = false;
     renderBrowsingMode(state.activeSigns, now);
     renderSignPins(state.activeSigns, now);
-
-    // Disable save button when no position is set
-    const saveBtn = document.getElementById("save-btn");
-    if (saveBtn instanceof HTMLButtonElement) {
-      saveBtn.disabled = state.userLat === null || state.userLng === null;
-    }
     return;
   }
 
@@ -191,6 +156,12 @@ function renderState(state: AppState): void {
     if (!_centeredOnSpot) {
       centerOnSpot(state.spot);
       _centeredOnSpot = true;
+      // Auto-open street popup for the saved spot's location (initial save and reload).
+      void getStreetName(state.spot.lat, state.spot.lng).then((road) => {
+        if (road !== null) {
+          showStreetPopup(state.spot.lat, state.spot.lng, road, findCleaningEntries(road));
+        }
+      });
     }
 
     // F-11.2 / F-11.3: Show green "clear" banner or red warning banner.
@@ -203,8 +174,8 @@ function renderState(state: AppState): void {
     // F-15: Show refresh button with freshness label in parked mode.
     renderRefreshButton(_fetchedAt, now);
 
-    // F-11.3 / F-11.4: Show nearby sign pins in parked mode; spot marker visible.
-    renderSignPins(state.nearbySigns, now);
+    // Show all active sign pins in parked mode (not just nearby ones).
+    renderSignPins(filterActive(state.allSigns, now), now);
     renderSpotMarker(state.spot);
     clearPositionMarker();
     return;
@@ -274,31 +245,6 @@ export async function initBrowserApp(): Promise<void> {
     appMode = "parked";
   }
 
-  // Wire save button
-  const saveBtn = document.getElementById("save-btn");
-  if (saveBtn) {
-    saveBtn.addEventListener("click", () => {
-      const state = app.getState();
-      if (state.mode !== "browsing") return;
-      const { userLat, userLng } = state;
-      if (userLat === null || userLng === null) return;
-
-      showStreetSidePicker((side: Side | null) => {
-        if (side === null) return; // cancelled
-        const offsetPos = applyStreetSideOffset(userLat, userLng, side);
-        const spot: SavedSpot = {
-          lat: offsetPos.lat,
-          lng: offsetPos.lng,
-          side,
-          savedAt: new Date().toISOString(),
-          address: null,
-        };
-        app.onSaveSpot(spot);
-        showSpotToast(spot.address ?? "your spot", side);
-      });
-    });
-  }
-
   // Wire clear button — F-11.4: removes spot from storage, transitions to browsing,
   // clears spot marker, shows all active signs as pins (via renderState browsing branch).
   const clearBtn = document.getElementById("clear-btn");
@@ -359,22 +305,17 @@ export async function initBrowserApp(): Promise<void> {
     });
   }
 
-  // Wire map click handler for both modes
-  registerMapClickHandler(async (lat: number, lng: number) => {
-    const currentState = app.getState();
-    if (currentState.mode === "browsing") {
-      renderPositionMarker(lat, lng);
-      app.setUserPosition(lat, lng);
-      const road = await getStreetName(lat, lng);
-      if (road !== null) {
-        showStreetPopup(lat, lng, road, findCleaningEntries(road));
-      }
-    } else if (currentState.mode === "parked") {
-      const road = await getStreetName(lat, lng);
-      if (road !== null) {
-        showStreetPopup(lat, lng, road, findCleaningEntries(road));
-      }
-    }
+  // Wire map click handler — every click saves (or moves) the spot.
+  registerMapClickHandler((lat: number, lng: number) => {
+    // Reset so renderState re-centers and re-opens the popup for the new location.
+    _centeredOnSpot = false;
+    const spot: SavedSpot = {
+      lat,
+      lng,
+      savedAt: new Date().toISOString(),
+      address: null,
+    };
+    app.onSaveSpot(spot);
   });
 
   // Start 60-second tick

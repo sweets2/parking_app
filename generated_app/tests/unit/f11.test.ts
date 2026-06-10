@@ -241,10 +241,19 @@ beforeEach(() => {
 
   capturedRenderState = null;
 
-  // Default fetch: reject (tests override as needed)
-  (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(
-    new Error("fetch not configured")
-  );
+  // street-cleaning.json is fetched fire-and-forget before data/latest.json in
+  // initBrowserApp, so it always consumes the first mock call. Pre-load one
+  // resolved value for it so per-test mocks apply to the data fetch.
+  (global.fetch as ReturnType<typeof vi.fn>)
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ entries: [] }),
+    } as Response)
+    .mockRejectedValue(new Error("fetch not configured"));
+
+  // renderState (parked mode) now calls getStreetName to auto-open the popup.
+  // Default to null so it resolves gracefully without a TypeError.
+  mockGetStreetName.mockResolvedValue(null);
 
   // Default storage: no saved spot
   mockStorageLoad.mockReturnValue(null);
