@@ -75,15 +75,28 @@ html, body {
   min-width: 190px;
 }
 .sp-header {
-  font-weight: bold;
-  font-size: 14px;
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
   margin-bottom: 2px;
 }
-.sp-street {
-  font-size: 13px;
+.sp-label {
+  font-size: 16px;
   font-weight: 600;
+  color: #64748b;
+}
+.sp-icon {
+  font-size: 16px;
+}
+.sp-icon-ghost {
+  visibility: hidden;
+}
+.sp-street {
+  font-size: 17px;
+  font-weight: 700;
   text-align: center;
+  color: #1e293b;
   margin-bottom: 8px;
 }
 .sp-loc-label {
