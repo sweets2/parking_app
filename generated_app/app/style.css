@@ -221,3 +221,10 @@ html, body {
 #map.tow-signs-hidden .leaflet-marker-pane {
   display: none;
 }
+
+.sp-block--active {
+  background: #eff6ff;
+  border-left: 3px solid #2563eb;
+  padding-left: 6px;
+  border-radius: 4px;
+}

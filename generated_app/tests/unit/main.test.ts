@@ -112,9 +112,11 @@ vi.mock("../../app/app", () => ({
 // ─── Mock app/geo ─────────────────────────────────────────────────────────────
 
 const mockGetStreetName = vi.fn<[number, number], Promise<string | null>>();
+const mockGeocodeCrossStreet = vi.fn<[string], Promise<{ lat: number; lng: number } | null>>();
 
 vi.mock("../../app/geo", () => ({
   getStreetName: mockGetStreetName,
+  geocodeCrossStreet: mockGeocodeCrossStreet,
 }));
 
 // ─── Mock fetch for street-cleaning.json ──────────────────────────────────────
@@ -359,6 +361,150 @@ describe("F-17.5 main.ts street popup click wiring", () => {
 
       expect(mockGetStreetName).not.toHaveBeenCalled();
       expect(mockRenderPositionMarker).toHaveBeenCalledWith(40.744, -74.032);
+    });
+  });
+
+  // ─── F-20 buildDetectSegmentCallback ───────────────────────────────────────
+
+  describe("F-20 buildDetectSegmentCallback via parked-mode click handler", () => {
+    it("F-20: GIVEN the parked-mode click handler fires at a known coordinate, THEN showStreetPopup is called with a fifth argument that is a function", async () => {
+      const washingtonEntry = makeCleaningEntry({ street: "Washington Street", location: "9th St. to 10th St." });
+      const streetCleaningData = {
+        fetched_at: "2026-06-09T12:00:00Z",
+        entries: [washingtonEntry],
+      };
+
+      mockFetchImpl = () =>
+        Promise.resolve({
+          ok: true,
+          json: async () => streetCleaningData,
+        } as Response);
+
+      mockGetStreetName.mockResolvedValue("Washington Street");
+
+      const { init } = await import("../../app/main");
+      await init("parked");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const handler = getCapturedClickHandler();
+      expect(handler).not.toBeNull();
+      if (handler === null) return;
+
+      await handler(40.744, -74.032);
+
+      expect(mockShowStreetPopup).toHaveBeenCalledOnce();
+      const call = mockShowStreetPopup.mock.calls[0] as unknown[];
+      // 5th argument should be a function (the detectSegment callback)
+      expect(typeof call[4]).toBe("function");
+    });
+
+    it("F-20: GIVEN geocodeCrossStreet returns coordinates that bracket the click point, WHEN the detectSegment callback is called, THEN it resolves to the matching location string", async () => {
+      // click at lat 40.745 (between 40.740 and 40.750)
+      // N-S street: deltaLat(0.010) > deltaLng(0.000) => latitude check
+      mockGeocodeCrossStreet
+        .mockResolvedValueOnce({ lat: 40.740, lng: -74.032 }) // "9th St"
+        .mockResolvedValueOnce({ lat: 40.750, lng: -74.032 }); // "10th St"
+
+      const washingtonEntry = makeCleaningEntry({ street: "Washington Street", location: "9th St. to 10th St." });
+      const streetCleaningData = {
+        fetched_at: "2026-06-09T12:00:00Z",
+        entries: [washingtonEntry],
+      };
+
+      mockFetchImpl = () =>
+        Promise.resolve({
+          ok: true,
+          json: async () => streetCleaningData,
+        } as Response);
+
+      mockGetStreetName.mockResolvedValue("Washington Street");
+
+      const { init } = await import("../../app/main");
+      await init("parked");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const handler = getCapturedClickHandler();
+      expect(handler).not.toBeNull();
+      if (handler === null) return;
+
+      await handler(40.745, -74.032);
+
+      expect(mockShowStreetPopup).toHaveBeenCalledOnce();
+      const call = mockShowStreetPopup.mock.calls[0] as unknown[];
+      const detectSegment = call[4] as (locations: string[]) => Promise<string | null>;
+      expect(typeof detectSegment).toBe("function");
+
+      const result = await detectSegment(["9th St. to 10th St."]);
+      expect(result).toBe("9th St. to 10th St.");
+    });
+
+    it("F-20: GIVEN geocodeCrossStreet returns null for all cross-streets, WHEN the callback is called, THEN it resolves to null", async () => {
+      mockGeocodeCrossStreet.mockResolvedValue(null);
+
+      const washingtonEntry = makeCleaningEntry({ street: "Washington Street", location: "9th St. to 10th St." });
+      const streetCleaningData = {
+        fetched_at: "2026-06-09T12:00:00Z",
+        entries: [washingtonEntry],
+      };
+
+      mockFetchImpl = () =>
+        Promise.resolve({
+          ok: true,
+          json: async () => streetCleaningData,
+        } as Response);
+
+      mockGetStreetName.mockResolvedValue("Washington Street");
+
+      const { init } = await import("../../app/main");
+      await init("parked");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const handler = getCapturedClickHandler();
+      expect(handler).not.toBeNull();
+      if (handler === null) return;
+
+      await handler(40.744, -74.032);
+
+      const call = mockShowStreetPopup.mock.calls[0] as unknown[];
+      const detectSegment = call[4] as (locations: string[]) => Promise<string | null>;
+      const result = await detectSegment(["9th St. to 10th St."]);
+      expect(result).toBeNull();
+    });
+
+    it("F-20: GIVEN extractCrossStreets returns null for a location (uses ' and '), THEN that location is skipped and geocodeCrossStreet is not called for it", async () => {
+      mockGeocodeCrossStreet.mockResolvedValue(null);
+
+      const washingtonEntry = makeCleaningEntry({ street: "Washington Street", location: "8th St. and 9th St." });
+      const streetCleaningData = {
+        fetched_at: "2026-06-09T12:00:00Z",
+        entries: [washingtonEntry],
+      };
+
+      mockFetchImpl = () =>
+        Promise.resolve({
+          ok: true,
+          json: async () => streetCleaningData,
+        } as Response);
+
+      mockGetStreetName.mockResolvedValue("Washington Street");
+
+      const { init } = await import("../../app/main");
+      await init("parked");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const handler = getCapturedClickHandler();
+      expect(handler).not.toBeNull();
+      if (handler === null) return;
+
+      await handler(40.744, -74.032);
+
+      const call = mockShowStreetPopup.mock.calls[0] as unknown[];
+      const detectSegment = call[4] as (locations: string[]) => Promise<string | null>;
+      // "8th St. and 9th St." uses " and " — extractCrossStreets returns null, skip
+      const result = await detectSegment(["8th St. and 9th St."]);
+      expect(result).toBeNull();
+      // geocodeCrossStreet should NOT have been called (location was skipped)
+      expect(mockGeocodeCrossStreet).not.toHaveBeenCalled();
     });
   });
 });

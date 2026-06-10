@@ -247,6 +247,51 @@ export type ViolationWindow = {
  * Known data limitation: the Hoboken API only returns signs already posted;
  * signs not yet in latest.json cannot be warned about here.
  */
+// ─── F-20 extractCrossStreets ──────────────────────────────────────────────────
+
+/**
+ * Parses a raw StreetCleaningEntry.location string like "Observer Hwy. to Seventh St."
+ * into a [from, to] tuple, stripping trailing periods from each part.
+ * Returns null if the string cannot be parsed.
+ */
+export function extractCrossStreets(location: string): [string, string] | null {
+  const parts = location.split(" to ");
+  if (parts.length !== 2) {
+    return null;
+  }
+  const from = (parts[0] ?? "").replace(/\.$/, "");
+  const to   = (parts[1] ?? "").replace(/\.$/, "");
+  return [from, to];
+}
+
+// ─── F-20 detectMatchingSegment ───────────────────────────────────────────────
+
+/**
+ * Returns true if the click coordinate falls between the two geocoded cross-street
+ * coordinates. Uses the dominant axis (lat for N-S streets, lng for E-W streets).
+ * When deltaLat === deltaLng, treats as E-W (uses longitude axis).
+ */
+export function detectMatchingSegment(
+  clickLat: number,
+  clickLng: number,
+  fromCoord: { lat: number; lng: number },
+  toCoord: { lat: number; lng: number }
+): boolean {
+  const deltaLat = Math.abs(fromCoord.lat - toCoord.lat);
+  const deltaLng = Math.abs(fromCoord.lng - toCoord.lng);
+  if (deltaLat > deltaLng) {
+    // N-S street — check latitude
+    const minLat = Math.min(fromCoord.lat, toCoord.lat);
+    const maxLat = Math.max(fromCoord.lat, toCoord.lat);
+    return clickLat >= minLat && clickLat <= maxLat;
+  } else {
+    // E-W street (or equal delta — treat as E-W) — check longitude
+    const minLng = Math.min(fromCoord.lng, toCoord.lng);
+    const maxLng = Math.max(fromCoord.lng, toCoord.lng);
+    return clickLng >= minLng && clickLng <= maxLng;
+  }
+}
+
 export function nextViolationWindow(
   signs: Sign[],
   spot: { lat: number; lng: number },

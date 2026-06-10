@@ -13,6 +13,8 @@ import {
   formatTime,
   nextViolationWindow,
   isDataStale,
+  extractCrossStreets,
+  detectMatchingSegment,
 } from "../../shared/parking-logic";
 import type { ViolationWindow } from "../../shared/parking-logic";
 import {
@@ -686,5 +688,76 @@ describe("isDataStale", () => {
       const result = isDataStale("not-a-date", NOW_STABLE);
       expect(result).toBe(true);
     }).not.toThrow();
+  });
+});
+
+// ─── F-20 extractCrossStreets ──────────────────────────────────────────────────
+
+describe("F-20 extractCrossStreets", () => {
+  it("GIVEN 'Observer Hwy. to Seventh St.', THEN returns ['Observer Hwy', 'Seventh St']", () => {
+    expect(extractCrossStreets("Observer Hwy. to Seventh St.")).toEqual(["Observer Hwy", "Seventh St"]);
+  });
+
+  it("GIVEN '9th St. to 10th St.', THEN returns ['9th St', '10th St']", () => {
+    expect(extractCrossStreets("9th St. to 10th St.")).toEqual(["9th St", "10th St"]);
+  });
+
+  it("GIVEN 'Eighth St. and Tenth St.' (uses ' and ' not ' to '), THEN returns null", () => {
+    expect(extractCrossStreets("Eighth St. and Tenth St.")).toBeNull();
+  });
+
+  it("GIVEN 'single street' (no delimiter), THEN returns null", () => {
+    expect(extractCrossStreets("single street")).toBeNull();
+  });
+
+  it("GIVEN 'A to B to C' (three parts), THEN returns null", () => {
+    expect(extractCrossStreets("A to B to C")).toBeNull();
+  });
+});
+
+// ─── F-20 detectMatchingSegment ───────────────────────────────────────────────
+
+describe("F-20 detectMatchingSegment", () => {
+  it("GIVEN a N-S street and clickLat between the two endpoint latitudes, THEN returns true", () => {
+    const from = { lat: 40.740, lng: -74.032 };
+    const to   = { lat: 40.750, lng: -74.032 };
+    expect(detectMatchingSegment(40.745, -74.032, from, to)).toBe(true);
+  });
+
+  it("GIVEN a N-S street and clickLat outside the latitude range, THEN returns false", () => {
+    const from = { lat: 40.740, lng: -74.032 };
+    const to   = { lat: 40.750, lng: -74.032 };
+    expect(detectMatchingSegment(40.760, -74.032, from, to)).toBe(false);
+  });
+
+  it("GIVEN a N-S street and clickLat exactly equal to fromCoord.lat (boundary), THEN returns true", () => {
+    const from = { lat: 40.740, lng: -74.032 };
+    const to   = { lat: 40.750, lng: -74.032 };
+    expect(detectMatchingSegment(40.740, -74.032, from, to)).toBe(true);
+  });
+
+  it("GIVEN a N-S street and clickLat exactly equal to toCoord.lat (boundary), THEN returns true", () => {
+    const from = { lat: 40.740, lng: -74.032 };
+    const to   = { lat: 40.750, lng: -74.032 };
+    expect(detectMatchingSegment(40.750, -74.032, from, to)).toBe(true);
+  });
+
+  it("GIVEN an E-W street and clickLng between the two endpoint longitudes, THEN returns true", () => {
+    const from = { lat: 40.744, lng: -74.040 };
+    const to   = { lat: 40.744, lng: -74.030 };
+    expect(detectMatchingSegment(40.744, -74.035, from, to)).toBe(true);
+  });
+
+  it("GIVEN an E-W street and clickLng outside the longitude range, THEN returns false", () => {
+    const from = { lat: 40.744, lng: -74.040 };
+    const to   = { lat: 40.744, lng: -74.030 };
+    expect(detectMatchingSegment(40.744, -74.050, from, to)).toBe(false);
+  });
+
+  it("GIVEN equal deltaLat === deltaLng (edge case), THEN does not throw and returns a boolean (treats as E-W)", () => {
+    const from = { lat: 40.740, lng: -74.040 };
+    const to   = { lat: 40.750, lng: -74.030 };
+    const result = detectMatchingSegment(40.745, -74.035, from, to);
+    expect(typeof result).toBe("boolean");
   });
 });

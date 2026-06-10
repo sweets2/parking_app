@@ -87,6 +87,7 @@ let _signLayers: LeafletLayer[] = [];
 let _positionMarker: LeafletCircleMarker | null = null;
 let _spotMarker: LeafletCircleMarker | null = null;
 let _streetPopup: LeafletPopup | null = null;
+let _popupHighlightToken = 0;
 
 const DEFAULT_ZOOM = 15;
 
@@ -348,7 +349,8 @@ function directionBadge(side: string): string {
 
 function buildStreetPopupContent(
   streetName: string,
-  entries: StreetCleaningEntry[]
+  entries: StreetCleaningEntry[],
+  highlightedLocation?: string
 ): string {
   if (entries.length === 0) {
     return `<div class="sp-wrap"><div class="sp-header"><span class="sp-icon">🧹</span><span class="sp-label">Street Cleaning</span><span class="sp-icon sp-icon-ghost">🧹</span></div><div class="sp-street">${streetName}</div><div class="sp-loc-label"><em>No cleaning schedule found</em></div></div>`;
@@ -375,7 +377,9 @@ function buildStreetPopupContent(
     const location = locationOrder[i];
     const locationEntries = byLocation.get(location) as StreetCleaningEntry[];
     const blockContext = formatLocation(location);
-    parts.push(`<div class="sp-block">`);
+    const isActive = highlightedLocation !== undefined && location === highlightedLocation;
+    const blockClass = isActive ? `sp-block sp-block--active` : `sp-block`;
+    parts.push(`<div class="${blockClass}">`);
     parts.push(`<div class="sp-loc-label">${streetName} ${blockContext}</div>`);
     for (const entry of locationEntries) {
       parts.push(`<div class="sp-entry">${directionBadge(entry.side)}<span class="sp-sched">${entry.schedule}</span></div>`);
@@ -411,12 +415,17 @@ export function setTowSignsVisible(visible: boolean): void {
  *
  * If `entries` is empty, renders a "no schedule found" message.
  * If `initMap` has not been called, returns without throwing.
+ *
+ * The optional `detectSegment` callback is called after the popup opens.
+ * When it resolves with a location string, the popup is updated to highlight
+ * that block. A stale-token guard prevents out-of-order updates.
  */
 export function showStreetPopup(
   lat: number,
   lng: number,
   streetName: string,
-  entries: StreetCleaningEntry[]
+  entries: StreetCleaningEntry[],
+  detectSegment?: (locations: string[]) => Promise<string | null>
 ): void {
   if (_map === null) return;
 
@@ -435,4 +444,15 @@ export function showStreetPopup(
   popup.openOn(_map);
 
   _streetPopup = popup;
+
+  const token = ++_popupHighlightToken;
+  if (detectSegment !== undefined && entries.length > 0) {
+    const uniqueLocations = [...new Set(entries.map((e) => e.location))];
+    void detectSegment(uniqueLocations).then((matched) => {
+      if (_popupHighlightToken !== token) return;
+      if (_streetPopup === null) return;
+      if (matched === null) return;
+      _streetPopup.setContent(buildStreetPopupContent(streetName, entries, matched));
+    });
+  }
 }

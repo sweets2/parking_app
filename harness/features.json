@@ -474,5 +474,39 @@
       "app/map.ts",
       "app/main.ts"
     ]
+  },
+  {
+    "id": "F-20",
+    "name": "Segment Auto-Highlight",
+    "status": "DONE",
+    "order": 28,
+    "depends_on": [
+      "F-07.6",
+      "F-17.5",
+      "F-08.4",
+      "F-19"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "app/geo.ts",
+      "app/map.ts",
+      "app/main.ts",
+      "tests/unit/parking-logic.test.ts",
+      "tests/unit/geo.test.ts",
+      "tests/unit/map.test.ts",
+      "tests/unit/main.test.ts"
+    ],
+    "output_files": [
+      "shared/parking-logic.ts",
+      "app/geo.ts",
+      "app/style.css",
+      "app/map.ts",
+      "app/main.ts",
+      "tests/unit/parking-logic.test.ts",
+      "tests/unit/geo.test.ts",
+      "tests/unit/map.test.ts",
+      "tests/unit/main.test.ts"
+    ]
   }
 ]

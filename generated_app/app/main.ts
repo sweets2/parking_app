@@ -23,13 +23,15 @@ import {
   showStreetPopup,
   setTowSignsVisible,
 } from "./map";
-import { getStreetName } from "./geo";
+import { getStreetName, geocodeCrossStreet } from "./geo";
 import { createApp } from "./app";
 import type { App, AppState } from "./app";
 import {
   filterLoadTimeNoise,
   filterActive,
   filterNearby,
+  extractCrossStreets,
+  detectMatchingSegment,
 } from "../shared/parking-logic";
 import { createSpotStorage } from "../shared/storage";
 import type { SavedSpot } from "../shared/storage";
@@ -111,6 +113,37 @@ export function findCleaningEntries(roadName: string): StreetCleaningEntry[] {
   );
 }
 
+// ─── F-20 buildDetectSegmentCallback ─────────────────────────────────────────
+
+/**
+ * Factory that returns a callback suitable for passing as the `detectSegment`
+ * argument to `showStreetPopup`. The callback iterates a list of location strings,
+ * geocodes their cross-street coordinates, and returns the first location that
+ * brackets the click point.
+ *
+ * Requests are sequential so the shared rate-limit clock in geo.ts works correctly.
+ */
+function buildDetectSegmentCallback(
+  clickLat: number,
+  clickLng: number
+): (locations: string[]) => Promise<string | null> {
+  return async (locations: string[]) => {
+    for (const location of locations) {
+      const crossStreets = extractCrossStreets(location);
+      if (crossStreets === null) continue;
+      const [from, to] = crossStreets;
+      const fromCoord = await geocodeCrossStreet(from);
+      if (fromCoord === null) continue;
+      const toCoord = await geocodeCrossStreet(to);
+      if (toCoord === null) continue;
+      if (detectMatchingSegment(clickLat, clickLng, fromCoord, toCoord)) {
+        return location;
+      }
+    }
+    return null;
+  };
+}
+
 // ─── renderState callback ─────────────────────────────────────────────────────
 
 /**
@@ -157,7 +190,8 @@ function renderState(state: AppState): void {
       // Auto-open street popup for the saved spot's location (initial save and reload).
       void getStreetName(state.spot.lat, state.spot.lng).then((road) => {
         if (road !== null) {
-          showStreetPopup(state.spot.lat, state.spot.lng, road, findCleaningEntries(road));
+          const detectSegment = buildDetectSegmentCallback(state.spot.lat, state.spot.lng);
+          showStreetPopup(state.spot.lat, state.spot.lng, road, findCleaningEntries(road), detectSegment);
         }
       });
     }
@@ -378,7 +412,8 @@ export async function init(initialMode: "browsing" | "parked" = "browsing"): Pro
       // Parked mode: show street cleaning popup
       const road = await getStreetName(lat, lng);
       if (road !== null) {
-        showStreetPopup(lat, lng, road, findCleaningEntries(road));
+        const detectSegment = buildDetectSegmentCallback(lat, lng);
+        showStreetPopup(lat, lng, road, findCleaningEntries(road), detectSegment);
       }
     }
   });
