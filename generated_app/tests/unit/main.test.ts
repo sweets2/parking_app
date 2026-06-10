@@ -612,19 +612,22 @@ describe("F-10.2 map tap sets position marker", () => {
 // app/map for main.ts tests, we use vi.importActual to access the real module.
 
 describe("F-10.3 signEmoji", () => {
-  it("signEmoji('CONSTRUCTION') returns '🚧'", async () => {
+  it("signEmoji('CONSTRUCTION') returns an SVG dot", async () => {
     const actual = await vi.importActual<typeof import("../../app/map")>("../../app/map");
-    expect(actual.signEmoji("CONSTRUCTION")).toBe("🚧");
+    expect(actual.signEmoji("CONSTRUCTION")).toContain("<svg");
+    expect(actual.signEmoji("CONSTRUCTION")).toContain("#cc0000");
   });
 
-  it("signEmoji('DELIVERY') returns '📦'", async () => {
+  it("signEmoji('DELIVERY') returns an SVG dot", async () => {
     const actual = await vi.importActual<typeof import("../../app/map")>("../../app/map");
-    expect(actual.signEmoji("DELIVERY")).toBe("📦");
+    expect(actual.signEmoji("DELIVERY")).toContain("<svg");
+    expect(actual.signEmoji("DELIVERY")).toContain("#cc0000");
   });
 
-  it("signEmoji('UNKNOWN_REASON') returns '⚠️' (fallback)", async () => {
+  it("signEmoji('UNKNOWN_REASON') returns a hollow SVG ring (fallback)", async () => {
     const actual = await vi.importActual<typeof import("../../app/map")>("../../app/map");
-    expect(actual.signEmoji("UNKNOWN_REASON")).toBe("⚠️");
+    expect(actual.signEmoji("UNKNOWN_REASON")).toContain("<svg");
+    expect(actual.signEmoji("UNKNOWN_REASON")).toContain("stroke=\"#dc2626\"");
   });
 
   it("F-10.3 GIVEN browsing mode with 3 active signs, WHEN renderState fires, THEN renderSignPins is called with array of length 3", async () => {

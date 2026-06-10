@@ -83,13 +83,18 @@ let _positionMarker: LeafletLayer | null = null;
 let _spotMarker: LeafletLayer | null = null;
 let _streetPopup: LeafletPopup | null = null;
 
-// ─── Emoji palette ────────────────────────────────────────────────────────────
+// ─── Tow sign dot icons ───────────────────────────────────────────────────────
+
+const icon = (body: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">${body}</svg>`;
+
+const TOW_RED = "#cc0000";
 
 const REASON_EMOJI: Record<string, string> = {
-  CONSTRUCTION: "🚧",
-  MOVING:       "🚛",
-  EVENT:        "🎪",
-  DELIVERY:     "📦",
+  CONSTRUCTION: icon(`<circle cx="6" cy="6" r="5" fill="${TOW_RED}" stroke="white" stroke-width="1"/>`),
+  MOVING:       icon(`<circle cx="6" cy="6" r="5" fill="${TOW_RED}" stroke="white" stroke-width="1"/>`),
+  EVENT:        icon(`<polygon points="6,1 11,11 1,11" fill="${TOW_RED}" stroke="white" stroke-width="1" stroke-linejoin="round"/>`),
+  DELIVERY:     icon(`<rect x="1" y="1" width="10" height="10" fill="${TOW_RED}" stroke="white" stroke-width="1" stroke-linejoin="round"/>`),
 };
 
 const SPOT_COLOR = "#38a169"; // green — visually distinct from sign markers
@@ -101,7 +106,7 @@ const SPOT_COLOR = "#38a169"; // green — visually distinct from sign markers
  * Returns "⚠️" for unknown reasons.
  */
 export function signEmoji(reason: string): string {
-  return REASON_EMOJI[reason] ?? "⚠️";
+  return REASON_EMOJI[reason] ?? icon(`<circle cx="6" cy="6" r="5" fill="none" stroke="#dc2626" stroke-width="2"/>`);
 }
 
 // ─── F-07.1 initMap ───────────────────────────────────────────────────────────
@@ -150,14 +155,14 @@ export function renderSignPins(signs: Sign[], _now: Date): void {
   const L = getL();
 
   for (const sign of signs) {
-    const emoji = REASON_EMOJI[sign.reason] ?? "⚠️";
+    const icon = signEmoji(sign.reason);
 
     const marker = L.marker([sign.lat, sign.lng], {
       icon: L.divIcon({
-        html: emoji,
+        html: icon,
         className: "sign-emoji-marker",
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
       }),
     });
 
@@ -295,24 +300,25 @@ function formatLocation(location: string): string {
   return `between ${from} and ${to}`;
 }
 
-/**
- * Build the HTML content for a street cleaning popup.
- *
- * Groups entries by their `location` field. Within each location group,
- * renders each entry as a side label + schedule line.
- *
- * If `entries` is empty, renders a "no schedule found" message.
- */
+function directionBadge(side: string): string {
+  const s = side.toLowerCase();
+  let triangle: string;
+  let letter: string;
+  let cls: string;
+  if (s === "north") { triangle = "▴"; letter = "N"; cls = "dir-n"; }
+  else if (s === "south") { triangle = "▾"; letter = "S"; cls = "dir-s"; }
+  else if (s === "east") { triangle = "▸"; letter = "E"; cls = "dir-e"; }
+  else if (s === "west") { triangle = "◂"; letter = "W"; cls = "dir-w"; }
+  else { triangle = "●"; letter = side.charAt(0).toUpperCase(); cls = "dir-other"; }
+  return `<span class="dir-badge ${cls}">${triangle} ${letter}</span>`;
+}
+
 function buildStreetPopupContent(
   streetName: string,
   entries: StreetCleaningEntry[]
 ): string {
-  const parts: string[] = [];
-
   if (entries.length === 0) {
-    parts.push(`<strong>${streetName}</strong>`);
-    parts.push(`<div><em>No cleaning schedule found</em></div>`);
-    return parts.join("");
+    return `<div class="sp-wrap"><div class="sp-header">🧹 Street Cleaning · ${streetName}</div><div class="sp-loc-label"><em>No cleaning schedule found</em></div></div>`;
   }
 
   // Collect unique locations in insertion order
@@ -326,19 +332,24 @@ function buildStreetPopupContent(
     (byLocation.get(entry.location) as StreetCleaningEntry[]).push(entry);
   }
 
-  for (const location of locationOrder) {
+  const parts: string[] = [];
+  parts.push(`<div class="sp-wrap">`);
+  parts.push(`<div class="sp-header">🧹 Street Cleaning · ${streetName}</div>`);
+
+  for (let i = 0; i < locationOrder.length; i++) {
+    if (i > 0) parts.push(`<hr class="sp-sep"/>`);
+    const location = locationOrder[i];
     const locationEntries = byLocation.get(location) as StreetCleaningEntry[];
     const blockContext = formatLocation(location);
-
-    parts.push(`<strong>${streetName} ${blockContext}</strong>`);
-    parts.push(`<div>Street Cleaning</div>`);
-    parts.push(`<hr/>`);
-
+    parts.push(`<div class="sp-block">`);
+    parts.push(`<div class="sp-loc-label">${streetName} ${blockContext}</div>`);
     for (const entry of locationEntries) {
-      parts.push(`<div><strong>${entry.side}</strong>: ${entry.schedule}</div>`);
+      parts.push(`<div class="sp-entry">${directionBadge(entry.side)}<span class="sp-sched">${entry.schedule}</span></div>`);
     }
+    parts.push(`</div>`);
   }
 
+  parts.push(`</div>`);
   return parts.join("");
 }
 

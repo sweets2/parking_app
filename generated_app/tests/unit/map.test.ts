@@ -293,44 +293,48 @@ describe("F-07 map module", () => {
       expect(mockMapInstance._layers.length).toBe(3);
     });
 
-    it("CONSTRUCTION sign marker uses 🚧 emoji", async () => {
+    it("CONSTRUCTION sign marker uses a red SVG circle", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "CONSTRUCTION" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["html"]).toBe("🚧");
+      expect(marker._options["html"]).toContain("<svg");
+      expect(marker._options["html"]).toContain("#cc0000");
     });
 
-    it("MOVING sign marker uses 🚛 emoji", async () => {
+    it("MOVING sign marker uses a red SVG circle", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "MOVING" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["html"]).toBe("🚛");
+      expect(marker._options["html"]).toContain("<svg");
+      expect(marker._options["html"]).toContain("#cc0000");
     });
 
-    it("EVENT sign marker uses 🎪 emoji", async () => {
+    it("EVENT sign marker uses a red SVG triangle", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "EVENT" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["html"]).toBe("🎪");
+      expect(marker._options["html"]).toContain("<svg");
+      expect(marker._options["html"]).toContain("#cc0000");
     });
 
-    it("DELIVERY sign marker uses 📦 emoji", async () => {
+    it("DELIVERY sign marker uses a red SVG square", async () => {
       const { initMap, renderSignPins } = await import("../../app/map");
       initMap();
       const signs: Sign[] = [makeSign({ id: "1", reason: "DELIVERY" })];
       renderSignPins(signs, NOW_STABLE);
       const marker = mockMapInstance._layers[0];
       expect(marker).toBeDefined();
-      expect(marker._options["html"]).toBe("📦");
+      expect(marker._options["html"]).toContain("<svg");
+      expect(marker._options["html"]).toContain("#cc0000");
     });
 
     it("clicking a pin shows a popup containing address, start date, end date, permit number", async () => {
@@ -545,8 +549,8 @@ describe("F-07 map module", () => {
       expect(mockPopupInstances.length).toBeGreaterThan(0);
       const popup = mockPopupInstances[mockPopupInstances.length - 1];
       expect(popup._content).toContain("Washington Street");
-      expect(popup._content).toContain("East");
-      expect(popup._content).toContain("West");
+      expect(popup._content).toContain("dir-e");
+      expect(popup._content).toContain("dir-w");
       expect(popup._content).toContain("Monday - 8 am to 9 am");
       expect(popup._content).toContain("Tuesday - 9 am to 10 am");
     });
@@ -562,8 +566,8 @@ describe("F-07 map module", () => {
       expect(mockPopupInstances.length).toBeGreaterThan(0);
       const popup = mockPopupInstances[mockPopupInstances.length - 1];
       expect(popup._content).toContain("9th Street");
-      expect(popup._content).toContain("North");
-      expect(popup._content).toContain("South");
+      expect(popup._content).toContain("dir-n");
+      expect(popup._content).toContain("dir-s");
       expect(popup._content).toContain("Wednesday - 8 am to 9 am");
       expect(popup._content).toContain("Thursday - 9 am to 10 am");
     });
