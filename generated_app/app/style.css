@@ -110,9 +110,9 @@ html, body {
   flex-shrink: 0;
 }
 .dir-n { background: #dbeafe; color: #1d4ed8; }
-.dir-s { background: #fce7f3; color: #be185d; }
-.dir-e { background: #dcfce7; color: #15803d; }
-.dir-w { background: #fef3c7; color: #b45309; }
+.dir-s { background: #ffedd5; color: #c2410c; }
+.dir-e { background: #ccfbf1; color: #0f766e; }
+.dir-w { background: #ffe4e6; color: #be123c; }
 .dir-other { background: #f3f4f6; color: #374151; }
 .sp-sep {
   border: none;
