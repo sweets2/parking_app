@@ -57,12 +57,16 @@ describe("Integration — full pipeline against real data", () => {
     expect(result.some((s) => s.id === badCoord.id)).toBe(false);
   });
 
-  it("filterLoadTimeNoise removes EXPIRED_SIGNS.length expired records from ALL_SIGNS at FETCH_TIME", () => {
+  it("filterLoadTimeNoise removes only definitively expired records (active_at_fetch=false AND end_iso before now) from ALL_SIGNS at FETCH_TIME", () => {
     const result = filterLoadTimeNoise(ALL_SIGNS, FETCH_TIME);
-    // The out-of-bounds signs are removed too, but we check expired count separately
-    const expiredIds = new Set(EXPIRED_SIGNS.map((s) => s.id));
-    const expiredInResult = result.filter((s) => expiredIds.has(s.id));
-    expect(expiredInResult.length).toBe(0);
+    // A sign is definitively expired only when active_at_fetch=false AND end_iso < FETCH_TIME local string.
+    // Signs with active_at_fetch=false but end_iso in the future are upcoming — they must be kept.
+    const fetchLocalStr = "2026-06-09T09:52:50";
+    const definitelyExpired = EXPIRED_SIGNS.filter((s) => s.end_iso < fetchLocalStr);
+    const definitelyExpiredInResult = result.filter((s) =>
+      definitelyExpired.some((e) => e.id === s.id)
+    );
+    expect(definitelyExpiredInResult.length).toBe(0);
   });
 
   it("filterNearby near SIGN_PERMANENT_1 does not include SIGN_BAD_COORD", () => {
@@ -114,8 +118,8 @@ describe("Integration — full pipeline against real data", () => {
   });
 
   it("formatCountdown returns '3h 0m' for a 3-hour window", () => {
-    const now = new Date("2026-06-09T12:00:00");
-    const end = "2026-06-09T15:00:00";
-    expect(formatCountdown(end, now)).toBe("3h 0m");
+    // end is 3 hours after NOW_STABLE (2026-06-09T16:00:00Z); Z suffix ensures UTC parse
+    const end = "2026-06-09T19:00:00Z";
+    expect(formatCountdown(end, NOW_STABLE)).toBe("3h 0m");
   });
 });

@@ -213,3 +213,81 @@ export function formatTime(timeStr: string): string {
   const mm = minutesRaw.toString().padStart(2, "0");
   return `${h}:${mm} ${amPm}`;
 }
+
+// ─── F-13.1 isDataStale ──────────────────────────────────────────────────────
+
+/**
+ * Returns true if more than 25 hours have elapsed since fetchedAt.
+ * Returns true for unparseable input (fail-safe).
+ */
+export function isDataStale(fetchedAt: string, now: Date): boolean {
+  if (!fetchedAt) {
+    return true;
+  }
+  const fetchedMs = new Date(fetchedAt).getTime();
+  if (isNaN(fetchedMs)) {
+    return true;
+  }
+  const elapsedMs = now.getTime() - fetchedMs;
+  return elapsedMs > 25 * 60 * 60 * 1000;
+}
+
+// ─── F-16 ViolationWindow / nextViolationWindow ──────────────────────────────
+
+export type ViolationWindow = {
+  sign: Sign;
+  minutesUntilActive: number; // 0 if already active, positive if upcoming
+};
+
+/**
+ * Returns the next (soonest) violation window among signs within 150 m of the
+ * given spot.  An active window has minutesUntilActive === 0.  An upcoming
+ * window has minutesUntilActive > 0.  Returns null if no relevant sign exists.
+ *
+ * Known data limitation: the Hoboken API only returns signs already posted;
+ * signs not yet in latest.json cannot be warned about here.
+ */
+export function nextViolationWindow(
+  signs: Sign[],
+  spot: { lat: number; lng: number },
+  now: Date
+): ViolationWindow | null {
+  const RADIUS_METERS = 150;
+  const nowMs = now.getTime();
+
+  let best: ViolationWindow | null = null;
+
+  for (const sign of signs) {
+    const dist = haversineMeters(spot.lat, spot.lng, sign.lat, sign.lng);
+    if (dist >= RADIUS_METERS) {
+      continue;
+    }
+
+    const startMs = new Date(sign.start_iso).getTime();
+    const endMs = new Date(sign.end_iso).getTime();
+
+    // Skip signs that have fully expired
+    if (endMs < nowMs) {
+      continue;
+    }
+
+    // Skip signs that haven't started yet but whose start is irrelevant —
+    // actually we WANT upcoming signs, so only skip truly expired ones above.
+    // Upcoming signs are those where startMs > nowMs.
+
+    let minutesUntilActive: number;
+    if (startMs <= nowMs) {
+      // Currently active (window started, not yet ended)
+      minutesUntilActive = 0;
+    } else {
+      // Upcoming — compute floor of minutes until start
+      minutesUntilActive = Math.floor((startMs - nowMs) / (60 * 1000));
+    }
+
+    if (best === null || minutesUntilActive < best.minutesUntilActive) {
+      best = { sign, minutesUntilActive };
+    }
+  }
+
+  return best;
+}

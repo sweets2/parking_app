@@ -1,6 +1,6 @@
 {
   "name": "Hoboken Parking",
-  "short_name": "HoboPark",
+  "short_name": "HP Parking",
   "description": "Track temporary no-parking signs in Hoboken, NJ",
   "start_url": "/",
   "display": "standalone",

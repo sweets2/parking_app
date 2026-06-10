@@ -11,7 +11,10 @@ import {
   signSeverity,
   nudgeCoords,
   formatTime,
+  nextViolationWindow,
+  isDataStale,
 } from "../../shared/parking-logic";
+import type { ViolationWindow } from "../../shared/parking-logic";
 import {
   SIGN_BAD_COORD,
   SIGN_PERMANENT_1,
@@ -126,26 +129,37 @@ describe("haversineMeters", () => {
 // ─── F-03.3 isSignActive ─────────────────────────────────────────────────────
 
 describe("isSignActive", () => {
+  // Sign whose window contains NOW_STABLE (2026-06-09T16:00:00Z = noon ET)
   const sign = makeSign({
-    start_iso: "2026-05-26T08:00:00",
-    end_iso: "2026-05-29T16:00:00",
+    start_iso: "2026-06-09T10:00:00",
+    end_iso: "2026-06-09T20:00:00",
   });
 
   it("returns true when now is within the window", () => {
-    expect(isSignActive(sign, new Date("2026-05-28T12:00:00"))).toBe(true);
+    expect(isSignActive(sign, NOW_STABLE)).toBe(true);
   });
 
   it("returns true when now equals end_iso (inclusive upper bound)", () => {
-    expect(isSignActive(sign, new Date(sign.end_iso))).toBe(true);
+    // Sign whose end_iso exactly equals NOW_STABLE — use Z suffix for UTC parse
+    const atEnd = makeSign({
+      start_iso: "2026-06-09T00:00:00Z",
+      end_iso: "2026-06-09T16:00:00Z",
+    });
+    expect(isSignActive(atEnd, NOW_STABLE)).toBe(true);
   });
 
   it("returns false one second after end_iso", () => {
-    expect(isSignActive(sign, new Date("2026-05-29T16:00:01"))).toBe(false);
+    // Sign that ended one second before NOW_STABLE — use Z suffix for UTC parse
+    const justExpired = makeSign({
+      start_iso: "2026-06-09T00:00:00Z",
+      end_iso: "2026-06-09T15:59:59Z",
+    });
+    expect(isSignActive(justExpired, NOW_STABLE)).toBe(false);
   });
 
   it("returns true for a far-future permanent sign", () => {
     const permanent = makeSign({ end_iso: "2030-12-31T07:00:00" });
-    expect(isSignActive(permanent, new Date("2026-05-28T12:00:00"))).toBe(true);
+    expect(isSignActive(permanent, NOW_STABLE)).toBe(true);
   });
 
   it("returns false for a sign that has not yet started (start_iso in the future)", () => {
@@ -153,7 +167,7 @@ describe("isSignActive", () => {
       start_iso: "2030-01-01T00:00:00",
       end_iso: "2030-12-31T07:00:00",
     });
-    expect(isSignActive(future, new Date("2026-05-28T12:00:00"))).toBe(false);
+    expect(isSignActive(future, NOW_STABLE)).toBe(false);
   });
 
   it("SIGN_EXPIRED_1 is inactive at NOW_AFTER_EXPIRED", () => {
@@ -190,7 +204,7 @@ describe("filterLoadTimeNoise", () => {
       lat: 40.745,
       lng: -74.030,
     });
-    const result = filterLoadTimeNoise([expiredSign], new Date("2026-01-01T00:00:00"));
+    const result = filterLoadTimeNoise([expiredSign], NOW_STABLE);
     expect(result).not.toContain(expiredSign);
   });
 
@@ -243,8 +257,7 @@ describe("filterLoadTimeNoise", () => {
       lat: 40.745,
       lng: -74.030,
     });
-    const now = new Date("2026-06-09T12:00:00");
-    const result = filterLoadTimeNoise([upcoming], now);
+    const result = filterLoadTimeNoise([upcoming], NOW_STABLE);
     expect(result).toContain(upcoming);
   });
 });
@@ -360,60 +373,63 @@ describe("filterNearby", () => {
 });
 
 // ─── F-03.7 formatCountdown ──────────────────────────────────────────────────
+// All tests use NOW_STABLE (2026-06-09T16:00:00.000Z) as the "now" value.
+// endIso strings use explicit "Z" suffix so they parse as UTC, consistent
+// with NOW_STABLE which is also a UTC timestamp.
 
 describe("formatCountdown", () => {
   it("returns '3h 0m' for 3 hours remaining", () => {
-    expect(
-      formatCountdown("2026-05-28T21:00:00", new Date("2026-05-28T18:00:00"))
-    ).toBe("3h 0m");
+    expect(formatCountdown("2026-06-09T19:00:00Z", NOW_STABLE)).toBe("3h 0m");
   });
 
   it("returns '45m' for exactly 45 minutes remaining", () => {
-    // Use literal local-time strings to avoid UTC/local timezone mismatch
-    expect(formatCountdown("2026-05-28T14:45:00", new Date("2026-05-28T14:00:00"))).toBe("45m");
+    expect(formatCountdown("2026-06-09T16:45:00Z", NOW_STABLE)).toBe("45m");
   });
 
   it("returns '1h 30m' for exactly 90 minutes remaining", () => {
-    expect(formatCountdown("2026-05-28T15:30:00", new Date("2026-05-28T14:00:00"))).toBe("1h 30m");
+    expect(formatCountdown("2026-06-09T17:30:00Z", NOW_STABLE)).toBe("1h 30m");
   });
 
   it("returns '59m' for 59 minutes 59 seconds (truncates seconds)", () => {
-    expect(formatCountdown("2026-05-28T14:59:59", new Date("2026-05-28T14:00:00"))).toBe("59m");
+    expect(formatCountdown("2026-06-09T16:59:59Z", NOW_STABLE)).toBe("59m");
   });
 
   it("returns '0m' when end equals now", () => {
-    expect(formatCountdown("2026-05-28T14:00:00", new Date("2026-05-28T14:00:00"))).toBe("0m");
+    expect(formatCountdown("2026-06-09T16:00:00Z", NOW_STABLE)).toBe("0m");
   });
 
   it("returns '0m' and no '-' when already expired", () => {
-    const result = formatCountdown("2026-05-28T13:00:00", new Date("2026-05-28T14:00:00"));
+    const result = formatCountdown("2026-06-09T15:00:00Z", NOW_STABLE);
     expect(result).toBe("0m");
     expect(result).not.toContain("-");
   });
 });
 
 // ─── F-03.8 formatSignWindow ─────────────────────────────────────────────────
+// All tests use NOW_STABLE (2026-06-09T16:00:00.000Z) as the "now" value.
 
 describe("formatSignWindow", () => {
   it("returns string containing 'today' and '5:00 PM' for same-day sign", () => {
-    const sign = makeSign({ end_iso: "2026-05-28T17:00:00" });
-    const result = formatSignWindow(sign, new Date("2026-05-28T12:00:00"));
+    // end_iso on same UTC date as NOW_STABLE (2026-06-09), at 17:00 UTC → 5:00 PM
+    const sign = makeSign({ end_iso: "2026-06-09T17:00:00" });
+    const result = formatSignWindow(sign, NOW_STABLE);
     expect(result).toContain("today");
     expect(result).toContain("5:00 PM");
   });
 
   it("returns string with weekday abbreviation and '4:00 PM' for different-day sign", () => {
-    const sign = makeSign({ end_iso: "2026-05-29T16:00:00" });
-    const result = formatSignWindow(sign, new Date("2026-05-28T12:00:00"));
-    // "Fri" for May 29, 2026
+    // end_iso on next UTC date (2026-06-10 = Wed), at 16:00 UTC → 4:00 PM
+    const sign = makeSign({ end_iso: "2026-06-10T16:00:00" });
+    const result = formatSignWindow(sign, NOW_STABLE);
     const hasWeekday = /Mon|Tue|Wed|Thu|Fri|Sat|Sun/.test(result);
     expect(hasWeekday).toBe(true);
     expect(result).toContain("4:00 PM");
   });
 
   it("shows '12:00 AM' for sign ending at midnight", () => {
-    const sign = makeSign({ end_iso: "2026-05-29T00:00:00" });
-    const result = formatSignWindow(sign, new Date("2026-05-28T12:00:00"));
+    // end_iso midnight of next day (2026-06-10T00:00:00 UTC → 12:00 AM)
+    const sign = makeSign({ end_iso: "2026-06-10T00:00:00" });
+    const result = formatSignWindow(sign, NOW_STABLE);
     expect(result).toContain("12:00 AM");
   });
 });
@@ -499,5 +515,176 @@ describe("formatTime", () => {
 
   it("'00:00:00' → '12:00 AM'", () => {
     expect(formatTime("00:00:00")).toBe("12:00 AM");
+  });
+});
+
+// ─── F-16 nextViolationWindow ────────────────────────────────────────────────
+
+describe("nextViolationWindow", () => {
+  // The spot used in these tests — placed far from all real signs so we can
+  // control which signs are "nearby" by constructing them with the exact coords.
+  const SPOT_LAT = 40.745;
+  const SPOT_LNG = -74.030;
+
+  // NOW_STABLE = 2026-06-09T16:00:00.000Z (noon ET on June 9, 2026)
+  // We build ISO strings relative to NOW_STABLE using explicit UTC offsets so
+  // arithmetic is portable across timezones.  However, the spec uses bare
+  // local-time ISO strings in sign data, so we build our test signs the same
+  // way the rest of the codebase does: bare strings that align with whatever
+  // local time NOW_STABLE resolves to.
+  //
+  // NOW_STABLE as a UTC ms value: 1749484800000
+  // We derive test ISOs relative to this by using Date math and toISOString
+  // with Z stripped, but since tests must not call new Date() internally we
+  // pre-compute these fixed offsets from NOW_STABLE manually.
+  //
+  // Strategy: use explicit UTC Z-suffix strings in start_iso / end_iso so that
+  // new Date(sign.start_iso).getTime() works correctly regardless of the
+  // machine's local timezone.  isSignActive uses getTime() on both sides, so
+  // UTC strings are safe.
+
+  /** Sign at SPOT_LAT/SPOT_LNG whose window contains NOW_STABLE (active). */
+  function makeActiveNearbySign(id: string): Sign {
+    return makeSign({
+      id,
+      lat: SPOT_LAT,
+      lng: SPOT_LNG,
+      start_iso: "2026-06-09T00:00:00Z",
+      end_iso: "2026-06-09T23:59:59Z",
+    });
+  }
+
+  /** Sign at SPOT_LAT/SPOT_LNG whose window starts `offsetMinutes` after NOW_STABLE. */
+  function makeUpcomingNearbySign(id: string, offsetMinutes: number): Sign {
+    const startMs = NOW_STABLE.getTime() + offsetMinutes * 60 * 1000;
+    const endMs = startMs + 2 * 60 * 60 * 1000; // 2-hour window
+    const startIso = new Date(startMs).toISOString();
+    const endIso = new Date(endMs).toISOString();
+    return makeSign({
+      id,
+      lat: SPOT_LAT,
+      lng: SPOT_LNG,
+      start_iso: startIso,
+      end_iso: endIso,
+    });
+  }
+
+  /** Sign far from the spot (> 150 m). */
+  function makeFarSign(id: string): Sign {
+    return makeSign({
+      id,
+      lat: 40.760,
+      lng: -74.060,
+      start_iso: "2026-06-09T00:00:00Z",
+      end_iso: "2026-06-09T23:59:59Z",
+    });
+  }
+
+  /** Sign at the spot whose window ended before NOW_STABLE. */
+  function makeExpiredNearbySign(id: string): Sign {
+    return makeSign({
+      id,
+      lat: SPOT_LAT,
+      lng: SPOT_LNG,
+      start_iso: "2026-06-08T00:00:00Z",
+      end_iso: "2026-06-09T12:00:00Z", // ends 4 hours before NOW_STABLE
+    });
+  }
+
+  it("returns null when no signs are within 150 m of the spot", () => {
+    const signs = [makeFarSign("far1"), makeFarSign("far2")];
+    const result = nextViolationWindow(signs, { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+    expect(result).toBeNull();
+  });
+
+  it("returns { sign, minutesUntilActive: 0 } for a currently-active sign within 150 m", () => {
+    const sign = makeActiveNearbySign("active1");
+    const result = nextViolationWindow([sign], { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+    expect(result).not.toBeNull();
+    expect((result as ViolationWindow).sign.id).toBe("active1");
+    expect((result as ViolationWindow).minutesUntilActive).toBe(0);
+  });
+
+  it("returns { sign, minutesUntilActive: 90 } for a sign starting exactly 90 min after NOW_STABLE", () => {
+    const sign = makeUpcomingNearbySign("upcoming90", 90);
+    const result = nextViolationWindow([sign], { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+    expect(result).not.toBeNull();
+    expect((result as ViolationWindow).sign.id).toBe("upcoming90");
+    expect((result as ViolationWindow).minutesUntilActive).toBe(90);
+  });
+
+  it("returns the soonest sign when two signs start 90 and 45 minutes after NOW_STABLE", () => {
+    const sign90 = makeUpcomingNearbySign("s90", 90);
+    const sign45 = makeUpcomingNearbySign("s45", 45);
+    const result = nextViolationWindow([sign90, sign45], { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+    expect(result).not.toBeNull();
+    expect((result as ViolationWindow).sign.id).toBe("s45");
+    expect((result as ViolationWindow).minutesUntilActive).toBe(45);
+  });
+
+  it("prefers active sign (minutesUntilActive: 0) over an upcoming sign", () => {
+    const active = makeActiveNearbySign("activeSign");
+    const upcoming = makeUpcomingNearbySign("upcomingSign", 30);
+    const result = nextViolationWindow([active, upcoming], { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+    expect(result).not.toBeNull();
+    expect((result as ViolationWindow).sign.id).toBe("activeSign");
+    expect((result as ViolationWindow).minutesUntilActive).toBe(0);
+  });
+
+  it("returns null when all nearby signs expired before NOW_STABLE", () => {
+    const expired = makeExpiredNearbySign("exp1");
+    const result = nextViolationWindow([expired], { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+    expect(result).toBeNull();
+  });
+
+  it("returns { sign, minutesUntilActive: 4320 } for a sign starting 3 * 24 * 60 minutes after NOW_STABLE", () => {
+    const sign = makeUpcomingNearbySign("far-future", 4320);
+    const result = nextViolationWindow([sign], { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+    expect(result).not.toBeNull();
+    expect((result as ViolationWindow).sign.id).toBe("far-future");
+    expect((result as ViolationWindow).minutesUntilActive).toBe(4320);
+  });
+
+  it("returns null for an empty signs array without throwing", () => {
+    expect(() => {
+      const result = nextViolationWindow([], { lat: SPOT_LAT, lng: SPOT_LNG }, NOW_STABLE);
+      expect(result).toBeNull();
+    }).not.toThrow();
+  });
+});
+
+// ─── F-13.1 isDataStale ──────────────────────────────────────────────────────
+// All tests use NOW_STABLE as the `now` argument.
+// NOW_STABLE = 2026-06-09T16:00:00.000Z
+
+describe("isDataStale", () => {
+  it("GIVEN fetchedAt is NOW_STABLE minus 24 hours, WHEN called with now=NOW_STABLE, THEN returns false", () => {
+    const fetchedAt = new Date(NOW_STABLE.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    expect(isDataStale(fetchedAt, NOW_STABLE)).toBe(false);
+  });
+
+  it("GIVEN fetchedAt is NOW_STABLE minus 26 hours, WHEN called with now=NOW_STABLE, THEN returns true", () => {
+    const fetchedAt = new Date(NOW_STABLE.getTime() - 26 * 60 * 60 * 1000).toISOString();
+    expect(isDataStale(fetchedAt, NOW_STABLE)).toBe(true);
+  });
+
+  it("GIVEN fetchedAt equals NOW_STABLE.toISOString(), WHEN called with now=NOW_STABLE, THEN returns false", () => {
+    expect(isDataStale(NOW_STABLE.toISOString(), NOW_STABLE)).toBe(false);
+  });
+
+  it("GIVEN fetchedAt is NOW_STABLE minus 25 hours and 1 minute, WHEN called with now=NOW_STABLE, THEN returns true", () => {
+    const fetchedAt = new Date(NOW_STABLE.getTime() - (25 * 60 + 1) * 60 * 1000).toISOString();
+    expect(isDataStale(fetchedAt, NOW_STABLE)).toBe(true);
+  });
+
+  it("GIVEN fetchedAt is an empty string, WHEN called, THEN returns true (fail-safe)", () => {
+    expect(isDataStale("", NOW_STABLE)).toBe(true);
+  });
+
+  it("GIVEN fetchedAt is not a valid date string, WHEN called, THEN returns true without throwing", () => {
+    expect(() => {
+      const result = isDataStale("not-a-date", NOW_STABLE);
+      expect(result).toBe(true);
+    }).not.toThrow();
   });
 });
