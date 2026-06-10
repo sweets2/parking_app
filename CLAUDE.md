@@ -121,6 +121,9 @@ These are the files an agent must read before implementing each feature. Do not 
 | F-08.4 | nothing (creates `app/geo.ts` from scratch) |
 | F-17.5 | `app/main.ts`, `app/map.ts`, `app/geo.ts`, `shared/types.ts` |
 | F-18 | `app/index.html`, `app/manifest.json` |
+| F-19 | `app/index.html`, `app/style.css`, `app/map.ts`, `app/main.ts` |
+| F-20 | `shared/types.ts`, `shared/parking-logic.ts`, `app/geo.ts`, `app/map.ts`, `app/main.ts`, `tests/unit/parking-logic.test.ts`, `tests/unit/geo.test.ts`, `tests/unit/map.test.ts`, `tests/unit/main.test.ts` |
+| F-21 | `shared/parking-logic.ts`, `app/geo.ts`, `app/main.ts`, `package.json`, `tests/unit/geo.test.ts` |
 
 ---
 
@@ -136,6 +139,9 @@ The column headers (Street / Side / Days & Hours / Location) appear as a real `d
 
 **F-17.5 — street-cleaning.json must be fetched before clicks work**
 `cleaningEntries` starts empty. The fetch of `"data/street-cleaning.json"` is fire-and-forget after `initMap()` — if a user clicks the map before it resolves, `findCleaningEntries` returns `[]` and `showStreetPopup` renders "No cleaning schedule found". This is acceptable graceful degradation, not a bug.
+
+**F-21 — Nominatim requires a User-Agent in Node**
+Node's built-in `fetch` sends no User-Agent and receives HTTP 403 from Nominatim. The browser sends a User-Agent automatically, which is why `geocodeCrossStreet` in `geo.ts` works at runtime without one. The build-time script runs in Node and must explicitly set `"User-Agent": "hoboken-parking-app/1.0 (build-time geocoder)"` on every Nominatim request or all lookups silently return empty arrays.
 
 **Layout — map fills full viewport, sign-list is hidden**
 `#map` uses `height: 100vh` so the map fills the entire screen. `#sign-list` is `display: none` — the sign card panel has been intentionally removed from the UI. Do not restore the old `calc(100vh - 180px)` height or unhide `#sign-list`. The `#controls` bar is `position: fixed` and overlays the map at the bottom.

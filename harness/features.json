@@ -508,5 +508,29 @@
       "tests/unit/map.test.ts",
       "tests/unit/main.test.ts"
     ]
+  },
+  {
+    "id": "F-21",
+    "name": "Build-Time Cross-Street Geocache",
+    "status": "DONE",
+    "order": 29,
+    "depends_on": [
+      "F-20"
+    ],
+    "context_files": [
+      "shared/parking-logic.ts",
+      "app/geo.ts",
+      "app/main.ts",
+      "package.json",
+      "tests/unit/geo.test.ts"
+    ],
+    "output_files": [
+      "fetcher/geocode-cross-streets.ts",
+      "app/geo.ts",
+      "app/main.ts",
+      "package.json",
+      "tests/unit/geo.test.ts"
+    ],
+    "post_build_command": "npm run geocode-cross-streets"
   }
 ]
