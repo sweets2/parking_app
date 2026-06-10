@@ -451,5 +451,28 @@
       "package.json",
       "netlify.toml"
     ]
+  },
+  {
+    "id": "F-19",
+    "name": "Tow Zones Legend Toggle",
+    "status": "DONE",
+    "order": 27,
+    "depends_on": [
+      "F-07",
+      "F-17.5",
+      "F-18"
+    ],
+    "context_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/map.ts",
+      "app/main.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/map.ts",
+      "app/main.ts"
+    ]
   }
 ]

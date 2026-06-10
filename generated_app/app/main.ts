@@ -21,6 +21,7 @@ import {
   clearSpotMarker,
   centerOnSpot,
   showStreetPopup,
+  setTowSignsVisible,
 } from "./map";
 import { getStreetName } from "./geo";
 import { createApp } from "./app";
@@ -265,6 +266,22 @@ export async function initBrowserApp(): Promise<void> {
   const initialState = app.getState();
   if (initialState.mode === "parked") {
     appMode = "parked";
+  }
+
+  // Wire tow-zones legend toggle
+  const towLegend = document.getElementById("tow-legend");
+  const towToggle = document.getElementById("tow-toggle");
+  if (towLegend !== null && towToggle !== null) {
+    const towStatus = towToggle.querySelector<HTMLElement>(".tow-status");
+    towToggle.addEventListener("click", () => {
+      const isOn = !towLegend.classList.contains("tow-off");
+      setTowSignsVisible(!isOn);
+      towLegend.classList.toggle("tow-off", isOn);
+      towToggle.setAttribute("aria-pressed", String(!isOn));
+      if (towStatus !== null) {
+        towStatus.textContent = isOn ? "Disabled" : "Enabled";
+      }
+    });
   }
 
   // Wire clear button — F-11.4: removes spot from storage, transitions to browsing,

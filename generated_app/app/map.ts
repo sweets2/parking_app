@@ -387,6 +387,23 @@ function buildStreetPopupContent(
   return parts.join("");
 }
 
+// ─── F-legend setTowSignsVisible ─────────────────────────────────────────────
+
+/**
+ * Show or hide all tow sign markers by toggling a CSS class on #map.
+ * Uses `.leaflet-marker-pane` which only contains tow markers (position and
+ * spot dots live in `.leaflet-overlay-pane` via circleMarker and are unaffected).
+ */
+export function setTowSignsVisible(visible: boolean): void {
+  const mapEl = document.getElementById("map");
+  if (mapEl === null) return;
+  if (visible) {
+    mapEl.classList.remove("tow-signs-hidden");
+  } else {
+    mapEl.classList.add("tow-signs-hidden");
+  }
+}
+
 /**
  * Open a Leaflet popup at the clicked coordinates showing the street cleaning
  * schedule for the given entries. At most one street popup is open at a time —
