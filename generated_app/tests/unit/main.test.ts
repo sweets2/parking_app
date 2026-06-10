@@ -197,6 +197,16 @@ describe("F-17.5 main.ts street popup click wiring", () => {
       const { normalizeStreet } = await import("../../app/main");
       expect(normalizeStreet("Observer Hwy")).toBe("observer highway");
     });
+
+    it("normalizes Seventeenth St to 17th street", async () => {
+      const { normalizeStreet } = await import("../../app/main");
+      expect(normalizeStreet("Seventeenth St")).toBe("17th street");
+    });
+
+    it("normalizes Nineteenth St to 19th street", async () => {
+      const { normalizeStreet } = await import("../../app/main");
+      expect(normalizeStreet("Nineteenth St")).toBe("19th street");
+    });
   });
 
   // ─── findCleaningEntries ────────────────────────────────────────────────────

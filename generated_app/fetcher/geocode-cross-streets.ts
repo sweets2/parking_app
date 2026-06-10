@@ -34,8 +34,23 @@ function normalizeStreet(s: string): string {
     .replace(/\bthirteenth\b/g, "13th")
     .replace(/\bfourteenth\b/g, "14th")
     .replace(/\bfifteenth\b/g, "15th")
-    .replace(/\bsixteenth\b/g, "16th");
+    .replace(/\bsixteenth\b/g, "16th")
+    .replace(/\bseventeenth\b/g, "17th")
+    .replace(/\beighteenth\b/g, "18th")
+    .replace(/\bnineteenth\b/g, "19th")
+    .replace(/\btwentieth\b/g, "20th");
 }
+
+// Boundary terms and streets that Nominatim cannot resolve — hardcoded Hoboken approximations.
+const STATIC_COORDS: Record<string, { lat: number; lng: number }> = {
+  "north boundary":        { lat: 40.7650, lng: -74.0330 },
+  "the northern boundary": { lat: 40.7650, lng: -74.0330 },
+  "south boundary":        { lat: 40.7300, lng: -74.0280 },
+  "the south boundary":    { lat: 40.7300, lng: -74.0280 },
+  "east boundary":         { lat: 40.7450, lng: -74.0190 },
+  "west boundary":         { lat: 40.7450, lng: -74.0510 },
+  "henderson street":      { lat: 40.7360, lng: -74.0365 },
+};
 
 let _lastCallMs = 0;
 
@@ -88,6 +103,12 @@ export async function runGeocode(): Promise<void> {
   for (let i = 0; i < nameList.length; i++) {
     const name = nameList[i];
     if (name === undefined) continue;
+    if (name in STATIC_COORDS) {
+      const coord = STATIC_COORDS[name];
+      table[name] = coord ?? null;
+      console.log(`[${i + 1}/${nameList.length}] Static override for "${name}": ${coord?.lat.toFixed(4)}, ${coord?.lng.toFixed(4)}`);
+      continue;
+    }
     process.stdout.write(`[${i + 1}/${nameList.length}] Geocoding "${name}"... `);
     const result = await geocode(name);
     table[name] = result;

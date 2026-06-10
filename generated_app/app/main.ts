@@ -99,7 +99,11 @@ export function normalizeStreet(s: string): string {
     .replace(/\bthirteenth\b/g, "13th")
     .replace(/\bfourteenth\b/g, "14th")
     .replace(/\bfifteenth\b/g, "15th")
-    .replace(/\bsixteenth\b/g, "16th");
+    .replace(/\bsixteenth\b/g, "16th")
+    .replace(/\bseventeenth\b/g, "17th")
+    .replace(/\beighteenth\b/g, "18th")
+    .replace(/\bnineteenth\b/g, "19th")
+    .replace(/\btwentieth\b/g, "20th");
 }
 
 /**
