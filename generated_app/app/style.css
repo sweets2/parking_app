@@ -124,6 +124,7 @@ html, body {
 .dir-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   padding: 1px 7px;
   border-radius: 10px;
@@ -131,6 +132,7 @@ html, body {
   font-weight: bold;
   white-space: nowrap;
   flex-shrink: 0;
+  min-width: 40px;
 }
 .dir-n { background: #dbeafe; color: #1d4ed8; }
 .dir-s { background: #ffedd5; color: #c2410c; }
