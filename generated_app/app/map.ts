@@ -10,7 +10,7 @@
 
 import type { Sign, StreetCleaningEntry, RoadGeometry } from "../shared/types";
 import type { SavedSpot } from "../shared/storage";
-import { formatTime, getStreetOrientation } from "../shared/parking-logic";
+import { formatTime, getStreetOrientation, isScheduleActiveNow, isScheduleUpcomingSoon } from "../shared/parking-logic";
 
 // ─── Leaflet type shim ───────────────────────────────────────────────────────
 // We access L as a global (not an import) because it is loaded via CDN.
@@ -353,21 +353,18 @@ function formatLocation(location: string): string {
 
 function directionBadge(side: string): string {
   const s = side.toLowerCase();
-  let triangle: string;
-  let letter: string;
-  let cls: string;
-  if (s === "north") { triangle = "▴"; letter = "N"; cls = "dir-n"; }
-  else if (s === "south") { triangle = "▾"; letter = "S"; cls = "dir-s"; }
-  else if (s === "east") { triangle = "▸"; letter = "E"; cls = "dir-e"; }
-  else if (s === "west") { triangle = "◂"; letter = "W"; cls = "dir-w"; }
-  else { triangle = "●"; letter = side.charAt(0).toUpperCase(); cls = "dir-other"; }
-  return `<span class="dir-badge ${cls}">${triangle} ${letter}</span>`;
+  if (s === "north") return `<span class="dir-badge dir-n">N</span>`;
+  if (s === "south") return `<span class="dir-badge dir-s">S</span>`;
+  if (s === "east")  return `<span class="dir-badge dir-e">E</span>`;
+  if (s === "west")  return `<span class="dir-badge dir-w">W</span>`;
+  return `<span class="dir-badge dir-other">${side.charAt(0).toUpperCase()}</span>`;
 }
 
 function buildStreetPopupContent(
   streetName: string,
   entries: StreetCleaningEntry[],
-  highlightedLocations?: string[]
+  highlightedLocations?: string[],
+  now?: Date
 ): string {
   if (entries.length === 0) {
     return `<div class="sp-wrap"><div class="sp-header"><span class="sp-icon">🧹</span><span class="sp-label">Street Cleaning</span><span class="sp-icon sp-icon-ghost">🧹</span></div><div class="sp-street">${streetName}</div><div class="sp-loc-label"><em>No cleaning schedule found</em></div></div>`;
@@ -401,7 +398,12 @@ function buildStreetPopupContent(
     parts.push(`<div class="${blockClass}">`);
     parts.push(`<div class="sp-loc-label">${streetName} ${blockContext}</div>`);
     for (const entry of locationEntries) {
-      parts.push(`<div class="sp-entry">${directionBadge(entry.side)}<span class="sp-sched">${entry.schedule}</span></div>`);
+      const schedActive   = now !== undefined && isScheduleActiveNow(entry.schedule, now);
+      const schedUpcoming = !schedActive && now !== undefined && isScheduleUpcomingSoon(entry.schedule, now);
+      const schedClass = schedActive   ? "sp-sched sp-sched--active"
+                       : schedUpcoming ? "sp-sched sp-sched--upcoming"
+                       : "sp-sched";
+      parts.push(`<div class="sp-entry">${directionBadge(entry.side)}<span class="${schedClass}">${entry.schedule}</span></div>`);
     }
     parts.push(`</div>`);
   }
@@ -766,8 +768,9 @@ export function showStreetPopup(
     _streetPopup = null;
   }
 
+  const now = new Date();
   const L = getL();
-  const content = buildStreetPopupContent(streetName, entries);
+  const content = buildStreetPopupContent(streetName, entries, undefined, now);
 
   const popup = L.popup();
   popup.setLatLng([lat, lng]);
@@ -783,7 +786,7 @@ export function showStreetPopup(
       if (_popupHighlightToken !== token) return;
       if (_streetPopup === null) return;
       if (matched === null) return;
-      _streetPopup.setContent(buildStreetPopupContent(streetName, entries, matched));
+      _streetPopup.setContent(buildStreetPopupContent(streetName, entries, matched, now));
     });
   }
 }
