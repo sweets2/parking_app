@@ -5,6 +5,7 @@
   "scripts": {
     "fetch":                   "tsx fetcher/fetch.ts",
     "fetch-cleaning":          "tsx fetcher/fetch-street-cleaning.ts",
+    "normalize-schedules":     "tsx fetcher/normalize-schedules.ts",
     "geocode-cross-streets":   "tsx fetcher/geocode-cross-streets.ts",
     "build-road-geometry":     "tsx fetcher/build-road-geometry.ts",
     "test":                    "vitest run",

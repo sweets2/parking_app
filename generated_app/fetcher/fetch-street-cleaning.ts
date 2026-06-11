@@ -6,6 +6,29 @@ import type { StreetCleaningEntry, StreetCleaningData } from "../shared/types";
 const SOURCE_URL =
   "https://www.hobokennj.gov/resources/street-cleaning-schedule";
 
+/**
+ * Normalizes raw scraped schedule text into the canonical display format:
+ * "Monday through Friday  8 am – 9 am"
+ *
+ * Handles inconsistencies from the city website:
+ *   - "Monday-Friday"  → "Monday through Friday"
+ *   - " - " separator → two spaces
+ *   - "X am to Y am"  → "X am – Y am"
+ *   - "12 noon"       → "12 pm"
+ *   - "2pm"           → "2 pm"
+ */
+export function normalizeSchedule(raw: string): string {
+  let s = raw.replace(/\bMonday\s*-\s*Friday\b/gi, "Monday through Friday");
+  const timeStart = s.search(/\d/);
+  if (timeStart === -1) return s;
+  const daysPart = s.slice(0, timeStart).replace(/[\s\-–—]+$/, "");
+  let timePart = s.slice(timeStart).trim();
+  timePart = timePart.replace(/(\d)(am|pm)\b/gi, "$1 $2");
+  timePart = timePart.replace(/\b12\s*noon\b/gi, "12 pm");
+  timePart = timePart.replace(/\s+to\s+/gi, " – ");
+  return `${daysPart}  ${timePart}`;
+}
+
 // Resolve data directory relative to this file at runtime
 const DATA_DIR = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -47,7 +70,7 @@ export function parseCleaningHtml(html: string): StreetCleaningEntry[] {
 
     const street = (cells[0]?.innerText ?? "").trim();
     const side = (cells[1]?.innerText ?? "").trim();
-    const schedule = (cells[2]?.innerText ?? "").trim();
+    const schedule = normalizeSchedule((cells[2]?.innerText ?? "").trim());
     const location = (cells[3]?.innerText ?? "").trim();
 
     // Filter out the header row

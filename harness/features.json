@@ -392,7 +392,7 @@
     "output_files": [
       "fetcher/fetch-street-cleaning.ts"
     ],
-    "post_build_command": "npm run fetch-cleaning"
+    "post_build_command": "npm run fetch-cleaning && npm run normalize-schedules"
   },
   {
     "id": "F-07.6",

@@ -101,7 +101,7 @@ describe("parseCleaningHtml", () => {
     expect(adams).toBeDefined();
     if (adams !== undefined) {
       expect(adams.side).toBe("West");
-      expect(adams.schedule).toBe("Monday - 11 am to 12 noon");
+      expect(adams.schedule).toBe("Monday  11 am – 12 pm");
       expect(adams.location).toBe("Newark St. to Sixteenth St.");
     }
   });

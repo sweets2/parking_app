@@ -44,7 +44,7 @@ export interface RawApiResponse {
 export interface StreetCleaningEntry {
   street:   string;   // "Washington Street"
   side:     string;   // "East" | "West" | "North" | "South" | "Both"
-  schedule: string;   // "Monday through Friday - 8 am to 9 am"
+  schedule: string;   // "Monday through Friday  8 am – 9 am"
   location: string;   // "Observer Hwy. to Seventh St."
 }
 
