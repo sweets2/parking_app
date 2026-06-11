@@ -119,6 +119,7 @@ html, body {
 }
 .sp-sched {
   color: #222;
+  white-space: pre-wrap;
 }
 .dir-badge {
   display: inline-flex;
@@ -255,8 +256,8 @@ html, body {
 }
 
 .sp-block--active {
-  background: #eff6ff;
-  border-left: 3px solid #2563eb;
+  background: #f0fdf4;
+  border-left: 3px solid #16a34a;
   padding-left: 6px;
   border-radius: 4px;
 }
