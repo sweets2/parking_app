@@ -10,7 +10,7 @@ A static PWA. No backend server. One daily cron job keeps the data fresh.
 Hoboken City API
         │  once daily (GitHub Action)
         ▼
-fetcher/fetch.ts  →  data/latest.json  →  Netlify CDN
+fetcher/fetch.ts  →  data/latest.json  →  Vercel CDN
                                                 │
                                          iPhone / Android / Browser
                                          (PWA, installs to home screen)
@@ -108,7 +108,7 @@ parking_app/                  ← repo root (scaffolding only)
 | Storage | localStorage |
 | Bundler | esbuild |
 | Tests | Vitest |
-| Hosting | Netlify (free tier, auto-deploy on push) |
+| Hosting | Vercel (free tier, auto-deploy on push) |
 | CI/CD | GitHub Actions |
 
 ---

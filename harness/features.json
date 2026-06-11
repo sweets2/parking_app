@@ -449,7 +449,7 @@
       "app/icon-192.png",
       "app/icon-512.png",
       "package.json",
-      "netlify.toml"
+      "vercel.json"
     ]
   },
   {
