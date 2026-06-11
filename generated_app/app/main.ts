@@ -344,6 +344,26 @@ export async function initBrowserApp(): Promise<void> {
     });
   }
 
+  // Wire "Get Current Location" button
+  const locateBtn = document.getElementById("locate-btn");
+  if (locateBtn !== null) {
+    locateBtn.addEventListener("click", () => {
+      if (!("geolocation" in navigator)) return;
+      locateBtn.setAttribute("disabled", "");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          locateBtn.removeAttribute("disabled");
+          renderPositionMarker(pos.coords.latitude, pos.coords.longitude);
+          centerOnSpot({ lat: pos.coords.latitude, lng: pos.coords.longitude, savedAt: new Date().toISOString(), address: null });
+        },
+        () => {
+          locateBtn.removeAttribute("disabled");
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+  }
+
   // Wire clear button — F-11.4: removes spot from storage, transitions to browsing,
   // clears spot marker, shows all active signs as pins (via renderState browsing branch).
   const clearBtn = document.getElementById("clear-btn");

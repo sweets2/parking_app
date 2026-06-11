@@ -142,12 +142,44 @@ html, body {
   margin: 6px 0;
 }
 
-/* ─── Tow zones legend toggle ─────────────────────────────────────────────── */
-
-/* Sits below Leaflet's zoom control (margin-top 10px + 2×26px buttons ≈ 62px + 22px gap) */
-#tow-legend {
+/* ─── Get Current Location button ─────────────────────────── */
+#locate-control {
   position: fixed;
   top: 84px;
+  left: 10px;
+  z-index: 1000;
+}
+
+#locate-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1.5px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  color: #374151;
+}
+
+#locate-btn:active {
+  background: #f3f4f6;
+}
+
+#locate-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ─── Tow zones legend toggle ─────────────────────────────────────────────── */
+
+/* Sits below locate button (84px + 34px button + 8px gap = 126px) */
+#tow-legend {
+  position: fixed;
+  top: 126px;
   left: 10px;
   z-index: 1000;
 }

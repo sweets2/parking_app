@@ -651,5 +651,46 @@
     "output_files": [
       "app/main.ts"
     ]
+  },
+  {
+    "id": "F-27",
+    "name": "Get Current Location Button",
+    "status": "DONE",
+    "order": 35,
+    "depends_on": [
+      "F-26"
+    ],
+    "context_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts"
+    ]
+  },
+  {
+    "id": "F-28",
+    "name": "Floating Feedback Button",
+    "status": "TODO",
+    "order": 36,
+    "depends_on": [
+      "F-26"
+    ],
+    "context_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/feedback.ts",
+      "app/main.ts",
+      "api/feedback.ts",
+      "tests/unit/feedback.test.ts"
+    ]
   }
 ]
