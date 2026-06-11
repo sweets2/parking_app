@@ -43,6 +43,7 @@ interface LeafletMap {
   getZoom(): number;
   on(event: string, handler: (e: unknown) => void): LeafletMap;
   off(event: string): LeafletMap;
+  closePopup(): LeafletMap;
 }
 
 interface LeafletCircleMarker extends LeafletLayer {
@@ -793,6 +794,9 @@ export function setTowSignsVisible(visible: boolean): void {
     }
   }
   if (_map === null) return;
+  if (!visible) {
+    _map.closePopup();
+  }
   for (const layer of _segmentLayers) {
     if (visible) {
       layer.addTo(_map);
