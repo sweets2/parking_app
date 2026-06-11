@@ -96,6 +96,8 @@ let _spotMarker: LeafletCircleMarker | null = null;
 let _streetPopup: LeafletPopup | null = null;
 let _popupHighlightToken = 0;
 let _roadGeometry: RoadGeometry = {};
+let _violationLayers: LeafletLayer[] = [];
+let _violationHighlightsVisible = true;
 
 const DEFAULT_ZOOM = 15;
 
@@ -158,6 +160,8 @@ export function initMap(): LeafletMap {
   _spotMarker = null;
   _streetPopup = null;
   _roadGeometry = {};
+  _violationLayers = [];
+  _violationHighlightsVisible = true;
 
   // Scale tow icons proportionally with zoom — each level doubles map detail
   const updateIconScale = () => {
@@ -798,6 +802,94 @@ export function setTowSignsVisible(visible: boolean): void {
     _map.closePopup();
   }
   for (const layer of _segmentLayers) {
+    if (visible) {
+      layer.addTo(_map);
+    } else {
+      layer.remove();
+    }
+  }
+}
+
+// ─── F-34 Street Violation Highlights ────────────────────────────────────────
+
+const ORDINAL_TO_NUMERIC: Record<string, string> = {
+  FIRST: "1ST", SECOND: "2ND", THIRD: "3RD", FOURTH: "4TH",
+  FIFTH: "5TH", SIXTH: "6TH", SEVENTH: "7TH", EIGHTH: "8TH",
+  NINTH: "9TH", TENTH: "10TH", ELEVENTH: "11TH", TWELFTH: "12TH",
+  THIRTEENTH: "13TH", FOURTEENTH: "14TH", FIFTEENTH: "15TH", SIXTEENTH: "16TH",
+};
+
+function normalizeToGeometryKey(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/\./g, "")
+    .replace(/\bSTREET\b/g, "ST")
+    .replace(/\bAVENUE\b/g, "AVE")
+    .replace(/\bHIGHWAY\b/g, "HWY")
+    .replace(/\bBOULEVARD\b/g, "BLVD")
+    .replace(/\bPLACE\b/g, "PL")
+    .replace(/\bCOURT\b/g, "CT")
+    .replace(/\bDRIVE\b/g, "DR")
+    .replace(/\bROAD\b/g, "RD")
+    .replace(/\bTERRACE\b/g, "TER")
+    .replace(/\b(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH|THIRTEENTH|FOURTEENTH|FIFTEENTH|SIXTEENTH)\b/g, m => ORDINAL_TO_NUMERIC[m] ?? m)
+    .trim();
+}
+
+function drawStreetHighlight(street: string, color: string, opacity: number): void {
+  const ways = _roadGeometry[street];
+  if (ways === undefined || ways.length === 0) return;
+  const L = getL();
+  for (const way of ways) {
+    if (way.length === 0) continue;
+    const layer = L.polyline(way, { color, weight: 12, opacity });
+    _violationLayers.push(layer);
+    if (_violationHighlightsVisible && _map !== null) {
+      layer.addTo(_map);
+    }
+  }
+}
+
+export function clearViolationHighlights(): void {
+  for (const layer of _violationLayers) {
+    layer.remove();
+  }
+  _violationLayers = [];
+}
+
+export function renderViolationHighlights(
+  cleaningEntries: StreetCleaningEntry[],
+  now: Date
+): void {
+  clearViolationHighlights();
+  if (_map === null) return;
+
+  const activeStreets = new Set<string>();
+  const upcomingStreets = new Set<string>();
+
+  for (const entry of cleaningEntries) {
+    const street = normalizeToGeometryKey(entry.street);
+    if (isScheduleActiveNow(entry.schedule, now)) {
+      activeStreets.add(street);
+    } else if (isScheduleUpcomingSoon(entry.schedule, now)) {
+      upcomingStreets.add(street);
+    }
+  }
+
+  for (const street of upcomingStreets) {
+    if (!activeStreets.has(street)) {
+      drawStreetHighlight(street, "#f97316", 0.22);
+    }
+  }
+  for (const street of activeStreets) {
+    drawStreetHighlight(street, "#ef4444", 0.28);
+  }
+}
+
+export function setViolationHighlightsVisible(visible: boolean): void {
+  _violationHighlightsVisible = visible;
+  if (_map === null) return;
+  for (const layer of _violationLayers) {
     if (visible) {
       layer.addTo(_map);
     } else {

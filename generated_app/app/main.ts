@@ -25,6 +25,9 @@ import {
   showStreetPopup,
   setTowSignsVisible,
   initRoadGeometry,
+  clearViolationHighlights,
+  renderViolationHighlights,
+  setViolationHighlightsVisible,
 } from "./map";
 import { getStreetName, geocodeCrossStreet, seedGeocodeCache } from "./geo";
 import { createApp } from "./app";
@@ -186,6 +189,7 @@ function renderState(state: AppState): void {
     renderBrowsingMode(state.activeSigns, now);
     renderSignPins(state.activeSigns, now);
     renderTowSegments(state.activeSigns);
+    renderViolationHighlights(cleaningEntries, now);
     return;
   }
 
@@ -216,6 +220,7 @@ function renderState(state: AppState): void {
     // Show all active sign pins in parked mode (not just nearby ones).
     renderSignPins(filterActive(state.allSigns, now), now);
     renderTowSegments(filterActive(state.allSigns, now));
+    renderViolationHighlights(cleaningEntries, now);
     renderSpotMarker(state.spot);
     clearPositionMarker();
     return;
@@ -236,6 +241,7 @@ async function silentRefresh(app: App, now: Date): Promise<void> {
       const nearby = filterNearby(filtered, state.spot.lat, state.spot.lng, 150, now);
       renderSignPins(nearby, now);
       renderTowSegments(nearby);
+      renderViolationHighlights(cleaningEntries, now);
       if (nearby.length > 0) {
         renderWarningBanner(nearby, now);
       } else {
@@ -244,12 +250,28 @@ async function silentRefresh(app: App, now: Date): Promise<void> {
     } else if (state.mode === "browsing") {
       renderSignPins(activeNow, now);
       renderTowSegments(activeNow);
+      renderViolationHighlights(cleaningEntries, now);
       renderBrowsingMode(activeNow, now);
     }
     app.tick(now);
   } catch {
     // Silent — cached data remains in use
   }
+}
+
+// ─── F-34 scheduleViolationRefresh ───────────────────────────────────────────
+
+function scheduleViolationRefresh(getState: () => AppState): void {
+  const now = new Date();
+  const secIntoHour = now.getMinutes() * 60 + now.getSeconds();
+  const msUntilNextHour = (3600 - secIntoHour) * 1000 - now.getMilliseconds();
+  setTimeout(() => {
+    const st = getState();
+    if (st.mode !== "loading" && st.mode !== "error") {
+      renderViolationHighlights(cleaningEntries, new Date());
+    }
+    scheduleViolationRefresh(getState);
+  }, msUntilNextHour);
 }
 
 // ─── Full browser app wiring ──────────────────────────────────────────────────
@@ -331,6 +353,12 @@ export async function initBrowserApp(): Promise<void> {
     appMode = "parked";
   }
 
+  // F-34: initial violation highlight render + hourly schedule
+  if (initialState.mode !== "loading" && initialState.mode !== "error") {
+    renderViolationHighlights(cleaningEntries, new Date());
+  }
+  scheduleViolationRefresh(app.getState.bind(app));
+
   // Wire tow-zones legend toggle
   const towLegend = document.getElementById("tow-legend");
   const towToggle = document.getElementById("tow-toggle");
@@ -343,6 +371,22 @@ export async function initBrowserApp(): Promise<void> {
       towToggle.setAttribute("aria-pressed", String(!isOn));
       if (towStatus !== null) {
         towStatus.textContent = isOn ? "Disabled" : "Enabled";
+      }
+    });
+  }
+
+  // Wire violation highlights legend toggle
+  const violationLegend = document.getElementById("violation-legend");
+  const violationToggle = document.getElementById("violation-toggle");
+  if (violationLegend !== null && violationToggle !== null) {
+    const violationStatus = violationToggle.querySelector<HTMLElement>(".violation-status");
+    violationToggle.addEventListener("click", () => {
+      const isOn = !violationLegend.classList.contains("violation-off");
+      setViolationHighlightsVisible(!isOn);
+      violationLegend.classList.toggle("violation-off", isOn);
+      violationToggle.setAttribute("aria-pressed", String(!isOn));
+      if (violationStatus !== null) {
+        violationStatus.textContent = isOn ? "Disabled" : "Enabled";
       }
     });
   }

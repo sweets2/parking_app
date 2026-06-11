@@ -305,6 +305,60 @@ html, body {
   color: #9ca3af;
 }
 
+/* ─── Street violation highlights legend ─── */
+#violation-legend {
+  position: fixed;
+  top: 168px;
+  left: 10px;
+  z-index: 1000;
+}
+
+#violation-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  transition: opacity 0.15s, border-color 0.15s;
+  user-select: none;
+}
+#violation-toggle:active { background: #f3f4f6; }
+
+.violation-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 0 1.5px rgba(239, 68, 68, 0.35);
+  flex-shrink: 0;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.violation-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+.violation-title { font-size: 12px; font-weight: 700; color: #1e293b; }
+.violation-status {
+  font-size: 10px;
+  font-weight: 600;
+  color: #16a34a;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  transition: color 0.15s;
+}
+
+/* OFF state */
+#violation-legend.violation-off #violation-toggle { border-color: #e5e7eb; }
+#violation-legend.violation-off .violation-dot { background: #9ca3af; box-shadow: none; }
+#violation-legend.violation-off .violation-status { color: #9ca3af; }
+
 /* Hide tow sign markers — only .leaflet-marker-pane; circleMarkers are unaffected */
 #map.tow-signs-hidden .leaflet-marker-pane {
   display: none;

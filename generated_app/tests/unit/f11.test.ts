@@ -49,6 +49,9 @@ vi.mock("../../app/map", () => ({
   showStreetPopup:           mockShowStreetPopup,
   initRoadGeometry:          mockInitRoadGeometry,
   setTowSignsVisible:        mockSetTowSignsVisible,
+  clearViolationHighlights:  vi.fn(),
+  renderViolationHighlights: vi.fn(),
+  setViolationHighlightsVisible: vi.fn(),
 }));
 
 // ─── Mock app/ui ──────────────────────────────────────────────────────────────

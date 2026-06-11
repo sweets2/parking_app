@@ -1268,3 +1268,122 @@ describe("F-25 renderTowSegments offset", () => {
     }
   });
 });
+
+// ─── F-34 Street Violation Highlights ────────────────────────────────────────
+
+describe("F-34 violation highlights", () => {
+  // Active cleaning schedule — "11 am – 1 pm" window contains noon ET (NOW_STABLE)
+  // NOW_STABLE = 2026-06-09T16:00:00Z = noon ET (UTC-4)
+  const ACTIVE_CLEANING: StreetCleaningEntry = {
+    street: "Bloomfield Street",
+    side: "West",
+    schedule: "Monday through Friday   11 am – 1 pm",
+    location: "1st St. to 14th St.",
+  };
+
+  // Upcoming cleaning schedule — starts at 1 pm ET, upcoming at noon ET
+  // isScheduleUpcomingSoon: minutesOfDay(720) >= 780-60 && 720 < 780 → true
+  const UPCOMING_CLEANING: StreetCleaningEntry = {
+    street: "Bloomfield Street",
+    side: "West",
+    schedule: "Monday through Friday   1 pm – 2 pm",
+    location: "1st St. to 14th St.",
+  };
+
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN initMap and road geometry for BLOOMFIELD ST, WHEN renderViolationHighlights with active cleaning schedule, THEN red polylines added to map", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    renderViolationHighlights([ACTIVE_CLEANING], NOW_STABLE);
+    const redLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#ef4444"
+    );
+    expect(redLayers.length).toBeGreaterThan(0);
+  });
+
+  it("GIVEN initMap and road geometry, WHEN renderViolationHighlights with upcoming cleaning schedule, THEN orange polylines added to map", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    renderViolationHighlights([UPCOMING_CLEANING], NOW_STABLE);
+    const orangeLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#f97316"
+    );
+    expect(orangeLayers.length).toBeGreaterThan(0);
+  });
+
+  it("GIVEN active and upcoming cleaning on same street, WHEN renderViolationHighlights called, THEN only red layers (active takes priority, no orange)", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    renderViolationHighlights([ACTIVE_CLEANING, UPCOMING_CLEANING], NOW_STABLE);
+    const orangeLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#f97316"
+    );
+    const redLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#ef4444"
+    );
+    expect(orangeLayers.length).toBe(0);
+    expect(redLayers.length).toBeGreaterThan(0);
+  });
+
+  it("GIVEN violation layers on map, WHEN setViolationHighlightsVisible(false) called, THEN no violation polylines remain in map layers", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights, setViolationHighlightsVisible } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    renderViolationHighlights([ACTIVE_CLEANING], NOW_STABLE);
+    expect(mockMapInstance._layers.length).toBeGreaterThan(0);
+    setViolationHighlightsVisible(false);
+    const violationPolylines = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    );
+    expect(violationPolylines.length).toBe(0);
+  });
+
+  it("GIVEN violation layers hidden, WHEN setViolationHighlightsVisible(true) called, THEN violation polylines are back on map", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights, setViolationHighlightsVisible } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    renderViolationHighlights([ACTIVE_CLEANING], NOW_STABLE);
+    setViolationHighlightsVisible(false);
+    expect(mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    ).length).toBe(0);
+    setViolationHighlightsVisible(true);
+    const violationPolylines = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    );
+    expect(violationPolylines.length).toBeGreaterThan(0);
+  });
+
+  it("GIVEN violation layers on map, WHEN clearViolationHighlights called, THEN no polyline layers remain and map layers empty of violation polylines", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights, clearViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    renderViolationHighlights([ACTIVE_CLEANING], NOW_STABLE);
+    expect(mockMapInstance._layers.length).toBeGreaterThan(0);
+    clearViolationHighlights();
+    const violationPolylines = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    );
+    expect(violationPolylines.length).toBe(0);
+  });
+
+  it("GIVEN empty road geometry, WHEN renderViolationHighlights called with active sign and cleaning, THEN no error thrown and no polyline layers added", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({});
+    expect(() => {
+      renderViolationHighlights([ACTIVE_CLEANING], NOW_STABLE);
+    }).not.toThrow();
+    const polylineLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    );
+    expect(polylineLayers.length).toBe(0);
+  });
+});
