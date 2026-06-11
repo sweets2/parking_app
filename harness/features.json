@@ -692,5 +692,43 @@
       "api/feedback.ts",
       "tests/unit/feedback.test.ts"
     ]
+  },
+  {
+    "id": "F-29",
+    "name": "Direction Badge Redesign",
+    "status": "DONE",
+    "order": 37,
+    "depends_on": [
+      "F-28"
+    ],
+    "context_files": [
+      "app/style.css",
+      "app/map.ts"
+    ],
+    "output_files": [
+      "app/style.css",
+      "app/map.ts"
+    ]
+  },
+  {
+    "id": "F-30",
+    "name": "Schedule Violation Pulse Animation",
+    "status": "DONE",
+    "order": 38,
+    "depends_on": [
+      "F-29"
+    ],
+    "context_files": [
+      "shared/parking-logic.ts",
+      "app/map.ts",
+      "app/style.css",
+      "tests/unit/parking-logic.test.ts"
+    ],
+    "output_files": [
+      "shared/parking-logic.ts",
+      "app/map.ts",
+      "app/style.css",
+      "tests/unit/parking-logic.test.ts"
+    ]
   }
 ]
