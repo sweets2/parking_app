@@ -32,11 +32,14 @@ vi.mock("../../app/map", () => ({
   registerMapClickHandler: mockRegisterMapClickHandler,
   renderPositionMarker: mockRenderPositionMarker,
   renderSignPins: mockRenderSignPins,
+  renderTowSegments: vi.fn(),
   renderSpotMarker: mockRenderSpotMarker,
   clearPositionMarker: vi.fn(),
   clearSpotMarker: vi.fn(),
   centerOnSpot: vi.fn(),
   showStreetPopup: mockShowStreetPopup,
+  initRoadGeometry: vi.fn(),
+  setTowSignsVisible: vi.fn(),
 }));
 
 // ─── Mock app/ui ──────────────────────────────────────────────────────────────
@@ -1267,18 +1270,19 @@ describe("F-14 automatic re-fetch on open", () => {
   it("F-14.1 GIVEN a saved spot exists and the no-cache fetch fails, WHEN initBrowserApp runs, THEN createApp is still called and mock app reaches parked state", async () => {
     const firstPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
 
-    // call 1 = street-cleaning fire-and-forget, call 2 = data/latest.json (succeeds),
-    // call 3 = data/latest.json no-cache (fails)
+    // call 1 = street-cleaning fire-and-forget, call 2 = cross-streets fire-and-forget,
+    // call 3 = road-geometry fire-and-forget, call 4 = data/latest.json (succeeds),
+    // call 5 = data/latest.json no-cache (fails)
     let callCount = 0;
     mockFetchImpl = () => {
       callCount++;
-      if (callCount <= 2) {
+      if (callCount <= 4) {
         return Promise.resolve({
           ok: true,
           json: async () => firstPayload,
         } as Response);
       }
-      // Third call (no-cache) fails
+      // Fifth call (no-cache) fails
       return Promise.reject(new Error("Network error on no-cache fetch"));
     };
 

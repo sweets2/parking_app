@@ -247,6 +247,36 @@ export type ViolationWindow = {
  * Known data limitation: the Hoboken API only returns signs already posted;
  * signs not yet in latest.json cannot be warned about here.
  */
+
+// ─── F-23 getStreetOrientation ────────────────────────────────────────────────
+
+/**
+ * Named East-West streets that contain no digit but run E-W (not N-S).
+ * Constructed once at module level so the Set is not rebuilt on each call.
+ */
+const EW_NAMED = new Set(["OBSERVER HWY", "NEWARK ST"]);
+
+/**
+ * Classify a sign address as East-West ("EW") or North-South ("NS").
+ *
+ * Algorithm:
+ * 1. Strip the leading house-number token (handles both "257 11TH ST" and
+ *    "257-257 11TH ST" formats).
+ * 2. If the stripped street name contains a digit → "EW" (numbered streets).
+ * 3. If the stripped street name is in EW_NAMED → "EW".
+ * 4. Otherwise → "NS".
+ */
+export function getStreetOrientation(address: string): "EW" | "NS" {
+  const street = address.replace(/^\d[\d-]*\s+/, "").trim();
+  if (/\d/.test(street)) {
+    return "EW";
+  }
+  if (EW_NAMED.has(street)) {
+    return "EW";
+  }
+  return "NS";
+}
+
 // ─── F-20 extractCrossStreets ──────────────────────────────────────────────────
 
 /**

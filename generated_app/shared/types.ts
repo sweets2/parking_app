@@ -52,3 +52,5 @@ export interface StreetCleaningData {
   fetched_at: string;                // ISO 8601 UTC — when the scrape ran
   entries:    StreetCleaningEntry[];
 }
+
+export type RoadGeometry = Record<string, [number, number][][]>;

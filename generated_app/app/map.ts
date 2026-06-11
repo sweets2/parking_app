@@ -8,9 +8,9 @@
  * In Node tests the global `L` is mocked before this module is imported.
  */
 
-import type { Sign, StreetCleaningEntry } from "../shared/types";
+import type { Sign, StreetCleaningEntry, RoadGeometry } from "../shared/types";
 import type { SavedSpot } from "../shared/storage";
-import { formatTime } from "../shared/parking-logic";
+import { formatTime, getStreetOrientation } from "../shared/parking-logic";
 
 // ─── Leaflet type shim ───────────────────────────────────────────────────────
 // We access L as a global (not an import) because it is loaded via CDN.
@@ -74,6 +74,10 @@ interface LeafletStatic {
     iconAnchor: [number, number];
   }): LeafletIcon;
   popup(): LeafletPopup;
+  polyline(
+    latlngs: [number, number][],
+    options: { color: string; weight: number; opacity: number }
+  ): LeafletLayer;
 }
 
 function getL(): LeafletStatic {
@@ -84,10 +88,13 @@ function getL(): LeafletStatic {
 
 let _map: LeafletMap | null = null;
 let _signLayers: LeafletLayer[] = [];
+let _segmentLayers: LeafletLayer[] = [];
+let _towSignsVisible: boolean = true;
 let _positionMarker: LeafletCircleMarker | null = null;
 let _spotMarker: LeafletCircleMarker | null = null;
 let _streetPopup: LeafletPopup | null = null;
 let _popupHighlightToken = 0;
+let _roadGeometry: RoadGeometry = {};
 
 const DEFAULT_ZOOM = 15;
 
@@ -143,17 +150,22 @@ export function initMap(): LeafletMap {
   // Reset module state for this map instance
   _map = map;
   _signLayers = [];
+  _segmentLayers = [];
+  _towSignsVisible = true;
   _positionMarker = null;
   _spotMarker = null;
   _streetPopup = null;
+  _roadGeometry = {};
 
   // Scale tow icons proportionally with zoom — each level doubles map detail
   const updateIconScale = () => {
     const zoom = map.getZoom();
     const towScale = Math.max(1, Math.min(4, Math.pow(1.4, zoom - DEFAULT_ZOOM)));
-    const mapEl = document.getElementById("map");
-    if (mapEl !== null) {
-      mapEl.style.setProperty("--tow-icon-scale", String(towScale));
+    if (typeof document !== "undefined") {
+      const mapEl = document.getElementById("map");
+      if (mapEl !== null) {
+        mapEl.style.setProperty("--tow-icon-scale", String(towScale));
+      }
     }
     const ds = dotScale();
     if (_positionMarker !== null) {
@@ -397,20 +409,273 @@ function buildStreetPopupContent(
   return parts.join("");
 }
 
+// ─── F-24 initRoadGeometry / getSubsegment ────────────────────────────────────
+
+/**
+ * Store the road geometry data fetched from data/road-geometry.json.
+ * Called once during app initialization after the file is fetched.
+ */
+export function initRoadGeometry(data: RoadGeometry): void {
+  _roadGeometry = data;
+}
+
+/**
+ * Given an array of ways (each way is an ordered array of [lat, lng] pairs),
+ * project [signLat, signLng] perpendicularly onto the nearest road segment and
+ * return a subsegment of halfLengthM on each side of that projected point.
+ *
+ * Using the nearest segment projection (rather than nearest waypoint) ensures
+ * the result is centred under the sign even when OSM nodes are sparsely placed.
+ * Uses flat-earth distance with cos(lat) correction for longitude.
+ *
+ * Falls back to a 2-point N-S segment centred on [signLat, signLng] if:
+ * - ways is empty / all ways have fewer than 2 points
+ * - the result is degenerate (< 2 points)
+ */
+export function getSubsegment(
+  ways: [number, number][][],
+  signLat: number,
+  signLng: number,
+  halfLengthM = 9
+): [number, number][] {
+  const cosLat = Math.cos(signLat * Math.PI / 180);
+  const NS_FALLBACK: [number, number][] = [
+    [signLat - halfLengthM / 111320, signLng],
+    [signLat + halfLengthM / 111320, signLng],
+  ];
+
+  if (ways.length === 0) return NS_FALLBACK;
+
+  // Step 1 — find nearest projected point on any road segment
+  let bestWayIdx = -1;
+  let bestSegIdx = -1;
+  let bestT = 0;
+  let bestDist = Infinity;
+  let projPt: [number, number] = [signLat, signLng];
+
+  for (let wi = 0; wi < ways.length; wi++) {
+    const way = ways[wi];
+    if (way === undefined) continue;
+    for (let si = 0; si < way.length - 1; si++) {
+      const A = way[si];
+      const B = way[si + 1];
+      if (A === undefined || B === undefined) continue;
+      const ax = (A[0] - signLat) * 111320;
+      const ay = (A[1] - signLng) * 111320 * cosLat;
+      const bx = (B[0] - signLat) * 111320;
+      const by = (B[1] - signLng) * 111320 * cosLat;
+      const abx = bx - ax;
+      const aby = by - ay;
+      const ab2 = abx * abx + aby * aby;
+      if (ab2 === 0) continue;
+      const t = Math.max(0, Math.min(1, -(ax * abx + ay * aby) / ab2));
+      const px = ax + t * abx;
+      const py = ay + t * aby;
+      const d = Math.sqrt(px * px + py * py);
+      if (d < bestDist) {
+        bestDist = d;
+        bestWayIdx = wi;
+        bestSegIdx = si;
+        bestT = t;
+        projPt = [A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])];
+      }
+    }
+  }
+
+  if (bestWayIdx === -1) return NS_FALLBACK;
+
+  const bestWay = ways[bestWayIdx];
+  if (bestWay === undefined || bestWay.length < 2) return NS_FALLBACK;
+
+  const segA = bestWay[bestSegIdx];
+  const segB = bestWay[bestSegIdx + 1];
+  if (segA === undefined || segB === undefined) return NS_FALLBACK;
+
+  const segLen = (() => {
+    const dlat = (segB[0] - segA[0]) * 111320;
+    const dlng = (segB[1] - segA[1]) * 111320 * cosLat;
+    return Math.sqrt(dlat * dlat + dlng * dlng);
+  })();
+  if (segLen === 0) return NS_FALLBACK;
+
+  // Step 2 — walk backward halfLengthM from projPt along the way
+  const backward: [number, number][] = [];
+  let accBackward = 0;
+  let backwardDone = false;
+
+  if (bestT > 0) {
+    const backSegLen = bestT * segLen;
+    if (backSegLen >= halfLengthM) {
+      const endT = bestT - halfLengthM / segLen;
+      backward.push([segA[0] + endT * (segB[0] - segA[0]), segA[1] + endT * (segB[1] - segA[1])]);
+      backwardDone = true;
+    } else {
+      accBackward = backSegLen;
+      backward.push(segA);
+    }
+  }
+
+  if (!backwardDone) {
+    for (let pi = bestSegIdx - 1; pi >= 0; pi--) {
+      const cur = bestWay[pi];
+      const nxt = bestWay[pi + 1];
+      if (cur === undefined || nxt === undefined) break;
+      const dlat = (cur[0] - nxt[0]) * 111320;
+      const dlng = (cur[1] - nxt[1]) * 111320 * cosLat;
+      const sLen = Math.sqrt(dlat * dlat + dlng * dlng);
+      const remaining = halfLengthM - accBackward;
+      if (sLen >= remaining) {
+        const t = remaining / sLen;
+        backward.push([nxt[0] + (cur[0] - nxt[0]) * t, nxt[1] + (cur[1] - nxt[1]) * t]);
+        break;
+      }
+      accBackward += sLen;
+      backward.push(cur);
+    }
+  }
+
+  // Step 3 — walk forward halfLengthM from projPt along the way
+  const forward: [number, number][] = [];
+  let accForward = 0;
+  let forwardDone = false;
+
+  if (bestT < 1) {
+    const fwdSegLen = (1 - bestT) * segLen;
+    if (fwdSegLen >= halfLengthM) {
+      const endT = bestT + halfLengthM / segLen;
+      forward.push([segA[0] + endT * (segB[0] - segA[0]), segA[1] + endT * (segB[1] - segA[1])]);
+      forwardDone = true;
+    } else {
+      accForward = fwdSegLen;
+      forward.push(segB);
+    }
+  }
+
+  if (!forwardDone) {
+    for (let pi = bestSegIdx + 2; pi < bestWay.length; pi++) {
+      const cur = bestWay[pi];
+      const prev = bestWay[pi - 1];
+      if (cur === undefined || prev === undefined) break;
+      const dlat = (cur[0] - prev[0]) * 111320;
+      const dlng = (cur[1] - prev[1]) * 111320 * cosLat;
+      const sLen = Math.sqrt(dlat * dlat + dlng * dlng);
+      const remaining = halfLengthM - accForward;
+      if (sLen >= remaining) {
+        const t = remaining / sLen;
+        forward.push([prev[0] + (cur[0] - prev[0]) * t, prev[1] + (cur[1] - prev[1]) * t]);
+        break;
+      }
+      accForward += sLen;
+      forward.push(cur);
+    }
+  }
+
+  const result: [number, number][] = [...backward.reverse(), projPt, ...forward];
+
+  if (result.length < 2) {
+    return NS_FALLBACK;
+  }
+
+  return result;
+}
+
+// ─── F-23 / F-24 renderTowSegments ───────────────────────────────────────────
+
+/**
+ * Draw two overlapping polylines (white outer + red inner casing) for each
+ * sign, marking the road segment where parking is restricted.
+ *
+ * Segment half-length scales with the sign's address range so that a sign
+ * covering a narrow span (e.g. "819-821") draws a short segment (~2 buildings)
+ * while a wide-span sign (e.g. "700-740") draws a proportionally longer one.
+ * Formula: halfLengthM = max(5, (addrRange / 2 + 1) * 4).
+ *
+ * Uses OSM road-centerline geometry if available (via initRoadGeometry),
+ * otherwise falls back to the E-W/N-S heuristic centred on the sign.
+ *
+ * Casing is always 2 polylines per sign: _segmentLayers.length === signs.length * 2.
+ *
+ * Clears previous segment layers before rendering the new set.
+ * Note: stale references are dropped before the _map null guard so they are
+ * cleared even when called before initMap().
+ */
+export function renderTowSegments(signs: Sign[]): void {
+  for (const layer of _segmentLayers) {
+    layer.remove();
+  }
+  _segmentLayers = [];
+
+  if (_map === null) return;
+  const L = getL();
+
+  for (const sign of signs) {
+    // Scale segment half-length by address range (each unit ≈ 4 m of frontage)
+    const addrMatch = sign.address.match(/^(\d+)-(\d+)\s+/);
+    const addrRange = addrMatch
+      ? Math.max(0, parseInt(addrMatch[2], 10) - parseInt(addrMatch[1], 10))
+      : 0;
+    const halfLengthM = Math.max(5, (addrRange / 2 + 1) * 4);
+
+    // Extract street name from address (e.g. "1036-1036 BLOOMFIELD ST" → "BLOOMFIELD ST")
+    const streetName = sign.address.replace(/^\d[\d-]*\s+/, "").trim();
+
+    let waypoints: [number, number][];
+
+    const ways = _roadGeometry[streetName];
+    if (ways !== undefined && ways.length > 0 && ways.some((w) => w.length > 0)) {
+      waypoints = getSubsegment(ways, sign.lat, sign.lng, halfLengthM);
+    } else {
+      // Heuristic fallback: E-W or N-S 2-point segment centred on sign
+      const orientation = getStreetOrientation(sign.address);
+      const cosLat = Math.cos(sign.lat * Math.PI / 180);
+      const halfLat = halfLengthM / 111320;
+      const halfLng = halfLengthM / (111320 * cosLat);
+      waypoints =
+        orientation === "EW"
+          ? [[sign.lat, sign.lng - halfLng], [sign.lat, sign.lng + halfLng]]
+          : [[sign.lat - halfLat, sign.lng], [sign.lat + halfLat, sign.lng]];
+    }
+
+    const outer = L.polyline(waypoints, { color: "#fff", weight: 7, opacity: 0.65 });
+    const inner = L.polyline(waypoints, { color: "#cc0000", weight: 3, opacity: 0.85 });
+    _segmentLayers.push(outer, inner);
+    if (_towSignsVisible) {
+      outer.addTo(_map);
+      inner.addTo(_map);
+    }
+  }
+}
+
 // ─── F-legend setTowSignsVisible ─────────────────────────────────────────────
 
 /**
  * Show or hide all tow sign markers by toggling a CSS class on #map.
  * Uses `.leaflet-marker-pane` which only contains tow markers (position and
  * spot dots live in `.leaflet-overlay-pane` via circleMarker and are unaffected).
+ *
+ * Also shows/hides segment polylines stored in _segmentLayers.
+ * _towSignsVisible is set unconditionally first so the flag is accurate even
+ * when mapEl is absent (e.g. in Node test environment).
  */
 export function setTowSignsVisible(visible: boolean): void {
-  const mapEl = document.getElementById("map");
-  if (mapEl === null) return;
-  if (visible) {
-    mapEl.classList.remove("tow-signs-hidden");
-  } else {
-    mapEl.classList.add("tow-signs-hidden");
+  _towSignsVisible = visible;
+  if (typeof document !== "undefined") {
+    const mapEl = document.getElementById("map");
+    if (mapEl !== null) {
+      if (visible) {
+        mapEl.classList.remove("tow-signs-hidden");
+      } else {
+        mapEl.classList.add("tow-signs-hidden");
+      }
+    }
+  }
+  if (_map === null) return;
+  for (const layer of _segmentLayers) {
+    if (visible) {
+      layer.addTo(_map);
+    } else {
+      layer.remove();
+    }
   }
 }
 

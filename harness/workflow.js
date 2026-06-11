@@ -286,7 +286,7 @@ You are implementing ONE feature. Your only output is the files listed under EXP
 2. **Read CLAUDE.md** (provided under PROJECT PROCESS AND CONSTRAINTS) — it contains the hard constraints and architecture rules for this project. They are non-negotiable.
 3. **Write tests first** — one test per Given/When/Then in the spec. Tests must be written before the implementation exists. Do not skip this step. (Skip this step for discovery features that produce documentation, not code.)
 4. **Write the implementation** — make the tests pass. Do not change the tests to make a broken implementation pass.
-5. **Write all files to disk** using the Write or Edit tools. Never run `npm run build` — it produces `app/app.js` and `app/sw.js` which shadow TypeScript sources and break vitest module resolution for all future tests.
+5. **Write all files to disk** using the Write or Edit tools. Never run \`npm run build\` — it produces \`app/app.js\` and \`app/sw.js\` which shadow TypeScript sources and break vitest module resolution for all future tests.
 
 ---
 

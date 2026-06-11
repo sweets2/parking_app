@@ -32,16 +32,23 @@ const mockInitMap          = vi.fn();
 const mockRegisterMapClickHandler = vi.fn();
 const mockShowStreetPopup  = vi.fn();
 
+const mockRenderTowSegments = vi.fn();
+const mockInitRoadGeometry = vi.fn();
+const mockSetTowSignsVisible = vi.fn();
+
 vi.mock("../../app/map", () => ({
   initMap:                   mockInitMap,
   registerMapClickHandler:   mockRegisterMapClickHandler,
   renderPositionMarker:      mockRenderPositionMarker,
   clearPositionMarker:       mockClearPositionMarker,
   renderSignPins:            mockRenderSignPins,
+  renderTowSegments:         mockRenderTowSegments,
   renderSpotMarker:          mockRenderSpotMarker,
   clearSpotMarker:           mockClearSpotMarker,
   centerOnSpot:              mockCenterOnSpot,
   showStreetPopup:           mockShowStreetPopup,
+  initRoadGeometry:          mockInitRoadGeometry,
+  setTowSignsVisible:        mockSetTowSignsVisible,
 }));
 
 // ─── Mock app/ui ──────────────────────────────────────────────────────────────
@@ -241,13 +248,21 @@ beforeEach(() => {
 
   capturedRenderState = null;
 
-  // street-cleaning.json is fetched fire-and-forget before data/latest.json in
-  // initBrowserApp, so it always consumes the first mock call. Pre-load one
-  // resolved value for it so per-test mocks apply to the data fetch.
+  // street-cleaning.json, cross-streets.json, and road-geometry.json are all
+  // fetched fire-and-forget before data/latest.json in initBrowserApp. Pre-load
+  // three resolved values for them so per-test mocks apply to the data fetch.
   (global.fetch as ReturnType<typeof vi.fn>)
     .mockResolvedValueOnce({
       ok: true,
       json: async () => ({ entries: [] }),
+    } as Response)
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({}),
+    } as Response)
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({}),
     } as Response)
     .mockRejectedValue(new Error("fetch not configured"));
 

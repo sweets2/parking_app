@@ -17,11 +17,13 @@ import {
   renderPositionMarker,
   clearPositionMarker,
   renderSignPins,
+  renderTowSegments,
   renderSpotMarker,
   clearSpotMarker,
   centerOnSpot,
   showStreetPopup,
   setTowSignsVisible,
+  initRoadGeometry,
 } from "./map";
 import { getStreetName, geocodeCrossStreet, seedGeocodeCache } from "./geo";
 import { createApp } from "./app";
@@ -35,7 +37,7 @@ import {
 } from "../shared/parking-logic";
 import { createSpotStorage } from "../shared/storage";
 import type { SavedSpot } from "../shared/storage";
-import type { Sign, StreetCleaningEntry, StreetCleaningData } from "../shared/types";
+import type { Sign, StreetCleaningEntry, StreetCleaningData, RoadGeometry } from "../shared/types";
 import {
   renderLoading,
   hideLoading,
@@ -181,6 +183,7 @@ function renderState(state: AppState): void {
     _centeredOnSpot = false;
     renderBrowsingMode(state.activeSigns, now);
     renderSignPins(state.activeSigns, now);
+    renderTowSegments(state.activeSigns);
     return;
   }
 
@@ -210,6 +213,7 @@ function renderState(state: AppState): void {
 
     // Show all active sign pins in parked mode (not just nearby ones).
     renderSignPins(filterActive(state.allSigns, now), now);
+    renderTowSegments(filterActive(state.allSigns, now));
     renderSpotMarker(state.spot);
     clearPositionMarker();
     return;
@@ -229,6 +233,7 @@ async function silentRefresh(app: App, now: Date): Promise<void> {
     if (state.mode === "parked") {
       const nearby = filterNearby(filtered, state.spot.lat, state.spot.lng, 150, now);
       renderSignPins(nearby, now);
+      renderTowSegments(nearby);
       if (nearby.length > 0) {
         renderWarningBanner(nearby, now);
       } else {
@@ -236,6 +241,7 @@ async function silentRefresh(app: App, now: Date): Promise<void> {
       }
     } else if (state.mode === "browsing") {
       renderSignPins(activeNow, now);
+      renderTowSegments(activeNow);
       renderBrowsingMode(activeNow, now);
     }
     app.tick(now);
@@ -266,6 +272,13 @@ export async function initBrowserApp(): Promise<void> {
       seedGeocodeCache(data as Record<string, { lat: number; lng: number } | null>);
     })
     .catch(() => { /* non-fatal — runtime Nominatim calls serve as fallback */ });
+
+  // Fire-and-forget: fetch road geometry for tow segment rendering.
+  // If absent, renderTowSegments falls back to the E-W/N-S heuristic.
+  fetch("data/road-geometry.json")
+    .then((res) => res.json())
+    .then((data: RoadGeometry) => initRoadGeometry(data))
+    .catch(() => { /* non-fatal: falls back to heuristic */ });
 
   // Fetch sign data
   let signsData: { signs: Sign[]; fetchTime: Date };

@@ -49,6 +49,7 @@ interface MockPopup {
   _lat: number;
   _lng: number;
   _open: boolean;
+  _openOnCount: number;
   setLatLng: (latlng: [number, number]) => MockPopup;
   setContent: (html: string) => MockPopup;
   openOn: (map: MockMap) => MockPopup;
@@ -79,6 +80,7 @@ interface MockMap {
   _center: LatLng;
   _zoom: number;
   _clickHandler: ((e: { latlng: LatLng }) => void) | null;
+  _zoomendHandler: ((e: unknown) => void) | null;
   _openPopups: MockPopup[];
   setView: (center: [number, number], zoom: number) => MockMap;
   panTo: (center: [number, number] | LatLng) => MockMap;
@@ -89,6 +91,7 @@ interface MockMap {
   addLayer: (layer: MockMarker) => MockMap;
   removeLayer: (layer: MockMarker) => MockMap;
   _fireClick: (lat: number, lng: number) => void;
+  _fireZoomend: () => void;
 }
 
 function createMockMap(): MockMap {
@@ -97,6 +100,7 @@ function createMockMap(): MockMap {
     _center: { lat: 40.744, lng: -74.032 },
     _zoom: 15,
     _clickHandler: null,
+    _zoomendHandler: null,
     _openPopups: [],
     setView(center, zoom) {
       map._center = { lat: center[0], lng: center[1] };
@@ -121,6 +125,9 @@ function createMockMap(): MockMap {
       if (event === "click") {
         map._clickHandler = handler;
       }
+      if (event === "zoomend") {
+        map._zoomendHandler = handler as (e: unknown) => void;
+      }
       return map;
     },
     off(_event) {
@@ -141,6 +148,11 @@ function createMockMap(): MockMap {
         map._clickHandler({ latlng: { lat, lng } });
       }
     },
+    _fireZoomend() {
+      if (map._zoomendHandler) {
+        map._zoomendHandler({});
+      }
+    },
   };
   return map;
 }
@@ -154,6 +166,7 @@ function createMockPopup(): MockPopup {
     _lat: 0,
     _lng: 0,
     _open: false,
+    _openOnCount: 0,
     setLatLng(latlng) {
       popup._lat = latlng[0];
       popup._lng = latlng[1];
@@ -164,6 +177,7 @@ function createMockPopup(): MockPopup {
       return popup;
     },
     openOn(map) {
+      popup._openOnCount++;
       popup._open = true;
       map._openPopups.push(popup);
       return popup;
@@ -245,6 +259,14 @@ function installLeafletMock(): void {
     }),
     popup: vi.fn(() => {
       return createMockPopup();
+    }),
+    polyline: vi.fn((latlngs: [number, number][], opts: Record<string, unknown> = {}) => {
+      const mid = latlngs[Math.floor(latlngs.length / 2)];
+      return createMockMarker(
+        mid !== undefined ? mid[0] : 0,
+        mid !== undefined ? mid[1] : 0,
+        { ...opts, _isPolyline: true, _latlngs: latlngs }
+      );
     }),
   };
 
@@ -725,5 +747,283 @@ describe("F-07 map module", () => {
       // Content should not change — the stale first call was ignored
       expect(popup._content).toBe(contentAfterSecond);
     });
+
+    // ─── F-22 Popup zoom-resize fix tests ─────────────────────────────────────
+
+    it("F-22: GIVEN a popup is open WHEN zoomend fires THEN the popup is re-opened (openOnCount === 2)", async () => {
+      const { initMap, showStreetPopup } = await import("../../app/map");
+      initMap();
+      const entries: StreetCleaningEntry[] = [
+        makeCleaningEntry({ location: "9th St. to 10th St." }),
+      ];
+      showStreetPopup(40.744, -74.032, "Washington Street", entries);
+      const popup = mockPopupInstances[mockPopupInstances.length - 1];
+      // Initial open
+      expect(popup._openOnCount).toBe(1);
+      // Fire zoomend
+      mockMapInstance._fireZoomend();
+      // popup should have been removed and re-opened
+      expect(popup._openOnCount).toBe(2);
+      expect(popup.isOpen()).toBe(true);
+    });
+
+    it("F-22: GIVEN no popup is open WHEN zoomend fires THEN no error is thrown and no popup is on the map", async () => {
+      const { initMap } = await import("../../app/map");
+      initMap();
+      // No showStreetPopup call — no popup open
+      expect(() => mockMapInstance._fireZoomend()).not.toThrow();
+      expect(mockMapInstance._openPopups.length).toBe(0);
+    });
+  });
+
+  // ─── F-23 renderTowSegments ────────────────────────────────────────────────
+
+  describe("F-23 renderTowSegments", () => {
+    it("GIVEN initMap has not been called, WHEN renderTowSegments([makeSign()]) is called, THEN no error is thrown", async () => {
+      const { renderTowSegments } = await import("../../app/map");
+      expect(() => renderTowSegments([makeSign()])).not.toThrow();
+    });
+
+    it("GIVEN initMap is called and 2 signs are passed to renderTowSegments, THEN 4 polyline layers are added to the map (2 per sign for casing)", async () => {
+      const { initMap, renderTowSegments } = await import("../../app/map");
+      initMap();
+      renderTowSegments([makeSign({ id: "s1" }), makeSign({ id: "s2" })]);
+      const polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(4);
+    });
+
+    it("GIVEN renderTowSegments is called twice, THEN only the second call's layers remain on the map (first batch removed)", async () => {
+      const { initMap, renderTowSegments } = await import("../../app/map");
+      initMap();
+      renderTowSegments([makeSign({ id: "s1" }), makeSign({ id: "s2" })]);
+      renderTowSegments([makeSign({ id: "s3" })]);
+      const polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(2);
+    });
+
+    it("GIVEN a sign with address '257-257 11TH ST' (EW), WHEN renderTowSegments is called, THEN the polyline's two endpoints share the same lat and differ in lng", async () => {
+      const { initMap, renderTowSegments } = await import("../../app/map");
+      initMap();
+      const sign = makeSign({ address: "257-257 11TH ST", lat: 40.744, lng: -74.032 });
+      renderTowSegments([sign]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      const callArgs = L.polyline.mock.calls[0] as [[number, number][], unknown];
+      const latlngs = callArgs[0];
+      const ptA = latlngs[0];
+      const ptB = latlngs[latlngs.length - 1];
+      // EW: same lat, different lng
+      expect(ptA[0]).toBe(ptB[0]);
+      expect(ptA[1]).not.toBe(ptB[1]);
+    });
+
+    it("GIVEN a sign with address '1036-1036 BLOOMFIELD ST' (NS), WHEN renderTowSegments is called, THEN the polyline's two endpoints differ in lat and share the same lng", async () => {
+      const { initMap, renderTowSegments } = await import("../../app/map");
+      initMap();
+      const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: -74.032 });
+      renderTowSegments([sign]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      const callArgs = L.polyline.mock.calls[0] as [[number, number][], unknown];
+      const latlngs = callArgs[0];
+      const ptA = latlngs[0];
+      const ptB = latlngs[latlngs.length - 1];
+      // NS: different lat, same lng
+      expect(ptA[0]).not.toBe(ptB[0]);
+      expect(ptA[1]).toBe(ptB[1]);
+    });
+
+    it("GIVEN renderTowSegments is called with an empty array, THEN no error is thrown and no polyline is added to the map", async () => {
+      const { initMap, renderTowSegments } = await import("../../app/map");
+      initMap();
+      expect(() => renderTowSegments([])).not.toThrow();
+      const polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(0);
+    });
+
+    it("GIVEN setTowSignsVisible(false) is called before renderTowSegments, WHEN renderTowSegments is called, THEN no polyline layers are added to the map", async () => {
+      const { initMap, renderTowSegments, setTowSignsVisible } = await import("../../app/map");
+      initMap();
+      setTowSignsVisible(false);
+      renderTowSegments([makeSign()]);
+      const polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(0);
+    });
+
+    it("GIVEN setTowSignsVisible(false) is called then renderTowSegments([makeSign()]) is called, WHEN setTowSignsVisible(true) is called, THEN the segment layers are added to the map", async () => {
+      const { initMap, renderTowSegments, setTowSignsVisible } = await import("../../app/map");
+      initMap();
+      setTowSignsVisible(false);
+      renderTowSegments([makeSign()]);
+      // No polylines yet
+      let polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(0);
+      setTowSignsVisible(true);
+      polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(2);
+    });
+
+    it("GIVEN renderTowSegments([makeSign()]) renders a segment, WHEN setTowSignsVisible(false) is called, THEN the segment layers are removed from the map", async () => {
+      const { initMap, renderTowSegments, setTowSignsVisible } = await import("../../app/map");
+      initMap();
+      renderTowSegments([makeSign()]);
+      let polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(2);
+      setTowSignsVisible(false);
+      polylines = mockMapInstance._layers.filter(
+        (l) => l._options["_isPolyline"] === true
+      );
+      expect(polylines.length).toBe(0);
+    });
+
+    // ─── F-24 casing style tests ───────────────────────────────────────────────
+
+    it("F-24: GIVEN initMap is called and 1 sign is passed to renderTowSegments, THEN L.polyline is called twice (outer + inner casing)", async () => {
+      const { initMap, renderTowSegments } = await import("../../app/map");
+      initMap();
+      renderTowSegments([makeSign()]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      expect(L.polyline.mock.calls.length).toBe(2);
+    });
+
+    it("F-24: GIVEN 1 sign rendered, THEN calls[0] options contain { color: '#fff', weight: 7 } (outer casing) and calls[1] contain { color: '#cc0000', weight: 3 } (inner)", async () => {
+      const { initMap, renderTowSegments } = await import("../../app/map");
+      initMap();
+      renderTowSegments([makeSign()]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      const outerArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
+      const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+      expect(outerArgs[1]["color"]).toBe("#fff");
+      expect(outerArgs[1]["weight"]).toBe(7);
+      expect(innerArgs[1]["color"]).toBe("#cc0000");
+      expect(innerArgs[1]["weight"]).toBe(3);
+    });
+
+    it("F-24: GIVEN initRoadGeometry called with BLOOMFIELD ST geometry AND a matching sign, THEN the inner polyline _latlngs.length is 3", async () => {
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
+      initMap();
+      initRoadGeometry({
+        "BLOOMFIELD ST": [[[40.7439, -74.032], [40.744, -74.032], [40.7441, -74.032]]],
+      });
+      const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: -74.032 });
+      renderTowSegments([sign]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      // calls[1] is the inner casing polyline
+      const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+      const latlngs = innerArgs[0] as [number, number][];
+      expect(latlngs.length).toBe(3);
+    });
+
+    it("F-24: GIVEN initRoadGeometry called with empty {} AND a sign on 11TH ST, THEN the outer polyline _latlngs.length is 2 (EW heuristic fallback)", async () => {
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
+      initMap();
+      initRoadGeometry({});
+      const sign = makeSign({ address: "257-257 11TH ST", lat: 40.744, lng: -74.032 });
+      renderTowSegments([sign]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      // calls[0] is the outer casing polyline
+      const outerArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
+      const latlngs = outerArgs[0] as [number, number][];
+      expect(latlngs.length).toBe(2);
+    });
+  });
+});
+
+// ─── F-24 getSubsegment ───────────────────────────────────────────────────────
+
+describe("F-24 getSubsegment", () => {
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN ways = [], WHEN getSubsegment([], 40.744, -74.032) is called, THEN result is the N-S 2-point fallback at ±halfLengthM/111320", async () => {
+    const { getSubsegment } = await import("../../app/map");
+    const halfLengthM = 9; // default
+    const result = getSubsegment([], 40.744, -74.032);
+    expect(result.length).toBe(2);
+    expect(result[0][0]).toBeCloseTo(40.744 - halfLengthM / 111320, 6);
+    expect(result[0][1]).toBeCloseTo(-74.032, 6);
+    expect(result[1][0]).toBeCloseTo(40.744 + halfLengthM / 111320, 6);
+    expect(result[1][1]).toBeCloseTo(-74.032, 6);
+  });
+
+  it("GIVEN ways = [[[40.744, -74.032]]] (one way, one point), WHEN getSubsegment is called, THEN result.length === 2 (N-S fallback for degenerate)", async () => {
+    const { getSubsegment } = await import("../../app/map");
+    const result = getSubsegment([[[40.744, -74.032]]], 40.744, -74.032);
+    expect(result.length).toBe(2);
+  });
+
+  it("GIVEN a 3-point way with points ~11m apart and signLat at the middle, WHEN getSubsegment is called, THEN endpoints are interpolated to exactly 9 m from center", async () => {
+    const { getSubsegment } = await import("../../app/map");
+    // 0.0001° lat ≈ 11.132 m > 9 m threshold — endpoints must be interpolated, not at raw waypoints
+    const ways: [number, number][][] = [
+      [[40.7439, -74.032], [40.744, -74.032], [40.7441, -74.032]],
+    ];
+    const result = getSubsegment(ways, 40.744, -74.032);
+    expect(result.length).toBe(3);
+    // Each endpoint should be ~9 m from center, not at the raw waypoint coordinate
+    expect(Math.abs(result[0][0] - 40.744) * 111320).toBeCloseTo(9, 0);
+    expect(result[0][0]).toBeGreaterThan(40.7439); // did not reach the raw waypoint
+    expect(Math.abs(result[2][0] - 40.744) * 111320).toBeCloseTo(9, 0);
+    expect(result[2][0]).toBeLessThan(40.7441); // did not reach the raw waypoint
+  });
+
+  it("GIVEN two disjoint ways, WHEN getSubsegment is called with sign near the first way, THEN all returned points come from the near way only", async () => {
+    const { getSubsegment } = await import("../../app/map");
+    const ways: [number, number][][] = [
+      [[40.744, -74.032], [40.7441, -74.032]],   // near way
+      [[40.748, -74.035], [40.749, -74.035]],    // far way
+    ];
+    const result = getSubsegment(ways, 40.744, -74.032);
+    for (const pt of result) {
+      expect(pt[0]).toBeLessThanOrEqual(40.7441);
+      expect(pt[0]).toBeLessThan(40.748);
+    }
+  });
+
+  it("GIVEN a sign midway along a 50-m segment (not at a waypoint), WHEN getSubsegment is called, THEN the segment is centred at the sign's road projection, not at a sparse waypoint", async () => {
+    const { getSubsegment } = await import("../../app/map");
+    // Two waypoints 50 m apart; sign at t=0.4 (20 m from start)
+    const D = 50 / 111320;
+    const ways: [number, number][][] = [[[40.744, -74.032], [40.744 + D, -74.032]]];
+    const signLat = 40.744 + 0.4 * D;
+    const result = getSubsegment(ways, signLat, -74.032);
+    expect(result.length).toBeGreaterThanOrEqual(2);
+    // projPt (= signLat on the road) must appear in result within 0.5 m
+    const hasProjPt = result.some(pt => Math.abs(pt[0] - signLat) * 111320 < 0.5);
+    expect(hasProjPt).toBe(true);
+    // Total segment length must be ≤ 18.5 m (2 × default 9 m)
+    const cosLat = Math.cos(signLat * Math.PI / 180);
+    const totalLen = result.slice(1).reduce((sum, pt, i) => {
+      const dl = (pt[0] - result[i][0]) * 111320;
+      const dm = (pt[1] - result[i][1]) * 111320 * cosLat;
+      return sum + Math.sqrt(dl * dl + dm * dm);
+    }, 0);
+    expect(totalLen).toBeLessThanOrEqual(18.5);
   });
 });

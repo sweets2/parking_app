@@ -15,6 +15,7 @@ import {
   isDataStale,
   extractCrossStreets,
   detectMatchingSegment,
+  getStreetOrientation,
 } from "../../shared/parking-logic";
 import type { ViolationWindow } from "../../shared/parking-logic";
 import {
@@ -759,5 +760,33 @@ describe("F-20 detectMatchingSegment", () => {
     const to   = { lat: 40.750, lng: -74.030 };
     const result = detectMatchingSegment(40.745, -74.035, from, to);
     expect(typeof result).toBe("boolean");
+  });
+});
+
+// ─── F-23 getStreetOrientation ────────────────────────────────────────────────
+
+describe("F-23 getStreetOrientation", () => {
+  it("GIVEN '257-257 11TH ST', THEN returns 'EW' (numbered street, range prefix)", () => {
+    expect(getStreetOrientation("257-257 11TH ST")).toBe("EW");
+  });
+
+  it("GIVEN '1036-1036 BLOOMFIELD ST', THEN returns 'NS' (named NS street)", () => {
+    expect(getStreetOrientation("1036-1036 BLOOMFIELD ST")).toBe("NS");
+  });
+
+  it("GIVEN '53-53 OBSERVER HWY', THEN returns 'EW' (EW_NAMED exception — no digit in street name after stripping)", () => {
+    expect(getStreetOrientation("53-53 OBSERVER HWY")).toBe("EW");
+  });
+
+  it("GIVEN '100-100 NEWARK ST', THEN returns 'EW' (EW_NAMED exception)", () => {
+    expect(getStreetOrientation("100-100 NEWARK ST")).toBe("EW");
+  });
+
+  it("GIVEN '257 11TH ST' (single house number, not range), THEN returns 'EW' — regression guard for range-only regex bug", () => {
+    expect(getStreetOrientation("257 11TH ST")).toBe("EW");
+  });
+
+  it("GIVEN '500 WASHINGTON ST' (single house number, named NS street), THEN returns 'NS' — verifies house digits are not mistaken for street digits", () => {
+    expect(getStreetOrientation("500 WASHINGTON ST")).toBe("NS");
   });
 });
