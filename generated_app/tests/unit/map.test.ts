@@ -34,7 +34,7 @@ function makeCleaningEntry(overrides: Partial<StreetCleaningEntry> = {}): Street
   return {
     street: "Washington Street",
     side: "East",
-    schedule: "Monday  8 am – 9 am",
+    schedule: "Monday   8 am – 9 am",
     location: "9th St. to 10th St.",
     ...overrides,
   };
@@ -568,8 +568,8 @@ describe("F-07 map module", () => {
       const { initMap, showStreetPopup } = await import("../../app/map");
       initMap();
       const entries: StreetCleaningEntry[] = [
-        makeCleaningEntry({ street: "Washington Street", side: "East", schedule: "Monday  8 am – 9 am", location: "9th St. to 10th St." }),
-        makeCleaningEntry({ street: "Washington Street", side: "West", schedule: "Tuesday  9 am – 10 am", location: "9th St. to 10th St." }),
+        makeCleaningEntry({ street: "Washington Street", side: "East", schedule: "Monday   8 am – 9 am", location: "9th St. to 10th St." }),
+        makeCleaningEntry({ street: "Washington Street", side: "West", schedule: "Tuesday   9 am – 10 am", location: "9th St. to 10th St." }),
       ];
       showStreetPopup(40.744, -74.032, "Washington Street", entries);
       expect(mockPopupInstances.length).toBeGreaterThan(0);
@@ -577,16 +577,16 @@ describe("F-07 map module", () => {
       expect(popup._content).toContain("Washington Street");
       expect(popup._content).toContain("dir-e");
       expect(popup._content).toContain("dir-w");
-      expect(popup._content).toContain("Monday  8 am – 9 am");
-      expect(popup._content).toContain("Tuesday  9 am – 10 am");
+      expect(popup._content).toContain("Monday   8 am – 9 am");
+      expect(popup._content).toContain("Tuesday   9 am – 10 am");
     });
 
     it("GIVEN entries for an E-W street with North and South sides, THEN the popup contains the street name, 'North' and 'South' labels, and both schedule strings", async () => {
       const { initMap, showStreetPopup } = await import("../../app/map");
       initMap();
       const entries: StreetCleaningEntry[] = [
-        makeCleaningEntry({ street: "9th Street", side: "North", schedule: "Wednesday  8 am – 9 am", location: "Washington St. to Bloomfield St." }),
-        makeCleaningEntry({ street: "9th Street", side: "South", schedule: "Thursday  9 am – 10 am", location: "Washington St. to Bloomfield St." }),
+        makeCleaningEntry({ street: "9th Street", side: "North", schedule: "Wednesday   8 am – 9 am", location: "Washington St. to Bloomfield St." }),
+        makeCleaningEntry({ street: "9th Street", side: "South", schedule: "Thursday   9 am – 10 am", location: "Washington St. to Bloomfield St." }),
       ];
       showStreetPopup(40.744, -74.032, "9th Street", entries);
       expect(mockPopupInstances.length).toBeGreaterThan(0);
@@ -594,8 +594,8 @@ describe("F-07 map module", () => {
       expect(popup._content).toContain("9th Street");
       expect(popup._content).toContain("dir-n");
       expect(popup._content).toContain("dir-s");
-      expect(popup._content).toContain("Wednesday  8 am – 9 am");
-      expect(popup._content).toContain("Thursday  9 am – 10 am");
+      expect(popup._content).toContain("Wednesday   8 am – 9 am");
+      expect(popup._content).toContain("Thursday   9 am – 10 am");
     });
 
     it("GIVEN an entry whose location is '9th St. to 10th St.', THEN the popup header contains 'between 9th St and 10th St'", async () => {
@@ -639,10 +639,10 @@ describe("F-07 map module", () => {
       const { initMap, showStreetPopup } = await import("../../app/map");
       initMap();
       const entries: StreetCleaningEntry[] = [
-        makeCleaningEntry({ street: "Washington Street", side: "East", schedule: "Monday  8 am – 9 am", location: "1st St. to 2nd St." }),
-        makeCleaningEntry({ street: "Washington Street", side: "West", schedule: "Tuesday  9 am – 10 am", location: "1st St. to 2nd St." }),
-        makeCleaningEntry({ street: "Washington Street", side: "East", schedule: "Wednesday  8 am – 9 am", location: "3rd St. to 4th St." }),
-        makeCleaningEntry({ street: "Washington Street", side: "West", schedule: "Thursday  9 am – 10 am", location: "3rd St. to 4th St." }),
+        makeCleaningEntry({ street: "Washington Street", side: "East", schedule: "Monday   8 am – 9 am", location: "1st St. to 2nd St." }),
+        makeCleaningEntry({ street: "Washington Street", side: "West", schedule: "Tuesday   9 am – 10 am", location: "1st St. to 2nd St." }),
+        makeCleaningEntry({ street: "Washington Street", side: "East", schedule: "Wednesday   8 am – 9 am", location: "3rd St. to 4th St." }),
+        makeCleaningEntry({ street: "Washington Street", side: "West", schedule: "Thursday   9 am – 10 am", location: "3rd St. to 4th St." }),
       ];
       showStreetPopup(40.744, -74.032, "Washington Street", entries);
       const popup = mockPopupInstances[mockPopupInstances.length - 1];

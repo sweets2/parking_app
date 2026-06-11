@@ -26,7 +26,7 @@ export function normalizeSchedule(raw: string): string {
   timePart = timePart.replace(/(\d)(am|pm)\b/gi, "$1 $2");
   timePart = timePart.replace(/\b12\s*noon\b/gi, "12 pm");
   timePart = timePart.replace(/\s+to\s+/gi, " – ");
-  return `${daysPart}  ${timePart}`;
+  return `${daysPart}   ${timePart}`;
 }
 
 // Resolve data directory relative to this file at runtime
