@@ -553,5 +553,22 @@
       "tests/unit/geo.test.ts"
     ],
     "post_build_command": "npm run geocode-cross-streets"
+  },
+  {
+    "id": "F-22",
+    "name": "Popup Zoom-Resize Fix",
+    "status": "TODO",
+    "order": 30,
+    "depends_on": [
+      "F-20.5"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ],
+    "output_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ]
   }
 ]
