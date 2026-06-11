@@ -950,6 +950,25 @@ describe("F-07 map module", () => {
       const latlngs = outerArgs[0] as [number, number][];
       expect(latlngs.length).toBe(2);
     });
+
+    it("F-24: GIVEN geometry exists for a street but sign is > 50 m away, WHEN renderTowSegments is called, THEN heuristic fallback draws 2-point segment at sign's actual lat", async () => {
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
+      initMap();
+      // ADAMS ST geometry near 40.740; sign is at 40.760 (far away)
+      initRoadGeometry({ "ADAMS ST": [[[40.740, -74.032], [40.741, -74.032]]] });
+      const sign = makeSign({ address: "100-100 ADAMS ST", lat: 40.760, lng: -74.032 });
+      renderTowSegments([sign]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      const outerArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
+      const latlngs = outerArgs[0] as [number, number][];
+      // Heuristic fallback: 2-point N-S segment centred near sign's actual lat (40.760)
+      expect(latlngs.length).toBe(2);
+      for (const pt of latlngs) {
+        expect(Math.abs(pt[0] - 40.760) * 111320).toBeLessThan(50);
+      }
+    });
   });
 });
 
@@ -1004,6 +1023,16 @@ describe("F-24 getSubsegment", () => {
       expect(pt[0]).toBeLessThanOrEqual(40.7441);
       expect(pt[0]).toBeLessThan(40.748);
     }
+  });
+
+  it("GIVEN sign is > 50 m from all road segments, WHEN getSubsegment is called, THEN returns [] so renderTowSegments can use orientation-correct heuristic", async () => {
+    const { getSubsegment } = await import("../../app/map");
+    // Ways near lat 40.740; sign at 40.760 ≈ 2200 m north — well beyond MAX_SNAP_M (50 m)
+    const ways: [number, number][][] = [
+      [[40.740, -74.032], [40.741, -74.032]],
+    ];
+    const result = getSubsegment(ways, 40.760, -74.032);
+    expect(result.length).toBe(0);
   });
 
   it("GIVEN a sign midway along a 50-m segment (not at a waypoint), WHEN getSubsegment is called, THEN the segment is centred at the sign's road projection, not at a sparse waypoint", async () => {

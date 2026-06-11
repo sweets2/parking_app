@@ -487,6 +487,13 @@ export function getSubsegment(
 
   if (bestWayIdx === -1) return NS_FALLBACK;
 
+  // If the sign is more than 50 m from the nearest road segment (e.g. an
+  // out-of-borough address that shares a street name with a Hoboken road),
+  // return [] so renderTowSegments can use the orientation-correct heuristic
+  // at the sign's actual GPS location instead of snapping to the wrong block.
+  const MAX_SNAP_M = 50;
+  if (bestDist > MAX_SNAP_M) return [];
+
   const bestWay = ways[bestWayIdx];
   if (bestWay === undefined || bestWay.length < 2) return NS_FALLBACK;
 
@@ -679,13 +686,16 @@ export function renderTowSegments(signs: Sign[]): void {
     // Extract street name from address (e.g. "1036-1036 BLOOMFIELD ST" → "BLOOMFIELD ST")
     const streetName = sign.address.replace(/^\d[\d-]*\s+/, "").trim();
 
-    let waypoints: [number, number][];
+    let waypoints: [number, number][] = [];
 
     const ways = _roadGeometry[streetName];
     if (ways !== undefined && ways.length > 0 && ways.some((w) => w.length > 0)) {
       waypoints = getSubsegment(ways, sign.lat, sign.lng, halfLengthM);
-    } else {
-      // Heuristic fallback: E-W or N-S 2-point segment centred on sign
+    }
+
+    // Use orientation heuristic when no OSM geometry exists or getSubsegment
+    // returned [] because the sign was too far from any known road segment.
+    if (waypoints.length < 2) {
       const orientation = getStreetOrientation(sign.address);
       const cosLat = Math.cos(sign.lat * Math.PI / 180);
       const halfLat = halfLengthM / 111320;
