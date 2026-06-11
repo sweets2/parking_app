@@ -146,6 +146,12 @@ The column headers (Street / Side / Days & Hours / Location) appear as a real `d
 **F-21 — Nominatim requires a User-Agent in Node**
 Node's built-in `fetch` sends no User-Agent and receives HTTP 403 from Nominatim. The browser sends a User-Agent automatically, which is why `geocodeCrossStreet` in `geo.ts` works at runtime without one. The build-time script runs in Node and must explicitly set `"User-Agent": "hoboken-parking-app/1.0 (build-time geocoder)"` on every Nominatim request or all lookups silently return empty arrays.
 
+**F-34 — renderViolationHighlights is cleaning-only; do not add signs back**
+`renderViolationHighlights(cleaningEntries, now)` takes no signs parameter by design. Adding tow signs flooded the map — 16 permanent permit signs (active 2023–2030) painted nearly every street red at all times. Tow zones already have their own polyline visual. Do not restore a signs argument.
+
+**F-34 — normalizeToGeometryKey must strip periods and convert ordinals**
+Street cleaning data uses abbreviated names with trailing periods ("Adams St.", "Eighth St.") while road-geometry keys use no periods and numeric ordinals ("ADAMS ST", "8TH ST"). `normalizeToGeometryKey` must: (1) call `.replace(/\./g, "")` before abbreviation expansion, and (2) replace spelled-out ordinals FIRST–SIXTEENTH with 1ST–16TH. Omitting either step causes nearly all cleaning streets to silently produce no highlight (geometry key lookup returns `undefined`).
+
 **Layout — map fills full viewport, sign-list is hidden**
 `#map` uses `height: 100vh` so the map fills the entire screen. `#sign-list` is `display: none` — the sign card panel has been intentionally removed from the UI. Do not restore the old `calc(100vh - 180px)` height or unhide `#sign-list`. The `#controls` bar is `position: fixed` and overlays the map at the bottom.
 
