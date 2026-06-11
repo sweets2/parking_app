@@ -135,7 +135,7 @@ html, body {
 }
 .sp-sched--upcoming {
   font-weight: bold;
-  animation: schedule-warn 3s ease-in-out infinite;
+  animation: schedule-warn 2s ease-in-out infinite;
 }
 .dir-badge {
   display: inline-flex;
@@ -151,7 +151,7 @@ html, body {
   min-width: 26px;
 }
 .dir-n, .dir-s { padding: 3px 3px; min-width: 22px; }
-.dir-n::before { content: "▴"; font-size: 11px; line-height: 1; position: absolute; top: 0px;    left: 50%; transform: translateX(-50%); }
+.dir-n::before { content: "▴"; font-size: 11px; line-height: 1; position: absolute; top: -2px;   left: 50%; transform: translateX(-50%); }
 .dir-s::after  { content: "▾"; font-size: 11px; line-height: 1; position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); }
 .dir-e::after  { content: "▸"; font-size: 11px; line-height: 1; position: absolute; right: 1px;  top: 50%; transform: translateY(calc(-50% - 1px)); }
 .dir-w::before { content: "◂"; font-size: 11px; line-height: 1; position: absolute; left: 1px;   top: 50%; transform: translateY(calc(-50% - 1px)); }
