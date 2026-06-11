@@ -648,7 +648,7 @@ describe("F-07 map module", () => {
         makeCleaningEntry({ location: "9th St. to 10th St." }),
         makeCleaningEntry({ location: "10th St. to 11th St.", side: "West" }),
       ];
-      const detectSegment = vi.fn().mockResolvedValue("9th St. to 10th St.");
+      const detectSegment = vi.fn().mockResolvedValue(["9th St. to 10th St."]);
       showStreetPopup(40.744, -74.032, "Washington Street", entries, detectSegment);
 
       // Allow the promise to resolve
@@ -658,6 +658,24 @@ describe("F-07 map module", () => {
       expect(popup._content).toContain("sp-block--active");
       const matches = popup._content.match(/sp-block--active/g);
       expect(matches).toHaveLength(1);
+    });
+
+    it("F-20: GIVEN showStreetPopup is called with a detectSegment that resolves to two locations, WHEN the promise resolves, THEN popup contains 'sp-block--active' exactly twice", async () => {
+      const { initMap, showStreetPopup } = await import("../../app/map");
+      initMap();
+      const entries: StreetCleaningEntry[] = [
+        makeCleaningEntry({ location: "9th St. to 10th St." }),
+        makeCleaningEntry({ location: "10th St. to 11th St.", side: "West" }),
+        makeCleaningEntry({ location: "11th St. to 12th St.", side: "East" }),
+      ];
+      const detectSegment = vi.fn().mockResolvedValue(["9th St. to 10th St.", "10th St. to 11th St."]);
+      showStreetPopup(40.744, -74.032, "Washington Street", entries, detectSegment);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const popup = mockPopupInstances[mockPopupInstances.length - 1];
+      const matches = popup._content.match(/sp-block--active/g);
+      expect(matches).toHaveLength(2);
     });
 
     it("F-20: GIVEN showStreetPopup is called with a detectSegment that resolves to null, THEN popup.setContent is NOT called after the promise resolves (no highlight added)", async () => {
@@ -685,11 +703,11 @@ describe("F-07 map module", () => {
         makeCleaningEntry({ location: "9th St. to 10th St." }),
       ];
 
-      let resolveFirst!: (v: string | null) => void;
+      let resolveFirst!: (v: string[] | null) => void;
       const firstSegment = vi.fn().mockReturnValue(
-        new Promise<string | null>((res) => { resolveFirst = res; })
+        new Promise<string[] | null>((res) => { resolveFirst = res; })
       );
-      const secondSegment = vi.fn().mockResolvedValue("9th St. to 10th St.");
+      const secondSegment = vi.fn().mockResolvedValue(["9th St. to 10th St."]);
 
       showStreetPopup(40.744, -74.032, "Washington Street", entries, firstSegment);
       showStreetPopup(40.744, -74.032, "Washington Street", entries, secondSegment);
@@ -701,7 +719,7 @@ describe("F-07 map module", () => {
       const contentAfterSecond = popup._content;
 
       // Now resolve the first call (stale token — should be ignored)
-      resolveFirst("9th St. to 10th St.");
+      resolveFirst(["9th St. to 10th St."]);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       // Content should not change — the stale first call was ignored

@@ -441,11 +441,11 @@ describe("F-17.5 main.ts street popup click wiring", () => {
 
       expect(mockShowStreetPopup).toHaveBeenCalledOnce();
       const call = mockShowStreetPopup.mock.calls[0] as unknown[];
-      const detectSegment = call[4] as (locations: string[]) => Promise<string | null>;
+      const detectSegment = call[4] as (locations: string[]) => Promise<string[] | null>;
       expect(typeof detectSegment).toBe("function");
 
       const result = await detectSegment(["9th St. to 10th St."]);
-      expect(result).toBe("9th St. to 10th St.");
+      expect(result).toEqual(["9th St. to 10th St."]);
     });
 
     it("F-20: GIVEN geocodeCrossStreet returns null for all cross-streets, WHEN the callback is called, THEN it resolves to null", async () => {
@@ -476,7 +476,7 @@ describe("F-17.5 main.ts street popup click wiring", () => {
       await handler(40.744, -74.032);
 
       const call = mockShowStreetPopup.mock.calls[0] as unknown[];
-      const detectSegment = call[4] as (locations: string[]) => Promise<string | null>;
+      const detectSegment = call[4] as (locations: string[]) => Promise<string[] | null>;
       const result = await detectSegment(["9th St. to 10th St."]);
       expect(result).toBeNull();
     });
@@ -509,7 +509,7 @@ describe("F-17.5 main.ts street popup click wiring", () => {
       await handler(40.744, -74.032);
 
       const call = mockShowStreetPopup.mock.calls[0] as unknown[];
-      const detectSegment = call[4] as (locations: string[]) => Promise<string | null>;
+      const detectSegment = call[4] as (locations: string[]) => Promise<string[] | null>;
       // "8th St. and 9th St." uses " and " — extractCrossStreets returns null, skip
       const result = await detectSegment(["8th St. and 9th St."]);
       expect(result).toBeNull();

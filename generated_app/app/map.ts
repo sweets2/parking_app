@@ -350,11 +350,13 @@ function directionBadge(side: string): string {
 function buildStreetPopupContent(
   streetName: string,
   entries: StreetCleaningEntry[],
-  highlightedLocation?: string
+  highlightedLocations?: string[]
 ): string {
   if (entries.length === 0) {
     return `<div class="sp-wrap"><div class="sp-header"><span class="sp-icon">🧹</span><span class="sp-label">Street Cleaning</span><span class="sp-icon sp-icon-ghost">🧹</span></div><div class="sp-street">${streetName}</div><div class="sp-loc-label"><em>No cleaning schedule found</em></div></div>`;
   }
+
+  const activeSet = new Set(highlightedLocations ?? []);
 
   // Collect unique locations in insertion order
   const locationOrder: string[] = [];
@@ -377,7 +379,7 @@ function buildStreetPopupContent(
     const location = locationOrder[i];
     const locationEntries = byLocation.get(location) as StreetCleaningEntry[];
     const blockContext = formatLocation(location);
-    const isActive = highlightedLocation !== undefined && location === highlightedLocation;
+    const isActive = activeSet.size > 0 && activeSet.has(location);
     const blockClass = isActive ? `sp-block sp-block--active` : `sp-block`;
     parts.push(`<div class="${blockClass}">`);
     parts.push(`<div class="sp-loc-label">${streetName} ${blockContext}</div>`);
@@ -425,7 +427,7 @@ export function showStreetPopup(
   lng: number,
   streetName: string,
   entries: StreetCleaningEntry[],
-  detectSegment?: (locations: string[]) => Promise<string | null>
+  detectSegment?: (locations: string[]) => Promise<string[] | null>
 ): void {
   if (_map === null) return;
 

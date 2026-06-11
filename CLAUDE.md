@@ -123,6 +123,7 @@ These are the files an agent must read before implementing each feature. Do not 
 | F-18 | `app/index.html`, `app/manifest.json` |
 | F-19 | `app/index.html`, `app/style.css`, `app/map.ts`, `app/main.ts` |
 | F-20 | `shared/types.ts`, `shared/parking-logic.ts`, `app/geo.ts`, `app/map.ts`, `app/main.ts`, `tests/unit/parking-logic.test.ts`, `tests/unit/geo.test.ts`, `tests/unit/map.test.ts`, `tests/unit/main.test.ts` |
+| F-20.5 | `app/map.ts`, `app/main.ts`, `tests/unit/map.test.ts`, `tests/unit/main.test.ts` |
 | F-21 | `shared/parking-logic.ts`, `app/geo.ts`, `app/main.ts`, `package.json`, `tests/unit/geo.test.ts` |
 
 ---

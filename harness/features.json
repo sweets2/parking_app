@@ -510,6 +510,27 @@
     ]
   },
   {
+    "id": "F-20.5",
+    "name": "Multi-Segment Highlight",
+    "status": "DONE",
+    "order": 28.5,
+    "depends_on": [
+      "F-20"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "app/main.ts",
+      "tests/unit/map.test.ts",
+      "tests/unit/main.test.ts"
+    ],
+    "output_files": [
+      "app/map.ts",
+      "app/main.ts",
+      "tests/unit/map.test.ts",
+      "tests/unit/main.test.ts"
+    ]
+  },
+  {
     "id": "F-21",
     "name": "Build-Time Cross-Street Geocache",
     "status": "DONE",

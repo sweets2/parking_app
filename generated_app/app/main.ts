@@ -130,8 +130,9 @@ export function findCleaningEntries(roadName: string): StreetCleaningEntry[] {
 function buildDetectSegmentCallback(
   clickLat: number,
   clickLng: number
-): (locations: string[]) => Promise<string | null> {
+): (locations: string[]) => Promise<string[] | null> {
   return async (locations: string[]) => {
+    const matched: string[] = [];
     for (const location of locations) {
       const crossStreets = extractCrossStreets(location);
       if (crossStreets === null) continue;
@@ -141,10 +142,10 @@ function buildDetectSegmentCallback(
       const toCoord = await geocodeCrossStreet(normalizeStreet(to));
       if (toCoord === null) continue;
       if (detectMatchingSegment(clickLat, clickLng, fromCoord, toCoord)) {
-        return location;
+        matched.push(location);
       }
     }
-    return null;
+    return matched.length > 0 ? matched : null;
   };
 }
 
