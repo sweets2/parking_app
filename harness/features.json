@@ -820,5 +820,36 @@
       "app/style.css",
       "tests/unit/map.test.ts"
     ]
+  },
+  {
+    "id": "F-35",
+    "name": "Upcoming Tow Zone Signs (Orange Layer)",
+    "status": "TODO",
+    "order": 43,
+    "depends_on": [
+      "F-34"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "app/main.ts",
+      "app/index.html",
+      "app/style.css",
+      "fetcher/fetch.ts",
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "tests/unit/map.test.ts",
+      "tests/unit/fetcher.test.ts"
+    ],
+    "output_files": [
+      "fetcher/fetch.ts",
+      "app/map.ts",
+      "app/main.ts",
+      "app/index.html",
+      "app/style.css",
+      "package.json",
+      "tests/unit/map.test.ts",
+      "tests/unit/fetcher.test.ts",
+      "specs/F-35.md"
+    ]
   }
 ]

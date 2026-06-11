@@ -108,18 +108,7 @@ function dotScale(): number {
 
 // ─── Tow sign dot icons ───────────────────────────────────────────────────────
 
-const icon = (body: string) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">${body}</svg>`;
-
-const TOW_RED = "#cc0000";
 export const LATERAL_OFFSET_M = 4.0;
-
-const REASON_EMOJI: Record<string, string> = {
-  CONSTRUCTION: icon(`<circle cx="6" cy="6" r="5" fill="${TOW_RED}" stroke="white" stroke-width="1"/>`),
-  MOVING:       icon(`<circle cx="6" cy="6" r="5" fill="${TOW_RED}" stroke="white" stroke-width="1"/>`),
-  EVENT:        icon(`<polygon points="6,1 11,11 1,11" fill="${TOW_RED}" stroke="white" stroke-width="1" stroke-linejoin="round"/>`),
-  DELIVERY:     icon(`<rect x="1" y="1" width="10" height="10" fill="${TOW_RED}" stroke="white" stroke-width="1" stroke-linejoin="round"/>`),
-};
 
 const SPOT_COLOR = "#1d6fe3"; // blue — visually distinct from sign markers
 const POSITION_BASE_RADIUS = 7;
@@ -128,11 +117,18 @@ const SPOT_BASE_RADIUS = 10;
 // ─── F-10.3 signEmoji ─────────────────────────────────────────────────────────
 
 /**
- * Maps a sign reason string to an emoji character.
- * Returns "⚠️" for unknown reasons.
+ * Returns the tow sign marker HTML.
+ * active=true  → ❗ (red, happening now)
+ * active=false → ❕ (upcoming/future date)
  */
-export function signEmoji(reason: string): string {
-  return REASON_EMOJI[reason] ?? icon(`<circle cx="6" cy="6" r="5" fill="none" stroke="#dc2626" stroke-width="2"/>`);
+export function signEmoji(_reason: string, active = true): string {
+  const c = active ? "#cc2200" : "#e05a00";
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="13" height="13" class="tow-sign-emoji">` +
+    `<circle cx="10" cy="10" r="10" fill="${c}"/>` +
+    `<text x="10" y="15" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial Black,Impact,sans-serif">!</text>` +
+    `</svg>`
+  );
 }
 
 // ─── F-07.1 initMap ───────────────────────────────────────────────────────────
@@ -216,7 +212,7 @@ export function renderSignPins(signs: Sign[], now: Date): void {
       icon: L.divIcon({
         html: icon,
         className: "sign-emoji-marker",
-        iconSize: [12, 12],
+        iconSize: [13, 13],
         iconAnchor: [6, 6],
       }),
     });
