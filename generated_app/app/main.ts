@@ -273,12 +273,11 @@ export async function initBrowserApp(): Promise<void> {
     })
     .catch(() => { /* non-fatal — runtime Nominatim calls serve as fallback */ });
 
-  // Fire-and-forget: fetch road geometry for tow segment rendering.
-  // If absent, renderTowSegments falls back to the E-W/N-S heuristic.
-  fetch("data/road-geometry.json")
-    .then((res) => res.json())
-    .then((data: RoadGeometry) => initRoadGeometry(data))
-    .catch(() => { /* non-fatal: falls back to heuristic */ });
+  // Await road geometry before rendering signs so renderTowSegments always has OSM data.
+  try {
+    const geoRes = await fetch("data/road-geometry.json");
+    initRoadGeometry(await geoRes.json() as RoadGeometry);
+  } catch { /* non-fatal: renderTowSegments falls back to heuristic */ }
 
   // Fetch sign data
   let signsData: { signs: Sign[]; fetchTime: Date };

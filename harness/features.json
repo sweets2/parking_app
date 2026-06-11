@@ -619,5 +619,37 @@
       "tests/unit/map.test.ts"
     ],
     "post_build_command": "npm run build-road-geometry"
+  },
+  {
+    "id": "F-25",
+    "name": "Side-Aware Perpendicular Offset for Tow Zone Polylines",
+    "status": "DONE",
+    "order": 33,
+    "depends_on": [
+      "F-24"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ],
+    "output_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ]
+  },
+  {
+    "id": "F-26",
+    "name": "Await Road Geometry Before Rendering Tow Segments",
+    "status": "DONE",
+    "order": 34,
+    "depends_on": [
+      "F-25"
+    ],
+    "context_files": [
+      "app/main.ts"
+    ],
+    "output_files": [
+      "app/main.ts"
+    ]
   }
 ]

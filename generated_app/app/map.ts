@@ -109,6 +109,7 @@ const icon = (body: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">${body}</svg>`;
 
 const TOW_RED = "#cc0000";
+export const LATERAL_OFFSET_M = 4.0;
 
 const REASON_EMOJI: Record<string, string> = {
   CONSTRUCTION: icon(`<circle cx="6" cy="6" r="5" fill="${TOW_RED}" stroke="white" stroke-width="1"/>`),
@@ -579,6 +580,63 @@ export function getSubsegment(
   return result;
 }
 
+// ─── F-25 offsetPolylinePoints ────────────────────────────────────────────────
+
+/**
+ * Shifts all points in `pts` perpendicular to the road direction toward the
+ * sign's curb side, by `offsetM` metres.
+ *
+ * Uses a flat-earth dot-product test to determine which side of the road the
+ * sign is on (left-perpendicular vs right-perpendicular). Returns `pts`
+ * unchanged when:
+ *   - pts.length < 2
+ *   - first and last points are identical (len === 0)
+ *   - sign is on the centreline (|dot| < 1e-9)
+ */
+export function offsetPolylinePoints(
+  pts: [number, number][],
+  signLat: number,
+  signLng: number,
+  offsetM: number
+): [number, number][] {
+  if (pts.length < 2) return pts;
+
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+
+  const cosLat = Math.cos(signLat * Math.PI / 180);
+
+  // Road direction vector (first → last) in flat-earth metres
+  const dY = (last[0] - first[0]) * 111320;
+  const dX = (last[1] - first[1]) * 111320 * cosLat;
+  const len = Math.sqrt(dY * dY + dX * dX);
+
+  if (len === 0) return pts;
+
+  // Left-perpendicular unit vector (90° CCW from road direction in east/north space)
+  const perpX_m = -dY / len;   // east component
+  const perpY_m = dX / len;    // north component
+
+  // Sign displacement from segment midpoint
+  const midLat = (first[0] + last[0]) / 2;
+  const midLng = (first[1] + last[1]) / 2;
+  const signDY = (signLat - midLat) * 111320;
+  const signDX = (signLng - midLng) * 111320 * cosLat;
+
+  // Dot product determines side
+  const dot = signDX * perpX_m + signDY * perpY_m;
+
+  if (Math.abs(dot) < 1e-9) return pts;
+
+  const dir = dot > 0 ? 1 : -1;
+
+  // Apply uniform offset to every point
+  const dLat = dir * offsetM * perpY_m / 111320;
+  const dLng = dir * offsetM * perpX_m / (111320 * cosLat);
+
+  return pts.map(([lat, lng]): [number, number] => [lat + dLat, lng + dLng]);
+}
+
 // ─── F-23 / F-24 renderTowSegments ───────────────────────────────────────────
 
 /**
@@ -635,6 +693,8 @@ export function renderTowSegments(signs: Sign[]): void {
           ? [[sign.lat, sign.lng - halfLng], [sign.lat, sign.lng + halfLng]]
           : [[sign.lat - halfLat, sign.lng], [sign.lat + halfLat, sign.lng]];
     }
+
+    waypoints = offsetPolylinePoints(waypoints, sign.lat, sign.lng, LATERAL_OFFSET_M);
 
     const outer = L.polyline(waypoints, { color: "#fff", weight: 7, opacity: 0.65 });
     const inner = L.polyline(waypoints, { color: "#cc0000", weight: 3, opacity: 0.85 });

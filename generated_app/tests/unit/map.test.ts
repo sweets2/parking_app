@@ -1027,3 +1027,211 @@ describe("F-24 getSubsegment", () => {
     expect(totalLen).toBeLessThanOrEqual(18.5);
   });
 });
+
+// ─── F-25 offsetPolylinePoints ────────────────────────────────────────────────
+
+describe("offsetPolylinePoints", () => {
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN pts.length < 2, WHEN offsetPolylinePoints is called, THEN returns pts unchanged (degenerate guard)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const pts: [number, number][] = [[40.744, -74.032]];
+    const result = offsetPolylinePoints(pts, 40.744, -74.032, 4.0);
+    expect(result).toBe(pts);
+  });
+
+  it("GIVEN pts.length === 0, WHEN offsetPolylinePoints is called, THEN returns pts unchanged", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const pts: [number, number][] = [];
+    const result = offsetPolylinePoints(pts, 40.744, -74.032, 4.0);
+    expect(result).toBe(pts);
+  });
+
+  it("GIVEN a N-S road and sign east of centreline (signLng > midLng), WHEN called, THEN all returned points have lng > original lng (shifted east)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    // N-S road: same lng, different lat
+    const pts: [number, number][] = [
+      [40.743, -74.032],
+      [40.745, -74.032],
+    ];
+    const midLng = -74.032;
+    const signLng = midLng + 0.0001; // east of centreline
+    const result = offsetPolylinePoints(pts, 40.744, signLng, 4.0);
+    for (const pt of result) {
+      expect(pt[1]).toBeGreaterThan(-74.032);
+    }
+  });
+
+  it("GIVEN a N-S road and sign west of centreline (signLng < midLng), WHEN called, THEN all returned points have lng < original lng (shifted west)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const pts: [number, number][] = [
+      [40.743, -74.032],
+      [40.745, -74.032],
+    ];
+    const midLng = -74.032;
+    const signLng = midLng - 0.0001; // west of centreline
+    const result = offsetPolylinePoints(pts, 40.744, signLng, 4.0);
+    for (const pt of result) {
+      expect(pt[1]).toBeLessThan(-74.032);
+    }
+  });
+
+  it("GIVEN an E-W road and sign north of centreline (signLat > midLat), WHEN called, THEN all returned points have lat > original lat (shifted north)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    // E-W road: same lat, different lng
+    const pts: [number, number][] = [
+      [40.744, -74.033],
+      [40.744, -74.031],
+    ];
+    const midLat = 40.744;
+    const signLat = midLat + 0.0001; // north of centreline
+    const result = offsetPolylinePoints(pts, signLat, -74.032, 4.0);
+    for (const pt of result) {
+      expect(pt[0]).toBeGreaterThan(40.744);
+    }
+  });
+
+  it("GIVEN an E-W road and sign south of centreline (signLat < midLat), WHEN called, THEN all returned points have lat < original lat (shifted south)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const pts: [number, number][] = [
+      [40.744, -74.033],
+      [40.744, -74.031],
+    ];
+    const midLat = 40.744;
+    const signLat = midLat - 0.0001; // south of centreline
+    const result = offsetPolylinePoints(pts, signLat, -74.032, 4.0);
+    for (const pt of result) {
+      expect(pt[0]).toBeLessThan(40.744);
+    }
+  });
+
+  it("GIVEN sign exactly at midpoint (on centreline), WHEN called, THEN returns pts reference unchanged (dot ≈ 0 guard)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const pts: [number, number][] = [
+      [40.743, -74.032],
+      [40.745, -74.032],
+    ];
+    // Sign is at the midpoint of the segment — on centreline
+    const midLat = (40.743 + 40.745) / 2;
+    const midLng = -74.032;
+    const result = offsetPolylinePoints(pts, midLat, midLng, 4.0);
+    expect(result).toBe(pts);
+  });
+
+  it("GIVEN a N-S road and sign exactly LATERAL_OFFSET_M metres east, WHEN called with offsetM = LATERAL_OFFSET_M, THEN east offset of each returned point ≈ LATERAL_OFFSET_M metres", async () => {
+    const { offsetPolylinePoints, LATERAL_OFFSET_M } = await import("../../app/map");
+    const centralLng = -74.032;
+    const midLat = 40.744;
+    const cosLat = Math.cos(midLat * Math.PI / 180);
+    // Offset LATERAL_OFFSET_M metres east in degrees
+    const signLng = centralLng + LATERAL_OFFSET_M / (111320 * cosLat);
+    const pts: [number, number][] = [
+      [40.743, centralLng],
+      [40.745, centralLng],
+    ];
+    const result = offsetPolylinePoints(pts, midLat, signLng, LATERAL_OFFSET_M);
+    for (const [i, pt] of result.entries()) {
+      const eastOffsetM = (pt[1] - pts[i][1]) * 111320 * cosLat;
+      expect(eastOffsetM).toBeCloseTo(LATERAL_OFFSET_M, 1);
+    }
+  });
+
+  it("GIVEN pts with identical first and last points (zero-length road segment), WHEN offsetPolylinePoints is called, THEN returns pts unchanged (len === 0 guard)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const pts: [number, number][] = [
+      [40.744, -74.032],
+      [40.744, -74.032],
+    ];
+    const result = offsetPolylinePoints(pts, 40.744, -74.033, 4.0);
+    expect(result).toBe(pts);
+  });
+});
+
+// ─── F-25 renderTowSegments offset tests ─────────────────────────────────────
+
+describe("F-25 renderTowSegments offset", () => {
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN two signs on opposite sides of the same N-S road, WHEN renderTowSegments is called, THEN east-side sign's polyline points all have lng > centreline and west-side sign's polyline points all have lng < centreline", async () => {
+    const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
+    initMap();
+    const centreLng = -74.032;
+    // N-S road: two points
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    const cosLat = Math.cos(40.744 * Math.PI / 180);
+    const eastLng = centreLng + 5 / (111320 * cosLat);   // sign ~5m east
+    const westLng = centreLng - 5 / (111320 * cosLat);   // sign ~5m west
+
+    const eastSign = makeSign({ id: "east", address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: eastLng });
+    const westSign = makeSign({ id: "west", address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: westLng });
+
+    renderTowSegments([eastSign, westSign]);
+
+    const L = (globalThis as Record<string, unknown>)["L"] as {
+      polyline: ReturnType<typeof vi.fn>;
+    };
+    // calls: [outer_east, inner_east, outer_west, inner_west]
+    const eastInnerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+    const westInnerArgs = L.polyline.mock.calls[3] as [[number, number][], Record<string, unknown>];
+    const eastLatlngs = eastInnerArgs[0] as [number, number][];
+    const westLatlngs = westInnerArgs[0] as [number, number][];
+
+    for (const pt of eastLatlngs) {
+      expect(pt[1]).toBeGreaterThan(centreLng);
+    }
+    for (const pt of westLatlngs) {
+      expect(pt[1]).toBeLessThan(centreLng);
+    }
+  });
+
+  it("GIVEN a sign east of a N-S centreline, WHEN renderTowSegments is called, THEN all captured polyline points have identical lat values (offset is purely longitudinal — perpendicularity test)", async () => {
+    const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
+    initMap();
+    const centreLng = -74.032;
+    // Perfect N-S road: both points share the same lng, different lat
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    const cosLat = Math.cos(40.744 * Math.PI / 180);
+    const eastLng = centreLng + 5 / (111320 * cosLat);
+    const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: eastLng });
+
+    renderTowSegments([sign]);
+
+    const L = (globalThis as Record<string, unknown>)["L"] as {
+      polyline: ReturnType<typeof vi.fn>;
+    };
+    // calls[1] is the inner casing polyline
+    const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+    const latlngs = innerArgs[0] as [number, number][];
+
+    // For a pure N-S road, the perpendicular direction is purely east/west.
+    // The offset adds only to lng — lats are unchanged by the offset operation.
+    // getSubsegment interpolates to halfLengthM from center, so the lats are
+    // not the raw waypoint values. Capture the pre-offset lats from getSubsegment
+    // by calling it directly, then verify the polyline lats match those values.
+    const { getSubsegment } = await import("../../app/map");
+    const addrRange = 0; // "1036-1036" → range = 0
+    const halfLengthM = Math.max(5, (addrRange / 2 + 1) * 4);
+    const prePts = getSubsegment(
+      [[[40.743, centreLng], [40.745, centreLng]]],
+      40.744,
+      eastLng,
+      halfLengthM
+    );
+    for (const [i, pt] of latlngs.entries()) {
+      const preOffset = prePts[i];
+      if (preOffset !== undefined) {
+        expect(pt[0]).toBeCloseTo(preOffset[0], 6);
+      }
+    }
+  });
+});
