@@ -749,5 +749,24 @@
       "fetcher/build-road-geometry.ts",
       "tests/unit/map.test.ts"
     ]
+  },
+  {
+    "id": "F-32",
+    "name": "Tow Zone Popup Redesign",
+    "status": "DONE",
+    "order": 40,
+    "depends_on": [
+      "F-30",
+      "F-31"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "app/style.css",
+      "shared/parking-logic.ts"
+    ],
+    "output_files": [
+      "app/map.ts",
+      "app/style.css"
+    ]
   }
 ]

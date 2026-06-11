@@ -10,7 +10,7 @@
 
 import type { Sign, StreetCleaningEntry, RoadGeometry } from "../shared/types";
 import type { SavedSpot } from "../shared/storage";
-import { formatTime, getStreetOrientation, isScheduleActiveNow, isScheduleUpcomingSoon } from "../shared/parking-logic";
+import { formatTime, getStreetOrientation, isScheduleActiveNow, isScheduleUpcomingSoon, isSignActive } from "../shared/parking-logic";
 
 // ─── Leaflet type shim ───────────────────────────────────────────────────────
 // We access L as a global (not an import) because it is loaded via CDN.
@@ -193,7 +193,7 @@ export function initMap(): LeafletMap {
  * The `now` parameter is accepted per spec signature (reserved for future
  * time-conditional filtering) but sign visibility is determined by the caller.
  */
-export function renderSignPins(signs: Sign[], _now: Date): void {
+export function renderSignPins(signs: Sign[], now: Date): void {
   if (_map === null) return;
 
   // Remove existing sign layers
@@ -216,7 +216,7 @@ export function renderSignPins(signs: Sign[], _now: Date): void {
       }),
     });
 
-    const popupHtml = buildSignPopup(sign);
+    const popupHtml = buildSignPopup(sign, now);
     marker.bindPopup(popupHtml);
     marker.on("click", () => {
       marker.openPopup();
@@ -227,13 +227,51 @@ export function renderSignPins(signs: Sign[], _now: Date): void {
   }
 }
 
-function buildSignPopup(sign: Sign): string {
+const REASON_LABELS: Record<string, string> = {
+  CONSTRUCTION: "🏗 Construction",
+  MOVING:       "🚚 Moving",
+  EVENT:        "🎉 Event",
+  DELIVERY:     "📦 Delivery",
+};
+
+function buildSignPopup(sign: Sign, now: Date): string {
+  const startMs = new Date(sign.start_iso).getTime();
+  const endMs   = new Date(sign.end_iso).getTime();
+  const nowMs   = now.getTime();
+
+  const active   = isSignActive(sign, now);
+  const upcoming = !active && startMs > nowMs
+                 && (startMs - nowMs) <= 60 * 60 * 1000
+                 && endMs > nowMs;
+
+  const reasonLabel = REASON_LABELS[sign.reason] ?? sign.reason;
+  const reasonClass = `tz-reason--${sign.reason.toLowerCase()}`;
+
+  const startFmt = `${sign.start_date} · ${formatTime(sign.start_time)}`;
+  const endFmt   = `${sign.stop_date} · ${formatTime(sign.end_time)}`;
+
+  let statusHtml = "";
+  if (active) {
+    statusHtml = `<div class="tz-status tz-status--active">Active now — ends ${endFmt}</div>`;
+  } else if (upcoming) {
+    const mins = Math.floor((startMs - nowMs) / 60_000);
+    statusHtml = `<div class="tz-status tz-status--upcoming">Starts in ${mins}m</div>`;
+  }
+
   return [
-    `<strong>${sign.address}</strong>`,
-    `<div>Reason: ${sign.reason}</div>`,
-    `<div>Start: ${sign.start_date} ${formatTime(sign.start_time)}</div>`,
-    `<div>End: ${sign.stop_date} ${formatTime(sign.end_time)}</div>`,
-    `<div>Permit: ${sign.permit_number}</div>`,
+    `<div class="tz-wrap">`,
+    `<div class="tz-header"><span class="tz-icon">🚨</span><span class="tz-title">TOW&nbsp;ZONE</span></div>`,
+    `<div class="tz-sub">Towing costs hundreds — far more than a ticket</div>`,
+    `<hr class="tz-sep"/>`,
+    `<div class="tz-address">${sign.address}</div>`,
+    `<div class="tz-reason ${reasonClass}">${reasonLabel}</div>`,
+    statusHtml,
+    `<div class="tz-times">`,
+    `<div><span class="tz-time-label">From&nbsp;</span>${startFmt}</div>`,
+    `<div><span class="tz-time-label">Until</span>${endFmt}</div>`,
+    `</div>`,
+    `<div class="tz-permit">Permit ${sign.permit_number}</div>`,
+    `</div>`,
   ].join("");
 }
 
