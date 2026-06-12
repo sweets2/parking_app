@@ -1436,17 +1436,19 @@ const HOBOKEN_STREET_LAT: Record<string, number> = {
 };
 const HOBOKEN_STREET_LAT_TOLERANCE = 0.008;
 
-function clipWaysByLon(
+function clipWaysByBounds(
   ways: [number, number][][],
-  minLon: number | undefined,
-  maxLon: number | undefined,
+  route: { minLon?: number; maxLon?: number; minLat?: number; maxLat?: number },
 ): [number, number][][] {
-  if (minLon === undefined && maxLon === undefined) return ways;
+  const { minLon, maxLon, minLat, maxLat } = route;
+  if (minLon === undefined && maxLon === undefined && minLat === undefined && maxLat === undefined) return ways;
   return ways
     .map(way =>
       way.filter(pt =>
         (minLon === undefined || pt[1] >= minLon) &&
-        (maxLon === undefined || pt[1] <= maxLon),
+        (maxLon === undefined || pt[1] <= maxLon) &&
+        (minLat === undefined || pt[0] >= minLat) &&
+        (maxLat === undefined || pt[0] <= maxLat),
       ),
     )
     .filter(way => way.length >= 2);
@@ -1484,7 +1486,7 @@ export function renderSnowEmergencyRoutes(routes: SnowRoute[], visible: boolean)
       }
       return true;
     });
-    const clipped = clipWaysByLon(filtered, route.minLon, route.maxLon);
+    const clipped = clipWaysByBounds(filtered, route);
     for (const way of mergeWays(clipped)) {
       const layer = L.polyline(way, { color: "#3b82f6", weight: 12, opacity: 0.45 });
       _snowRouteLayers.push(layer);

@@ -69,8 +69,10 @@ export interface SnowRoute {
   side: string;     // "North" | "South" | "Both" | "West" | "East"
   from: string;     // cross-street label for display only
   to: string;       // cross-street label for display only
-  minLon?: number;  // clip geometry west of this longitude (remove points with lon < minLon)
-  maxLon?: number;  // clip geometry east of this longitude (remove points with lon > maxLon)
+  minLon?: number;  // clip geometry west of this longitude (east-west streets)
+  maxLon?: number;  // clip geometry east of this longitude (east-west streets)
+  minLat?: number;  // clip geometry south of this latitude (north-south streets)
+  maxLat?: number;  // clip geometry north of this latitude (north-south streets)
 }
 
 export interface BusStop {
