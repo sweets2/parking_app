@@ -75,6 +75,7 @@ html, body {
   font-size: 13px;
   line-height: 1.5;
   min-width: 190px;
+  max-width: min(300px, 85vw);
 }
 .sp-header {
   display: flex;
@@ -166,8 +167,16 @@ html, body {
   margin: 6px 0;
 }
 
+/* ─── Leaflet popup responsive sizing ─────────────────────── */
+.leaflet-popup-content-wrapper {
+  max-width: min(320px, 90vw);
+}
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
 /* ─── Tow Zone popup ──────────────────────────────────────── */
-.tz-wrap { font-size: 13px; min-width: 190px; }
+.tz-wrap { font-size: 13px; min-width: 190px; max-width: min(300px, 85vw); }
 .tz-header {
   display: flex;
   align-items: center;
@@ -666,6 +675,21 @@ html, body {
 }
 #feedback-confirm.error {
   color: #dc2626;
+}
+
+/* ─── Mobile responsive popup scaling ─────────────────────────────────────── */
+@media (max-width: 480px) {
+  .sp-wrap        { font-size: 11px; }
+  .sp-street      { font-size: 14px; }
+  .sp-label       { font-size: 13px; }
+  .sp-icon        { font-size: 13px; }
+  .sp-loc-label   { font-size: 10px; }
+  .dir-badge      { font-size: 10px; min-width: 22px; padding: 1px 3px; }
+  .dir-n, .dir-s  { min-width: 18px; }
+  .tz-wrap        { font-size: 11px; }
+  .tz-title       { font-size: 13px; }
+  .tz-address     { font-size: 12px; }
+  .tz-window      { font-size: 12px; }
 }
 
 /* ─── Coffee button ────────────────────────────────────────────────────────── */
