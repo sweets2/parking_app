@@ -431,7 +431,7 @@ html, body {
 /* ─── Municipal Garages legend ─── */
 #garage-legend {
   position: fixed;
-  top: 252px;
+  top: 267px;
   left: 10px;
   z-index: 1000;
 }
@@ -491,7 +491,7 @@ html, body {
 
 #snow-legend {
   position: fixed;
-  top: 294px;
+  top: 309px;
   left: 10px;
   z-index: 1000;
 }
