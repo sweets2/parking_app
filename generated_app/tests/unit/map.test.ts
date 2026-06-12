@@ -802,8 +802,9 @@ describe("F-07 map module", () => {
     });
 
     it("GIVEN initMap is called and 2 signs are passed to renderTowSegments, THEN 4 polyline layers are added to the map (2 per sign for casing)", async () => {
-      const { initMap, renderTowSegments } = await import("../../app/map");
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
       initMap();
+      initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
       renderTowSegments([makeSign({ id: "s1" }), makeSign({ id: "s2" })]);
       const polylines = mockMapInstance._layers.filter(
         (l) => l._options["_isPolyline"] === true
@@ -812,8 +813,9 @@ describe("F-07 map module", () => {
     });
 
     it("GIVEN renderTowSegments is called twice, THEN only the second call's layers remain on the map (first batch removed)", async () => {
-      const { initMap, renderTowSegments } = await import("../../app/map");
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
       initMap();
+      initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
       renderTowSegments([makeSign({ id: "s1" }), makeSign({ id: "s2" })]);
       renderTowSegments([makeSign({ id: "s3" })]);
       const polylines = mockMapInstance._layers.filter(
@@ -822,7 +824,7 @@ describe("F-07 map module", () => {
       expect(polylines.length).toBe(2);
     });
 
-    it("GIVEN a sign with address '257-257 11TH ST' (EW), WHEN renderTowSegments is called, THEN the polyline's two endpoints share the same lat and differ in lng", async () => {
+    it("GIVEN a sign with address '257-257 11TH ST' (no matching geometry), WHEN renderTowSegments is called, THEN no polyline is drawn", async () => {
       const { initMap, renderTowSegments } = await import("../../app/map");
       initMap();
       const sign = makeSign({ address: "257-257 11TH ST", lat: 40.744, lng: -74.032 });
@@ -830,16 +832,10 @@ describe("F-07 map module", () => {
       const L = (globalThis as Record<string, unknown>)["L"] as {
         polyline: ReturnType<typeof vi.fn>;
       };
-      const callArgs = L.polyline.mock.calls[0] as [[number, number][], unknown];
-      const latlngs = callArgs[0];
-      const ptA = latlngs[0];
-      const ptB = latlngs[latlngs.length - 1];
-      // EW: same lat, different lng
-      expect(ptA[0]).toBe(ptB[0]);
-      expect(ptA[1]).not.toBe(ptB[1]);
+      expect(L.polyline.mock.calls.length).toBe(0);
     });
 
-    it("GIVEN a sign with address '1036-1036 BLOOMFIELD ST' (NS), WHEN renderTowSegments is called, THEN the polyline's two endpoints differ in lat and share the same lng", async () => {
+    it("GIVEN a sign with address '1036-1036 BLOOMFIELD ST' (no matching geometry), WHEN renderTowSegments is called, THEN no polyline is drawn", async () => {
       const { initMap, renderTowSegments } = await import("../../app/map");
       initMap();
       const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: -74.032 });
@@ -847,13 +843,7 @@ describe("F-07 map module", () => {
       const L = (globalThis as Record<string, unknown>)["L"] as {
         polyline: ReturnType<typeof vi.fn>;
       };
-      const callArgs = L.polyline.mock.calls[0] as [[number, number][], unknown];
-      const latlngs = callArgs[0];
-      const ptA = latlngs[0];
-      const ptB = latlngs[latlngs.length - 1];
-      // NS: different lat, same lng
-      expect(ptA[0]).not.toBe(ptB[0]);
-      expect(ptA[1]).toBe(ptB[1]);
+      expect(L.polyline.mock.calls.length).toBe(0);
     });
 
     it("GIVEN renderTowSegments is called with an empty array, THEN no error is thrown and no polyline is added to the map", async () => {
@@ -878,8 +868,9 @@ describe("F-07 map module", () => {
     });
 
     it("GIVEN setTowSignsVisible(false) is called then renderTowSegments([makeSign()]) is called, WHEN setTowSignsVisible(true) is called, THEN the segment layers are added to the map", async () => {
-      const { initMap, renderTowSegments, setTowSignsVisible } = await import("../../app/map");
+      const { initMap, renderTowSegments, setTowSignsVisible, initRoadGeometry } = await import("../../app/map");
       initMap();
+      initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
       setTowSignsVisible(false);
       renderTowSegments([makeSign()]);
       // No polylines yet
@@ -895,8 +886,9 @@ describe("F-07 map module", () => {
     });
 
     it("GIVEN renderTowSegments([makeSign()]) renders a segment, WHEN setTowSignsVisible(false) is called, THEN the segment layers are removed from the map", async () => {
-      const { initMap, renderTowSegments, setTowSignsVisible } = await import("../../app/map");
+      const { initMap, renderTowSegments, setTowSignsVisible, initRoadGeometry } = await import("../../app/map");
       initMap();
+      initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
       renderTowSegments([makeSign()]);
       let polylines = mockMapInstance._layers.filter(
         (l) => l._options["_isPolyline"] === true
@@ -910,8 +902,9 @@ describe("F-07 map module", () => {
     });
 
     it("GIVEN renderTowSegments renders, WHEN setTowSignsVisible(false) then setTowSignsVisible(true), THEN the same segment layers are restored on the map", async () => {
-      const { initMap, renderTowSegments, setTowSignsVisible } = await import("../../app/map");
+      const { initMap, renderTowSegments, setTowSignsVisible, initRoadGeometry } = await import("../../app/map");
       initMap();
+      initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
       renderTowSegments([makeSign()]);
       setTowSignsVisible(false);
       let polylines = mockMapInstance._layers.filter(
@@ -928,8 +921,9 @@ describe("F-07 map module", () => {
     // ─── F-24 casing style tests ───────────────────────────────────────────────
 
     it("F-24: GIVEN initMap is called and 1 sign is passed to renderTowSegments, THEN L.polyline is called twice (outer + inner casing)", async () => {
-      const { initMap, renderTowSegments } = await import("../../app/map");
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
       initMap();
+      initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
       renderTowSegments([makeSign()]);
       const L = (globalThis as Record<string, unknown>)["L"] as {
         polyline: ReturnType<typeof vi.fn>;
@@ -938,8 +932,9 @@ describe("F-07 map module", () => {
     });
 
     it("F-24: GIVEN 1 sign rendered, THEN calls[0] options contain { color: '#fff', weight: 7 } (outer casing) and calls[1] contain { color: '#cc0000', weight: 3 } (inner)", async () => {
-      const { initMap, renderTowSegments } = await import("../../app/map");
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
       initMap();
+      initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
       renderTowSegments([makeSign()]);
       const L = (globalThis as Record<string, unknown>)["L"] as {
         polyline: ReturnType<typeof vi.fn>;
@@ -969,7 +964,7 @@ describe("F-07 map module", () => {
       expect(latlngs.length).toBe(3);
     });
 
-    it("F-24: GIVEN initRoadGeometry called with empty {} AND a sign on 11TH ST, THEN the outer polyline _latlngs.length is 2 (EW heuristic fallback)", async () => {
+    it("F-24: GIVEN initRoadGeometry called with empty {} AND a sign on 11TH ST, THEN no polyline is drawn (sign skipped — no geometry to snap to)", async () => {
       const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
       initMap();
       initRoadGeometry({});
@@ -978,29 +973,20 @@ describe("F-07 map module", () => {
       const L = (globalThis as Record<string, unknown>)["L"] as {
         polyline: ReturnType<typeof vi.fn>;
       };
-      // calls[0] is the outer casing polyline
-      const outerArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-      const latlngs = outerArgs[0] as [number, number][];
-      expect(latlngs.length).toBe(2);
+      expect(L.polyline.mock.calls.length).toBe(0);
     });
 
-    it("F-24: GIVEN geometry exists for a street but sign is > 50 m away, WHEN renderTowSegments is called, THEN heuristic fallback draws 2-point segment at sign's actual lat", async () => {
+    it("F-24: GIVEN geometry exists for a street but sign is > 50 m away, WHEN renderTowSegments is called, THEN no polyline is drawn (sign skipped — avoids lines over buildings)", async () => {
       const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
       initMap();
-      // ADAMS ST geometry near 40.740; sign is at 40.760 (far away)
+      // ADAMS ST geometry near 40.740; sign is at 40.760 (~2200m away)
       initRoadGeometry({ "ADAMS ST": [[[40.740, -74.032], [40.741, -74.032]]] });
       const sign = makeSign({ address: "100-100 ADAMS ST", lat: 40.760, lng: -74.032 });
       renderTowSegments([sign]);
       const L = (globalThis as Record<string, unknown>)["L"] as {
         polyline: ReturnType<typeof vi.fn>;
       };
-      const outerArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-      const latlngs = outerArgs[0] as [number, number][];
-      // Heuristic fallback: 2-point N-S segment centred near sign's actual lat (40.760)
-      expect(latlngs.length).toBe(2);
-      for (const pt of latlngs) {
-        expect(Math.abs(pt[0] - 40.760) * 111320).toBeLessThan(50);
-      }
+      expect(L.polyline.mock.calls.length).toBe(0);
     });
   });
 });
@@ -1462,8 +1448,9 @@ describe("F-35 upcoming sign rendering", () => {
   });
 
   it("GIVEN 1 upcoming sign WHEN renderUpcomingTowSegments is called THEN L.polyline called twice; second call options have color: '#f97316'", async () => {
-    const { initMap, renderUpcomingTowSegments } = await import("../../app/map");
+    const { initMap, renderUpcomingTowSegments, initRoadGeometry } = await import("../../app/map");
     initMap();
+    initRoadGeometry({ "Test St": [[[40.744, -74.032], [40.744, -74.033]]] });
     const sign = makeSign({ id: "u1", start_iso: "2026-06-10T08:00:00", end_iso: "2026-06-10T17:00:00" });
     renderUpcomingTowSegments([sign]);
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };

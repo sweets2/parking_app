@@ -549,10 +549,6 @@ html, body {
 #snow-legend.snow-off .snow-dot { background: #9ca3af; box-shadow: none; }
 #snow-legend.snow-off .snow-status { color: #9ca3af; }
 
-/* Hide tow sign markers — only the custom towSignPane; garage/position/spot markers are unaffected */
-#map.tow-signs-hidden .leaflet-towSignPane-pane {
-  display: none;
-}
 
 .sp-block--active {
   background: #f0fdf4;

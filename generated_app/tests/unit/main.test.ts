@@ -50,8 +50,7 @@ vi.mock("../../app/map", () => ({
   setGarageMarkersVisible: vi.fn(),
   renderSnowEmergencyRoutes: vi.fn(),
   setSnowRoutesVisible: vi.fn(),
-  renderBusStopMarkers: vi.fn(),
-  setBusStopsVisible: vi.fn(),
+
 }));
 
 // ─── Mock app/ui ──────────────────────────────────────────────────────────────

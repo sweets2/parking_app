@@ -10,7 +10,7 @@
 
 import type { Sign, StreetCleaningEntry, RoadGeometry, Garage, SnowRoute } from "../shared/types";
 import type { SavedSpot } from "../shared/storage";
-import { formatTime, getStreetOrientation, isScheduleActiveNow, isScheduleUpcomingSoon, isSignActive } from "../shared/parking-logic";
+import { formatTime, isScheduleActiveNow, isScheduleUpcomingSoon, isSignActive } from "../shared/parking-logic";
 import { track } from "./analytics";
 
 // ─── Leaflet type shim ───────────────────────────────────────────────────────
@@ -282,7 +282,9 @@ export function renderSignPins(signs: Sign[], now: Date): void {
       marker.openPopup();
     });
 
-    marker.addTo(_map);
+    if (_towSignsVisible) {
+      marker.addTo(_map);
+    }
     _signLayers.push(marker);
   }
 }
@@ -858,29 +860,22 @@ export function renderTowSegments(signs: Sign[]): void {
 // ─── F-legend setTowSignsVisible ─────────────────────────────────────────────
 
 /**
- * Show or hide all tow sign markers by toggling a CSS class on #map.
- * Uses `.leaflet-marker-pane` which only contains tow markers (position and
- * spot dots live in `.leaflet-overlay-pane` via circleMarker and are unaffected).
- *
- * Also shows/hides segment polylines stored in _segmentLayers.
- * _towSignsVisible is set unconditionally first so the flag is accurate even
- * when mapEl is absent (e.g. in Node test environment).
+ * Show or hide all tow sign markers and segment polylines.
+ * Manages _signLayers and _segmentLayers explicitly (same pattern as garage/upcoming)
+ * so non-tow markers (garage, position, spot) are unaffected.
  */
 export function setTowSignsVisible(visible: boolean): void {
   _towSignsVisible = visible;
-  if (typeof document !== "undefined") {
-    const mapEl = document.getElementById("map");
-    if (mapEl !== null) {
-      if (visible) {
-        mapEl.classList.remove("tow-signs-hidden");
-      } else {
-        mapEl.classList.add("tow-signs-hidden");
-      }
-    }
-  }
   if (_map === null) return;
   if (!visible) {
     _map.closePopup();
+  }
+  for (const layer of _signLayers) {
+    if (visible) {
+      layer.addTo(_map);
+    } else {
+      layer.remove();
+    }
   }
   for (const layer of _segmentLayers) {
     if (visible) {
@@ -1051,16 +1046,7 @@ export function renderUpcomingTowSegments(signs: Sign[]): void {
       waypoints = getSubsegment(ways, sign.lat, sign.lng, halfLengthM);
     }
 
-    if (waypoints.length < 2) {
-      const orientation = getStreetOrientation(sign.address);
-      const cosLat = Math.cos(sign.lat * Math.PI / 180);
-      const halfLat = halfLengthM / 111320;
-      const halfLng = halfLengthM / (111320 * cosLat);
-      waypoints =
-        orientation === "EW"
-          ? [[sign.lat, sign.lng - halfLng], [sign.lat, sign.lng + halfLng]]
-          : [[sign.lat - halfLat, sign.lng], [sign.lat + halfLat, sign.lng]];
-    }
+    if (waypoints.length < 2) continue;
 
     waypoints = offsetPolylinePoints(waypoints, sign.lat, sign.lng, LATERAL_OFFSET_M);
 
