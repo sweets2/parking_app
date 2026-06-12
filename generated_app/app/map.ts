@@ -110,7 +110,7 @@ let _violationLayers: LeafletLayer[] = [];
 let _violationHighlightsVisible = true;
 let _upcomingSignLayers: LeafletLayer[] = [];
 let _upcomingSegmentLayers: LeafletLayer[] = [];
-let _upcomingSignsVisible: boolean = true;
+let _upcomingSignsVisible: boolean = false;
 let _garageLayers: LeafletLayer[] = [];
 let _garageMarkersVisible: boolean = true;
 let _snowRouteLayers: LeafletLayer[] = [];
@@ -147,19 +147,27 @@ const KNOWN_REASONS: readonly string[] = ["CONSTRUCTION", "MOVING", "EVENT", "DE
  * active=false → orange tint for upcoming signs
  */
 export function signEmoji(reason: string, active = true): string {
-  const c = active ? "#cc0000" : "#e05a00";
+  const [c1, c2, gid] = active
+    ? ["#ff4422", "#aa1100", "tsg-a"]
+    : ["#ff7722", "#c04400", "tsg-o"];
+  const grad =
+    `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0%" stop-color="${c1}"/>` +
+    `<stop offset="100%" stop-color="${c2}"/>` +
+    `</linearGradient></defs>`;
   if (!KNOWN_REASONS.includes(reason)) {
-    // Hollow ring fallback for unrecognized reasons
     return (
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="13" height="13" class="tow-sign-emoji">` +
-      `<circle cx="10" cy="10" r="8" fill="none" stroke="#dc2626" stroke-width="2"/>` +
-      `<text x="10" y="15" text-anchor="middle" font-size="13" font-weight="900" fill="#dc2626" font-family="Arial Black,Impact,sans-serif">!</text>` +
+      grad +
+      `<circle cx="10" cy="10" r="8" fill="none" stroke="url(#${gid})" stroke-width="2"/>` +
+      `<text x="10" y="15" text-anchor="middle" font-size="13" font-weight="900" fill="${c2}" font-family="Arial Black,Impact,sans-serif">!</text>` +
       `</svg>`
     );
   }
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="13" height="13" class="tow-sign-emoji">` +
-    `<circle cx="10" cy="10" r="10" fill="${c}"/>` +
+    grad +
+    `<circle cx="10" cy="10" r="10" fill="url(#${gid})"/>` +
     `<text x="10" y="15" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial Black,Impact,sans-serif">!</text>` +
     `</svg>`
   );
@@ -1254,10 +1262,10 @@ export function renderUpcomingSignPins(signs: Sign[], now: Date): void {
 
   for (const sign of signs) {
     const icon = L.divIcon({
-      html: UPCOMING_SIGN_ICON,
+      html: signEmoji(sign.reason, false),
       className: "sign-emoji-marker",
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
+      iconSize: [13, 13],
+      iconAnchor: [6, 6],
     });
     const pos = getSnappedPinPosition(sign);
 
