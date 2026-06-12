@@ -316,12 +316,48 @@ function scheduleViolationRefresh(getState: () => AppState): void {
   }, msUntilNextHour);
 }
 
+// ─── Coffee button wiring ─────────────────────────────────────────────────────
+
+/**
+ * Wire the coffee-cup donation button and its popover card.
+ * Exported for isolated testing without invoking initBrowserApp().
+ */
+export function initCoffee(): void {
+  const coffeeBtn = document.getElementById('coffee-btn');
+  const coffeePopover = document.getElementById('coffee-popover');
+
+  coffeeBtn?.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
+    const isOpen = coffeePopover?.classList.contains('open') ?? false;
+    coffeePopover?.classList.toggle('open', !isOpen);
+    coffeePopover?.setAttribute('aria-hidden', String(isOpen));
+  });
+
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('click', (e: MouseEvent) => {
+      if (coffeePopover?.classList.contains('open') &&
+          !coffeePopover.contains(e.target as Node)) {
+        coffeePopover.classList.remove('open');
+        coffeePopover.setAttribute('aria-hidden', 'true');
+      }
+    });
+
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        coffeePopover?.classList.remove('open');
+        coffeePopover?.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+}
+
 // ─── Full browser app wiring ──────────────────────────────────────────────────
 
 export async function initBrowserApp(): Promise<void> {
   renderLoading();
   initMap();
   initFeedback();
+  initCoffee();
 
   // Fire-and-forget: fetch street cleaning schedule.
   fetch("data/street-cleaning.json")

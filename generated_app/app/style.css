@@ -667,3 +667,68 @@ html, body {
 #feedback-confirm.error {
   color: #dc2626;
 }
+
+/* ─── Coffee button ────────────────────────────────────────────────────────── */
+#coffee-btn {
+  position: fixed;
+  bottom: 122px;
+  right: 10px;
+  z-index: 1000;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1.5px solid #d1d5db;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+#coffee-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+/* ─── Coffee popover ───────────────────────────────────────────────────────── */
+#coffee-popover {
+  display: none;
+  position: fixed;
+  bottom: 174px;
+  right: 10px;
+  z-index: 1001;
+  width: 220px;
+  background: #fff;
+  border: 1.5px solid #d1d5db;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  flex-direction: column;
+  gap: 10px;
+}
+#coffee-popover.open {
+  display: flex;
+}
+.coffee-msg {
+  margin: 0;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.4;
+}
+#coffee-link {
+  display: block;
+  text-align: center;
+  background: #ff5e5b;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+#coffee-link:hover {
+  background: #e04e4b;
+}
