@@ -60,6 +60,20 @@ import {
   renderClearBanner,
 } from "./ui";
 
+// ─── Dev time override ────────────────────────────────────────────────────────
+// Set DEV_FORCE_NOW to a Date to test the split-highlight on one street only.
+// Only entries matching DEV_TEST_STREET are shown — all other streets hidden.
+// Washington St East=active + West=upcoming: any weekday 8:00–8:59 am ET
+// To enable: set DEV_FORCE_NOW = new Date("2026-06-09T12:30:00Z")
+// To disable: set DEV_FORCE_NOW = null
+const DEV_FORCE_NOW: Date | null = null;
+const DEV_TEST_STREET = "Washington St.";
+function devNow(): Date { return DEV_FORCE_NOW ?? new Date(); }
+function devEntries(entries: StreetCleaningEntry[]): StreetCleaningEntry[] {
+  if (DEV_FORCE_NOW === null) return entries;
+  return entries.filter(e => e.street === DEV_TEST_STREET);
+}
+
 // ─── Module state ─────────────────────────────────────────────────────────────
 
 let cleaningEntries: StreetCleaningEntry[] = [];
@@ -181,7 +195,7 @@ function buildDetectSegmentCallback(
  * Only used in browser context where document is defined.
  */
 function renderState(state: AppState): void {
-  const now = new Date();
+  const now = devNow();
 
   if (state.mode === "loading") {
     renderLoading();
@@ -207,7 +221,7 @@ function renderState(state: AppState): void {
     renderBrowsingMode(state.activeSigns, now);
     renderSignPins(state.activeSigns, now);
     renderTowSegments(state.activeSigns);
-    renderViolationHighlights(cleaningEntries, now);
+    renderViolationHighlights(devEntries(cleaningEntries), now);
     renderUpcomingSignPins(upcomingSignsData, now);
     renderUpcomingTowSegments(upcomingSignsData);
     return;
@@ -226,7 +240,7 @@ function renderState(state: AppState): void {
       void getStreetName(state.spot.lat, state.spot.lng).then((road) => {
         if (road !== null) {
           const detectSegment = buildDetectSegmentCallback(state.spot.lat, state.spot.lng, road);
-          showStreetPopup(state.spot.lat, state.spot.lng, road, findCleaningEntries(road), detectSegment);
+          showStreetPopup(state.spot.lat, state.spot.lng, road, findCleaningEntries(road), detectSegment, devNow());
         }
       });
     }
@@ -250,7 +264,7 @@ function renderState(state: AppState): void {
     // Show all active sign pins in parked mode (not just nearby ones).
     renderSignPins(filterActive(state.allSigns, now), now);
     renderTowSegments(filterActive(state.allSigns, now));
-    renderViolationHighlights(cleaningEntries, now);
+    renderViolationHighlights(devEntries(cleaningEntries), now);
     renderUpcomingSignPins(upcomingSignsData, now);
     renderUpcomingTowSegments(upcomingSignsData);
     renderSpotMarker(state.spot);
@@ -273,7 +287,7 @@ async function silentRefresh(app: App, now: Date): Promise<void> {
       const nearby = filterNearby(filtered, state.spot.lat, state.spot.lng, 150, now);
       renderSignPins(nearby, now);
       renderTowSegments(nearby);
-      renderViolationHighlights(cleaningEntries, now);
+      renderViolationHighlights(devEntries(cleaningEntries), now);
       if (nearby.length > 0) {
         renderWarningBanner(nearby, now);
       } else {
@@ -282,7 +296,7 @@ async function silentRefresh(app: App, now: Date): Promise<void> {
     } else if (state.mode === "browsing") {
       renderSignPins(activeNow, now);
       renderTowSegments(activeNow);
-      renderViolationHighlights(cleaningEntries, now);
+      renderViolationHighlights(devEntries(cleaningEntries), now);
       renderBrowsingMode(activeNow, now);
     }
     // Refresh upcoming signs
@@ -311,7 +325,7 @@ function scheduleViolationRefresh(getState: () => AppState): void {
   setTimeout(() => {
     const st = getState();
     if (st.mode !== "loading" && st.mode !== "error") {
-      renderViolationHighlights(cleaningEntries, new Date());
+      renderViolationHighlights(devEntries(cleaningEntries), devNow());
     }
     scheduleViolationRefresh(getState);
   }, msUntilNextHour);
@@ -414,7 +428,7 @@ export async function initBrowserApp(): Promise<void> {
   try {
     const futureRes = await fetch("data/future.json");
     const futureJson = await futureRes.json() as { fetched_at: string; signs: Sign[] };
-    const now = new Date();
+    const now = devNow();
     upcomingSignsData = filterLoadTimeNoise(futureJson.signs, new Date(futureJson.fetched_at))
       .filter((s) => !isSignActive(s, now));
   } catch {
@@ -453,7 +467,7 @@ export async function initBrowserApp(): Promise<void> {
 
   // F-34: initial violation highlight render + hourly schedule
   if (initialState.mode !== "loading" && initialState.mode !== "error") {
-    renderViolationHighlights(cleaningEntries, new Date());
+    renderViolationHighlights(devEntries(cleaningEntries), devNow());
   }
   scheduleViolationRefresh(app.getState.bind(app));
 
@@ -610,7 +624,7 @@ export async function initBrowserApp(): Promise<void> {
 
   // Start 60-second tick; auto-refresh data when it's from a previous UTC calendar day.
   setInterval(() => {
-    const now = new Date();
+    const now = devNow();
     const fetched = new Date(_fetchedAt);
     const stale =
       fetched.getUTCFullYear() !== now.getUTCFullYear() ||
@@ -669,7 +683,7 @@ export async function init(initialMode: "browsing" | "parked" = "browsing"): Pro
       const road = await getStreetName(lat, lng);
       if (road !== null) {
         const detectSegment = buildDetectSegmentCallback(lat, lng, road);
-        showStreetPopup(lat, lng, road, findCleaningEntries(road), detectSegment);
+        showStreetPopup(lat, lng, road, findCleaningEntries(road), detectSegment, devNow());
       }
     }
   });

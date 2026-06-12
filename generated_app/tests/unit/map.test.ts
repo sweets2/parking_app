@@ -988,6 +988,37 @@ describe("F-07 map module", () => {
       };
       expect(L.polyline.mock.calls.length).toBe(0);
     });
+
+    // ─── F-31 tests ───────────────────────────────────────────────────────────
+
+    it("F-31: GIVEN initRoadGeometry called with '14TH ST' geometry (two OSM nodes with slightly different lat values) AND a matching sign on 14TH ST within snap range, WHEN renderTowSegments is called, THEN L.polyline is called at least once AND the polyline points include at least two distinct lat values (OSM geometry used, not single-lat horizontal fallback)", async () => {
+      const { initMap, renderTowSegments, initRoadGeometry } = await import("../../app/map");
+      initMap();
+      // 14TH ST geometry: two nodes at slightly different latitudes (non-horizontal)
+      // This simulates real OSM geometry where streets aren't perfectly horizontal
+      initRoadGeometry({
+        "14TH ST": [[[40.756, -74.040], [40.7565, -74.030]]],
+      });
+      // Sign on 14TH ST close to the road geometry (within 50m)
+      const sign = makeSign({ address: "100-100 14TH ST", lat: 40.7562, lng: -74.035 });
+      renderTowSegments([sign]);
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      // L.polyline must be called at least once (outer + inner = 2 calls)
+      expect(L.polyline.mock.calls.length).toBeGreaterThanOrEqual(1);
+      // The polyline points must include at least two distinct lat values,
+      // confirming OSM geometry was used (not a single-lat horizontal fallback)
+      const allCalls = L.polyline.mock.calls as [[number, number][], Record<string, unknown>][];
+      const firstCall = allCalls[0];
+      expect(firstCall).toBeDefined();
+      if (firstCall !== undefined) {
+        const latlngs = firstCall[0] as [number, number][];
+        const lats = latlngs.map((pt) => pt[0]);
+        const distinctLats = new Set(lats.map((lat) => Math.round(lat * 1e6)));
+        expect(distinctLats.size).toBeGreaterThanOrEqual(2);
+      }
+    });
   });
 });
 
@@ -1354,6 +1385,20 @@ describe("F-34 violation highlights", () => {
     location: "1st St. to 14th St.",
   };
 
+  const EAST_ACTIVE: StreetCleaningEntry = {
+    street: "Bloomfield Street",
+    side: "East",
+    schedule: ACTIVE_CLEANING.schedule,
+    location: "1st St. to 14th St.",
+  };
+
+  const WEST_UPCOMING: StreetCleaningEntry = {
+    street: "Bloomfield Street",
+    side: "West",
+    schedule: UPCOMING_CLEANING.schedule,
+    location: "1st St. to 14th St.",
+  };
+
   beforeEach(() => {
     installLeafletMock();
     vi.resetModules();
@@ -1449,6 +1494,53 @@ describe("F-34 violation highlights", () => {
       (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
     );
     expect(polylineLayers.length).toBe(0);
+  });
+
+  it("GIVEN two connected ways sharing an endpoint, WHEN renderViolationHighlights, THEN one polyline rendered (ways merged)", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [
+      [[40.745, -74.044], [40.7455, -74.044]],
+      [[40.7455, -74.044], [40.746, -74.044]],
+    ]});
+    renderViolationHighlights([ACTIVE_CLEANING], NOW_STABLE);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(1);
+  });
+
+  it("GIVEN two disconnected ways, WHEN renderViolationHighlights, THEN two polylines rendered (chains stay separate)", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [
+      [[40.745, -74.044], [40.7455, -74.044]],
+      [[40.747, -74.044], [40.748, -74.044]],
+    ]});
+    renderViolationHighlights([ACTIVE_CLEANING], NOW_STABLE);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(2);
+  });
+
+  it("GIVEN East=active and West=upcoming, WHEN renderViolationHighlights, THEN two offset polylines (red + orange)", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    renderViolationHighlights([EAST_ACTIVE, WEST_UPCOMING], NOW_STABLE);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(2);
+    const colors = (L.polyline.mock.calls as [unknown, { color: string }][]).map(([, opts]) => opts.color);
+    expect(colors).toContain("#ef4444");
+    expect(colors).toContain("#f97316");
+  });
+
+  it("GIVEN East=active and West=active, WHEN renderViolationHighlights, THEN one full-width red polyline (no split)", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    const WEST_ACTIVE: StreetCleaningEntry = { ...EAST_ACTIVE, side: "West" };
+    renderViolationHighlights([EAST_ACTIVE, WEST_ACTIVE], NOW_STABLE);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(1);
+    expect((L.polyline.mock.calls[0] as [unknown, Record<string, unknown>])[1]).toMatchObject({ color: "#ef4444", weight: 12 });
   });
 });
 

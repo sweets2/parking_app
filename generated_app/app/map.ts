@@ -974,13 +974,87 @@ function normalizeToGeometryKey(name: string): string {
     .trim();
 }
 
-function drawStreetHighlight(street: string, color: string, opacity: number): void {
+function mergeWays(ways: [number, number][][]): [number, number][][] {
+  if (ways.length <= 1) return ways;
+  const used = new Array<boolean>(ways.length).fill(false);
+  const result: [number, number][][] = [];
+
+  function ptEq(a: [number, number], b: [number, number]): boolean {
+    return Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7;
+  }
+
+  for (let i = 0; i < ways.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    let chain: [number, number][] = [...ways[i]];
+
+    let found = true;
+    while (found) {
+      found = false;
+      for (let j = 0; j < ways.length; j++) {
+        if (used[j]) continue;
+        const w = ways[j];
+        const end = chain[chain.length - 1];
+        if (end !== undefined && w[0] !== undefined && ptEq(end, w[0])) {
+          chain = chain.concat(w.slice(1));
+          used[j] = true; found = true; break;
+        }
+        if (end !== undefined && w[w.length - 1] !== undefined && ptEq(end, w[w.length - 1])) {
+          chain = chain.concat([...w].reverse().slice(1));
+          used[j] = true; found = true; break;
+        }
+      }
+    }
+
+    found = true;
+    while (found) {
+      found = false;
+      for (let j = 0; j < ways.length; j++) {
+        if (used[j]) continue;
+        const w = ways[j];
+        const start = chain[0];
+        if (start !== undefined && w[w.length - 1] !== undefined && ptEq(start, w[w.length - 1])) {
+          chain = w.slice(0, -1).concat(chain);
+          used[j] = true; found = true; break;
+        }
+        if (start !== undefined && w[0] !== undefined && ptEq(start, w[0])) {
+          chain = [...w].reverse().slice(0, -1).concat(chain);
+          used[j] = true; found = true; break;
+        }
+      }
+    }
+
+    result.push(chain);
+  }
+  return result;
+}
+
+function drawStreetHighlight(street: string, color: string, opacity: number, side: string | null): void {
   const ways = _roadGeometry[street];
   if (ways === undefined || ways.length === 0) return;
   const L = getL();
-  for (const way of ways) {
+  const merged = mergeWays(ways);
+  const weight = side !== null ? 7 : 12;
+
+  for (const way of merged) {
     if (way.length === 0) continue;
-    const layer = L.polyline(way, { color, weight: 12, opacity });
+    let pts: [number, number][] = way;
+
+    if (side !== null) {
+      const mid = way[Math.floor(way.length / 2)];
+      if (mid !== undefined) {
+        const DELTA = 0.0001;
+        let refLat = mid[0];
+        let refLng = mid[1];
+        if (side === "East")       refLng += DELTA;
+        else if (side === "West")  refLng -= DELTA;
+        else if (side === "North") refLat += DELTA;
+        else if (side === "South") refLat -= DELTA;
+        pts = offsetPolylinePoints(way, refLat, refLng, LATERAL_OFFSET_M);
+      }
+    }
+
+    const layer = L.polyline(pts, { color, weight, opacity });
     _violationLayers.push(layer);
     if (_violationHighlightsVisible && _map !== null) {
       layer.addTo(_map);
@@ -1002,25 +1076,43 @@ export function renderViolationHighlights(
   clearViolationHighlights();
   if (_map === null) return;
 
-  const activeStreets = new Set<string>();
-  const upcomingStreets = new Set<string>();
+  const streetSides = new Map<string, Map<string, "active" | "upcoming">>();
 
   for (const entry of cleaningEntries) {
     const street = normalizeToGeometryKey(entry.street);
+    let sides = streetSides.get(street);
+    if (sides === undefined) {
+      sides = new Map();
+      streetSides.set(street, sides);
+    }
     if (isScheduleActiveNow(entry.schedule, now)) {
-      activeStreets.add(street);
+      sides.set(entry.side, "active");
     } else if (isScheduleUpcomingSoon(entry.schedule, now)) {
-      upcomingStreets.add(street);
+      if (sides.get(entry.side) !== "active") {
+        sides.set(entry.side, "upcoming");
+      }
     }
   }
 
-  for (const street of upcomingStreets) {
-    if (!activeStreets.has(street)) {
-      drawStreetHighlight(street, "#f97316", 0.22);
+  for (const [street, sides] of streetSides) {
+    const sideEntries = [...sides.entries()];
+    const hasActive   = sideEntries.some(([, s]) => s === "active");
+    const hasUpcoming = sideEntries.some(([, s]) => s === "upcoming");
+    const allSpecific = sideEntries.every(([sd]) => sd !== "Both");
+
+    if (!hasActive && !hasUpcoming) continue;
+
+    if (hasActive && hasUpcoming && allSpecific && sideEntries.length > 1) {
+      for (const [sd, status] of sideEntries) {
+        const color   = status === "active" ? "#ef4444" : "#f97316";
+        const opacity = status === "active" ? 0.28 : 0.22;
+        drawStreetHighlight(street, color, opacity, sd);
+      }
+    } else {
+      const color   = hasActive ? "#ef4444" : "#f97316";
+      const opacity = hasActive ? 0.28 : 0.22;
+      drawStreetHighlight(street, color, opacity, null);
     }
-  }
-  for (const street of activeStreets) {
-    drawStreetHighlight(street, "#ef4444", 0.28);
   }
 }
 
@@ -1300,7 +1392,8 @@ export function showStreetPopup(
   lng: number,
   streetName: string,
   entries: StreetCleaningEntry[],
-  detectSegment?: (locations: string[]) => Promise<string[] | null>
+  detectSegment?: (locations: string[]) => Promise<string[] | null>,
+  now?: Date
 ): void {
   if (_map === null) return;
 
@@ -1310,9 +1403,9 @@ export function showStreetPopup(
     _streetPopup = null;
   }
 
-  const now = new Date();
+  const resolvedNow = now ?? new Date();
   const L = getL();
-  const content = buildStreetPopupContent(streetName, entries, undefined, now);
+  const content = buildStreetPopupContent(streetName, entries, undefined, resolvedNow);
 
   const popup = L.popup();
   popup.setLatLng([lat, lng]);
