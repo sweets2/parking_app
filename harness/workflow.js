@@ -547,6 +547,10 @@ ${contextFilePaths.map(toOutputPath).join('\n')}`,
       )
     : Promise.resolve('(no context files for this feature)'),
 ])
+if (!staticReads) {
+  log('Failed to read CLAUDE.md or feature spec — aborting.')
+  return { done: false, reason: `Failed to read static files for ${targetId}` }
+}
 const featureSpec = staticReads.featureSpec
 const agentMd     = staticReads.claudeMd
 
@@ -615,7 +619,7 @@ ${featureSpec}`
     { schema: PREFLIGHT_SCHEMA, label: `spec-lint:${targetId}`, phase: 'Validate' }
   )
 
-  if (preflight.verdict === 'BLOCK') {
+  if (preflight && preflight.verdict === 'BLOCK') {
     const errorList = preflight.issues.map(i => `- [${i.severity}] ${i.text}`).join('\n')
     log(`Spec quality BLOCK — ${preflight.issues.filter(i => i.severity === 'ERROR').length} error(s) found`)
     preflight.issues.filter(i => i.severity === 'ERROR').forEach(i => log(`  ✗ ${i.text}`))
@@ -626,7 +630,7 @@ ${featureSpec}`
     })
   }
 
-  if (preflight.verdict === 'WARN') {
+  if (preflight && preflight.verdict === 'WARN') {
     log(`Spec quality WARN — ${preflight.issues.length} warning(s) injected into Creator prompt`)
     preflight.issues.forEach(i => log(`  ⚠ ${i.text}`))
   } else {
@@ -702,7 +706,9 @@ let writtenFiles = await agent(
   { label: `read-output:${targetId}:initial`, phase: 'Create' }
 )
 
-const missing = outputPaths.filter(f => writtenFiles.includes(`=== FILE: ${f} === MISSING`))
+const missing = writtenFiles
+  ? outputPaths.filter(f => writtenFiles.includes(`=== FILE: ${f} === MISSING`))
+  : outputPaths
 const allPresent = missing.length === 0
 
 if (!allPresent) {
@@ -810,10 +816,11 @@ let noChangeDetected = false
 const MAX_REVISIONS = 2
 
 const hashFilesPrompt = `Run in the project root: sha256sum ${outputPaths.join(' ')} 2>/dev/null | sort\nReturn the raw stdout as "hashes".`
-let prevHashes = (await agent(
+const initialHashResult = await agent(
   hashFilesPrompt,
   { schema: FILE_HASHES_SCHEMA, label: `hash-output:${targetId}:initial`, phase: 'Evaluate' }
-)).hashes
+)
+let prevHashes = initialHashResult ? initialHashResult.hashes : ''
 
 while (revision <= MAX_REVISIONS) {
 
@@ -918,10 +925,11 @@ ${featureSpec}`,
   // Comparing sha256 of on-disk bytes avoids LLM formatting variation that would make
   // a string-equality check non-deterministic. The LLM file-read only runs when hashes
   // confirm something actually changed — saving it on stall.
-  const currHashes = (await agent(
+  const hashCheckResult = await agent(
     hashFilesPrompt,
     { schema: FILE_HASHES_SCHEMA, label: `hash-check:${targetId}:r${revision}`, phase: 'Evaluate' }
-  )).hashes
+  )
+  const currHashes = hashCheckResult ? hashCheckResult.hashes : ''
   if (currHashes === prevHashes) {
     log(`⚠ Reviser r${revision} made no file changes — short-circuiting to BLOCKED`)
     noChangeDetected = true
