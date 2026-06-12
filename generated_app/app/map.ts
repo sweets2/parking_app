@@ -115,6 +115,7 @@ let _garageLayers: LeafletLayer[] = [];
 let _garageMarkersVisible: boolean = true;
 let _snowRouteLayers: LeafletLayer[] = [];
 let _snowRoutesVisible: boolean = true;
+let _streetParity: Record<string, 1 | -1> = {};
 const DEFAULT_ZOOM = 15;
 
 function dotScale(): number {
@@ -202,6 +203,7 @@ export function initMap(): LeafletMap {
   _garageMarkersVisible = true;
   _snowRouteLayers = [];
   _snowRoutesVisible = true;
+  _streetParity = {};
   map.createPane('towSignPane');
   const towSignPaneEl = map.getPane('towSignPane');
   if (towSignPaneEl !== undefined) towSignPaneEl.style.zIndex = '600';
@@ -536,6 +538,15 @@ export function initRoadGeometry(data: RoadGeometry): void {
 }
 
 /**
+ * Store the street-parity data fetched from data/street-parity.json.
+ * Maps normalized street name keys to which perpendicular direction (1 | -1)
+ * holds odd-numbered addresses.
+ */
+export function initStreetParity(data: Record<string, 1 | -1>): void {
+  _streetParity = data;
+}
+
+/**
  * Given an array of ways (each way is an ordered array of [lat, lng] pairs),
  * project [signLat, signLng] perpendicularly onto the nearest road segment and
  * return a subsegment of halfLengthM on each side of that projected point.
@@ -713,13 +724,19 @@ export function getSubsegment(
  * unchanged when:
  *   - pts.length < 2
  *   - first and last points are identical (len === 0)
- *   - sign is on the centreline (|dot| < 1e-9)
+ *   - sign is on the centreline (|dot| < 1e-9) and no forcedDir is provided
+ *
+ * When `forcedDir` is provided, the dot-product block is skipped entirely and
+ * `forcedDir` is used directly as the offset direction. This bypasses the
+ * |dot| < 1e-9 early-return guard that fires when the sign GPS is on the
+ * road centreline (the common case for permit-API geocoded addresses).
  */
 export function offsetPolylinePoints(
   pts: [number, number][],
   signLat: number,
   signLng: number,
-  offsetM: number
+  offsetM: number,
+  forcedDir?: 1 | -1
 ): [number, number][] {
   if (pts.length < 2) return pts;
 
@@ -735,22 +752,28 @@ export function offsetPolylinePoints(
 
   if (len === 0) return pts;
 
-  // Left-perpendicular unit vector (90° CCW from road direction in east/north space)
-  const perpX_m = -dY / len;   // east component
-  const perpY_m = dX / len;    // north component
+  // Right-perpendicular unit vector (90° CW from road direction in east/north space)
+  // dir=1 shifts toward increasing longitude (east for a N-S road)
+  const perpX_m = dY / len;    // east component
+  const perpY_m = -dX / len;   // north component
 
-  // Sign displacement from segment midpoint
-  const midLat = (first[0] + last[0]) / 2;
-  const midLng = (first[1] + last[1]) / 2;
-  const signDY = (signLat - midLat) * 111320;
-  const signDX = (signLng - midLng) * 111320 * cosLat;
+  let dir: 1 | -1;
+  if (forcedDir !== undefined) {
+    dir = forcedDir;
+  } else {
+    // Sign displacement from segment midpoint
+    const midLat = (first[0] + last[0]) / 2;
+    const midLng = (first[1] + last[1]) / 2;
+    const signDY = (signLat - midLat) * 111320;
+    const signDX = (signLng - midLng) * 111320 * cosLat;
 
-  // Dot product determines side
-  const dot = signDX * perpX_m + signDY * perpY_m;
+    // Dot product determines side
+    const dot = signDX * perpX_m + signDY * perpY_m;
 
-  if (Math.abs(dot) < 1e-9) return pts;
+    if (Math.abs(dot) < 1e-9) return pts;
 
-  const dir = dot > 0 ? 1 : -1;
+    dir = dot > 0 ? 1 : -1;
+  }
 
   // Apply uniform offset to every point
   const dLat = dir * offsetM * perpY_m / 111320;
@@ -845,7 +868,16 @@ export function renderTowSegments(signs: Sign[]): void {
 
     if (waypoints.length < 2) continue;
 
-    waypoints = offsetPolylinePoints(waypoints, sign.lat, sign.lng, LATERAL_OFFSET_M);
+    const numMatch = sign.address.match(/^(\d+)/);
+    let forcedDir: 1 | -1 | undefined;
+    if (numMatch !== null) {
+      const oddDir = _streetParity[normalizeToGeometryKey(streetName)];
+      if (oddDir !== undefined) {
+        const isOdd = parseInt(numMatch[1], 10) % 2 === 1;
+        forcedDir = isOdd ? oddDir : (oddDir === 1 ? -1 : 1);
+      }
+    }
+    waypoints = offsetPolylinePoints(waypoints, sign.lat, sign.lng, LATERAL_OFFSET_M, forcedDir);
 
     const outer = L.polyline(waypoints, { color: "#fff", weight: 7, opacity: 0.65 });
     const inner = L.polyline(waypoints, { color: "#cc0000", weight: 3, opacity: 0.85 });
@@ -1048,7 +1080,16 @@ export function renderUpcomingTowSegments(signs: Sign[]): void {
 
     if (waypoints.length < 2) continue;
 
-    waypoints = offsetPolylinePoints(waypoints, sign.lat, sign.lng, LATERAL_OFFSET_M);
+    const numMatch = sign.address.match(/^(\d+)/);
+    let forcedDir: 1 | -1 | undefined;
+    if (numMatch !== null) {
+      const oddDir = _streetParity[normalizeToGeometryKey(streetName)];
+      if (oddDir !== undefined) {
+        const isOdd = parseInt(numMatch[1], 10) % 2 === 1;
+        forcedDir = isOdd ? oddDir : (oddDir === 1 ? -1 : 1);
+      }
+    }
+    waypoints = offsetPolylinePoints(waypoints, sign.lat, sign.lng, LATERAL_OFFSET_M, forcedDir);
 
     const outer = L.polyline(waypoints, { color: "#fff", weight: 7, opacity: 0.65 });
     const inner = L.polyline(waypoints, { color: "#f97316", weight: 3, opacity: 0.85 });

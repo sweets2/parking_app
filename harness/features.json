@@ -987,7 +987,7 @@
   {
     "id": "F-41",
     "name": "Fix: Tow-Zone Curb Offset via Address Parity",
-    "status": "BLOCKED",
+    "status": "DONE",
     "order": 49,
     "depends_on": [
       "F-35"

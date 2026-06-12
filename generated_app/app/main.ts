@@ -36,6 +36,7 @@ import {
   setGarageMarkersVisible,
   renderSnowEmergencyRoutes,
   setSnowRoutesVisible,
+  initStreetParity,
 } from "./map";
 import { getStreetName, geocodeCrossStreet, seedGeocodeCache } from "./geo";
 import { createApp } from "./app";
@@ -461,6 +462,12 @@ export async function initBrowserApp(): Promise<void> {
     .then(({ routes }: { routes: SnowRoute[] }) => {
       renderSnowEmergencyRoutes(routes, true);
     })
+    .catch(() => { /* non-fatal */ });
+
+  // Fire-and-forget: fetch street parity data for curb-side offset.
+  fetch("data/street-parity.json")
+    .then((r) => r.json())
+    .then((data: unknown) => { initStreetParity(data as Record<string, 1 | -1>); })
     .catch(() => { /* non-fatal */ });
 
   // Wire tow-zones legend toggle

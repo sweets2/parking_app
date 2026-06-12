@@ -1196,6 +1196,55 @@ describe("offsetPolylinePoints", () => {
     const result = offsetPolylinePoints(pts, 40.744, -74.033, 4.0);
     expect(result).toBe(pts);
   });
+
+  // ─── F-41 forcedDir tests ──────────────────────────────────────────────────
+
+  it("F-41: GIVEN a N-S polyline, sign at midpoint (dot ≈ 0), forcedDir = 1, WHEN offsetPolylinePoints is called, THEN all returned points shift east (positive longitude delta)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const centreLng = -74.032;
+    const pts: [number, number][] = [
+      [40.743, centreLng],
+      [40.745, centreLng],
+    ];
+    // Sign at exact midpoint — dot ≈ 0 normally causes early return
+    const midLat = (40.743 + 40.745) / 2;
+    const result = offsetPolylinePoints(pts, midLat, centreLng, 4.0, 1);
+    // forcedDir = 1 means offset in left-perpendicular direction (east for N-S road going north)
+    for (const pt of result) {
+      expect(pt[1]).toBeGreaterThan(centreLng);
+    }
+  });
+
+  it("F-41: GIVEN a N-S polyline, sign at midpoint (dot ≈ 0), forcedDir = -1, WHEN offsetPolylinePoints is called, THEN all returned points shift west (negative longitude delta)", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const centreLng = -74.032;
+    const pts: [number, number][] = [
+      [40.743, centreLng],
+      [40.745, centreLng],
+    ];
+    const midLat = (40.743 + 40.745) / 2;
+    const result = offsetPolylinePoints(pts, midLat, centreLng, 4.0, -1);
+    for (const pt of result) {
+      expect(pt[1]).toBeLessThan(centreLng);
+    }
+  });
+
+  it("F-41: GIVEN a N-S polyline, sign east of center (dot > 0 → natural dir = 1), forcedDir = -1, WHEN offsetPolylinePoints is called, THEN all returned points shift west — forcedDir overrides natural GPS direction", async () => {
+    const { offsetPolylinePoints } = await import("../../app/map");
+    const centreLng = -74.032;
+    const pts: [number, number][] = [
+      [40.743, centreLng],
+      [40.745, centreLng],
+    ];
+    const cosLat = Math.cos(40.744 * Math.PI / 180);
+    // Sign east of centreline (natural dir = 1)
+    const eastLng = centreLng + 5 / (111320 * cosLat);
+    const result = offsetPolylinePoints(pts, 40.744, eastLng, 4.0, -1);
+    // forcedDir = -1 overrides natural dir, should shift west
+    for (const pt of result) {
+      expect(pt[1]).toBeLessThan(centreLng);
+    }
+  });
 });
 
 // ─── F-25 renderTowSegments offset tests ─────────────────────────────────────
@@ -1775,5 +1824,170 @@ describe("F-37 snow emergency routes", () => {
     expect(mockMapInstance._layers.length).toBe(0);
     setSnowRoutesVisible(true);
     expect(mockMapInstance._layers.length).toBe(1);
+  });
+});
+
+// ─── F-41 Address-parity curb offset ─────────────────────────────────────────
+
+describe("F-41 renderTowSegments — address-parity curb offset", () => {
+  // N-S road on BLOOMFIELD ST — left-perpendicular (dir=1) is east
+  // initStreetParity({ "BLOOMFIELD ST": 1 }) means odd addresses are on the east side (+1)
+
+  const centreLng = -74.032;
+
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("F-41: GIVEN initStreetParity({ 'BLOOMFIELD ST': 1 }) and a sign with odd address '1037-1037 BLOOMFIELD ST' (centerline sign, dot ≈ 0), WHEN renderTowSegments is called, THEN inner polyline points are shifted east (+1 direction)", async () => {
+    const { initMap, renderTowSegments, initRoadGeometry, initStreetParity } = await import("../../app/map");
+    initMap();
+    // N-S road: sign at centerline
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    initStreetParity({ "BLOOMFIELD ST": 1 });
+    // Odd address, sign exactly on centerline (dot ≈ 0 without parity)
+    const sign = makeSign({ address: "1037-1037 BLOOMFIELD ST", lat: 40.744, lng: centreLng });
+    renderTowSegments([sign]);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(2);
+    const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+    const latlngs = innerArgs[0] as [number, number][];
+    // With forcedDir=1 on N-S road (going north), perpendicular is east (positive lng delta)
+    for (const pt of latlngs) {
+      expect(pt[1]).toBeGreaterThan(centreLng);
+    }
+  });
+
+  it("F-41: GIVEN initStreetParity({ 'BLOOMFIELD ST': 1 }) and a sign with even address '1036-1036 BLOOMFIELD ST' (centerline sign), WHEN renderTowSegments is called, THEN inner polyline points are shifted west (-1 direction)", async () => {
+    const { initMap, renderTowSegments, initRoadGeometry, initStreetParity } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    initStreetParity({ "BLOOMFIELD ST": 1 });
+    // Even address → forcedDir = -1 (opposite of oddDir=1)
+    const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: centreLng });
+    renderTowSegments([sign]);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(2);
+    const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+    const latlngs = innerArgs[0] as [number, number][];
+    for (const pt of latlngs) {
+      expect(pt[1]).toBeLessThan(centreLng);
+    }
+  });
+
+  it("F-41: GIVEN initStreetParity({}) (no entry) and a centerline sign, WHEN renderTowSegments is called, THEN no crash occurs and layer count is 2 (polyline rendered at centerline — graceful degradation)", async () => {
+    // Per spec note: 'graceful degradation' — when no parity entry, forcedDir is undefined,
+    // sign is on centerline (dot ≈ 0), offsetPolylinePoints returns pts unchanged.
+    // The polyline IS rendered (waypoints.length >= 2), just at the centerline.
+    const { initMap, renderTowSegments, initRoadGeometry, initStreetParity } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    initStreetParity({});
+    const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: centreLng });
+    expect(() => renderTowSegments([sign])).not.toThrow();
+    const polylines = mockMapInstance._layers.filter((l) => l._options["_isPolyline"] === true);
+    // The polyline renders at centerline (offset returns pts unchanged)
+    expect(polylines.length).toBe(2);
+  });
+});
+
+// ─── F-41 renderUpcomingTowSegments — mirror tests ───────────────────────────
+
+describe("F-41 renderUpcomingTowSegments — address-parity curb offset", () => {
+  const centreLng = -74.032;
+
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("F-41: GIVEN initStreetParity({ 'BLOOMFIELD ST': 1 }) and odd address '1037-1037 BLOOMFIELD ST' (centerline sign), WHEN renderUpcomingTowSegments is called, THEN inner polyline points are shifted east", async () => {
+    const { initMap, renderUpcomingTowSegments, initRoadGeometry, initStreetParity } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    initStreetParity({ "BLOOMFIELD ST": 1 });
+    const sign = makeSign({ address: "1037-1037 BLOOMFIELD ST", lat: 40.744, lng: centreLng });
+    renderUpcomingTowSegments([sign]);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(2);
+    const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+    const latlngs = innerArgs[0] as [number, number][];
+    for (const pt of latlngs) {
+      expect(pt[1]).toBeGreaterThan(centreLng);
+    }
+  });
+
+  it("F-41: GIVEN initStreetParity({ 'BLOOMFIELD ST': 1 }) and even address '1036-1036 BLOOMFIELD ST' (centerline sign), WHEN renderUpcomingTowSegments is called, THEN inner polyline points are shifted west", async () => {
+    const { initMap, renderUpcomingTowSegments, initRoadGeometry, initStreetParity } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    initStreetParity({ "BLOOMFIELD ST": 1 });
+    const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: centreLng });
+    renderUpcomingTowSegments([sign]);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBe(2);
+    const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+    const latlngs = innerArgs[0] as [number, number][];
+    for (const pt of latlngs) {
+      expect(pt[1]).toBeLessThan(centreLng);
+    }
+  });
+
+  it("F-41: GIVEN initStreetParity({}) (no entry) and a centerline sign, WHEN renderUpcomingTowSegments is called, THEN no crash occurs and layer count is 2", async () => {
+    const { initMap, renderUpcomingTowSegments, initRoadGeometry, initStreetParity } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "BLOOMFIELD ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    initStreetParity({});
+    const sign = makeSign({ address: "1036-1036 BLOOMFIELD ST", lat: 40.744, lng: centreLng });
+    expect(() => renderUpcomingTowSegments([sign])).not.toThrow();
+    const polylines = mockMapInstance._layers.filter((l) => l._options["_isPolyline"] === true);
+    expect(polylines.length).toBe(2);
+  });
+});
+
+// ─── F-41 Normalization alignment test ───────────────────────────────────────
+
+describe("F-41 normalization alignment", () => {
+  const centreLng = -74.032;
+
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("F-41: GIVEN initStreetParity({ '8TH ST': 1 }) and a sign with address '805 EIGHTH ST' on road geometry keyed 'EIGHTH ST', WHEN renderTowSegments is called, THEN inner polyline is offset (normalizeToGeometryKey('EIGHTH ST') → '8TH ST' hits parity map)", async () => {
+    const { initMap, renderTowSegments, initRoadGeometry, initStreetParity } = await import("../../app/map");
+    initMap();
+    // Road geometry uses the non-normalized key "EIGHTH ST" (as scraped from OSM name)
+    initRoadGeometry({
+      "EIGHTH ST": [[[40.743, centreLng], [40.745, centreLng]]],
+    });
+    // Parity map uses the normalized key "8TH ST"
+    initStreetParity({ "8TH ST": 1 });
+    // Address "805 EIGHTH ST" — sign on centerline
+    const sign = makeSign({ address: "805 EIGHTH ST", lat: 40.744, lng: centreLng });
+    renderTowSegments([sign]);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    // Should render 2 polylines (geometry found via "EIGHTH ST")
+    expect(L.polyline.mock.calls.length).toBe(2);
+    const innerArgs = L.polyline.mock.calls[1] as [[number, number][], Record<string, unknown>];
+    const latlngs = innerArgs[0] as [number, number][];
+    // With forcedDir=1 (odd address 805, oddDir=1) on N-S road, shift east
+    for (const pt of latlngs) {
+      expect(pt[1]).toBeGreaterThan(centreLng);
+    }
   });
 });
