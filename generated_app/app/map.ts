@@ -45,6 +45,7 @@ interface LeafletMap {
   on(event: string, handler: (e: unknown) => void): LeafletMap;
   off(event: string): LeafletMap;
   closePopup(): LeafletMap;
+  getContainer(): HTMLElement;
   createPane(name: string): HTMLElement;
   getPane(name: string): HTMLElement | undefined;
 }
@@ -118,6 +119,8 @@ let _snowRoutesVisible: boolean = true;
 let _streetParity: Record<string, 1 | -1> = {};
 let _lastCleaningEntries: StreetCleaningEntry[] = [];
 let _lastNowForHighlights: Date | null = null;
+let _pinchSuppressUntil: number | null = null;
+let _activeTouches = 0;
 const DEFAULT_ZOOM = 15;
 
 function dotScale(): number {
@@ -251,6 +254,20 @@ export function initMap(): LeafletMap {
       track("map-zoomed", { zoom_level: map.getZoom() });
     }, 300);
   });
+
+  // Suppress accidental blue-dot placement immediately after a pinch-to-zoom.
+  // Leaflet fires a synthetic click on touchend; guard it with a 500 ms window
+  // whenever 2+ fingers were involved, matching the Google Maps / Apple Maps convention.
+  const container = map.getContainer();
+  container.addEventListener("touchstart", (e: TouchEvent) => {
+    _activeTouches = e.touches.length;
+  }, { passive: true });
+  container.addEventListener("touchend", (_e: TouchEvent) => {
+    if (_activeTouches >= 2) {
+      _pinchSuppressUntil = Date.now() + 500;
+    }
+    _activeTouches = 0;
+  }, { passive: true });
 
   return map;
 }
@@ -453,6 +470,7 @@ export function registerMapClickHandler(
   if (_map === null) return;
   _map.off("click");
   _map.on("click", (e) => {
+    if (_pinchSuppressUntil !== null && Date.now() < _pinchSuppressUntil) return;
     const ev = e as { latlng: LeafletLatLng };
     callback(ev.latlng.lat, ev.latlng.lng);
   });

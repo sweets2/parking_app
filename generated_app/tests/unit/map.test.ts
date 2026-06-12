@@ -92,6 +92,7 @@ interface MockMap {
   addLayer: (layer: MockMarker) => MockMap;
   removeLayer: (layer: MockMarker) => MockMap;
   closePopup: () => MockMap;
+  getContainer: () => HTMLElement;
   createPane: (name: string) => HTMLElement;
   getPane: (name: string) => HTMLElement | undefined;
   _fireClick: (lat: number, lng: number) => void;
@@ -155,6 +156,9 @@ function createMockMap(): MockMap {
     },
     closePopup() {
       return map;
+    },
+    getContainer() {
+      return { addEventListener: () => {} } as unknown as HTMLElement;
     },
     createPane(name: string) {
       const el = { style: { zIndex: '' } } as unknown as HTMLElement;
