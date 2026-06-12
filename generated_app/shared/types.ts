@@ -65,10 +65,12 @@ export interface Garage {
 }
 
 export interface SnowRoute {
-  street: string;  // road-geometry key, e.g. "3RD ST" (uppercase, no periods)
-  side: string;    // "North" | "South" | "Both" | "West" | "East"
-  from: string;    // cross-street label for display only
-  to: string;      // cross-street label for display only
+  street: string;   // road-geometry key, e.g. "3RD ST" (uppercase, no periods)
+  side: string;     // "North" | "South" | "Both" | "West" | "East"
+  from: string;     // cross-street label for display only
+  to: string;       // cross-street label for display only
+  minLon?: number;  // clip geometry west of this longitude (remove points with lon < minLon)
+  maxLon?: number;  // clip geometry east of this longitude (remove points with lon > maxLon)
 }
 
 export interface BusStop {

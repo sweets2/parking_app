@@ -151,14 +151,14 @@ export function signEmoji(reason: string, active = true): string {
   if (!KNOWN_REASONS.includes(reason)) {
     // Hollow ring fallback for unrecognized reasons
     return (
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="13" height="13" class="tow-sign-emoji">` +
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="10" height="10" class="tow-sign-emoji">` +
       `<circle cx="10" cy="10" r="8" fill="none" stroke="#dc2626" stroke-width="2"/>` +
       `<text x="10" y="15" text-anchor="middle" font-size="13" font-weight="900" fill="#dc2626" font-family="Arial Black,Impact,sans-serif">!</text>` +
       `</svg>`
     );
   }
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="13" height="13" class="tow-sign-emoji">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="10" height="10" class="tow-sign-emoji">` +
     `<circle cx="10" cy="10" r="10" fill="${c}"/>` +
     `<text x="10" y="15" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial Black,Impact,sans-serif">!</text>` +
     `</svg>`
@@ -282,8 +282,8 @@ export function renderSignPins(signs: Sign[], now: Date): void {
       icon: L.divIcon({
         html: icon,
         className: "sign-emoji-marker",
-        iconSize: [13, 13],
-        iconAnchor: [6, 6],
+        iconSize: [10, 10],
+        iconAnchor: [5, 5],
       }),
       pane: 'towSignPane',
     });
@@ -1256,8 +1256,8 @@ export function renderUpcomingSignPins(signs: Sign[], now: Date): void {
     const icon = L.divIcon({
       html: signEmoji(sign.reason, false),
       className: "sign-emoji-marker",
-      iconSize: [13, 13],
-      iconAnchor: [6, 6],
+      iconSize: [10, 10],
+      iconAnchor: [5, 5],
     });
     const pos = getSnappedPinPosition(sign);
 
@@ -1426,11 +1426,31 @@ export function setGarageMarkersVisible(visible: boolean): void {
 // lat ~40.753 — about 0.013° north of Hoboken's actual 3rd St (~40.740).
 // A ±0.008° tolerance (~890 m) accepts all legitimate Hoboken ways while
 // rejecting every JC bleed-through observed in the data.
+// Expected centroid latitudes for Hoboken numbered streets, used to reject
+// OSM ways that share the street name but belong to Jersey City.
+// 9TH ST uses 40.748 (not 40.750) to exclude a JC Heights stub at centLat 40.757.
+// 13TH ST uses 40.753 (not 40.756) to exclude a JC segment at centLat 40.761.
 const HOBOKEN_STREET_LAT: Record<string, number> = {
   "3RD ST": 40.740, "4TH ST": 40.741, "5TH ST": 40.742,
-  "9TH ST": 40.750, "13TH ST": 40.756,
+  "9TH ST": 40.748, "13TH ST": 40.753,
 };
 const HOBOKEN_STREET_LAT_TOLERANCE = 0.008;
+
+function clipWaysByLon(
+  ways: [number, number][][],
+  minLon: number | undefined,
+  maxLon: number | undefined,
+): [number, number][][] {
+  if (minLon === undefined && maxLon === undefined) return ways;
+  return ways
+    .map(way =>
+      way.filter(pt =>
+        (minLon === undefined || pt[1] >= minLon) &&
+        (maxLon === undefined || pt[1] <= maxLon),
+      ),
+    )
+    .filter(way => way.length >= 2);
+}
 
 /**
  * Render blue polylines for each snow emergency route entry.
@@ -1438,6 +1458,8 @@ const HOBOKEN_STREET_LAT_TOLERANCE = 0.008;
  * drawStreetHighlight — but uses its own layer array (_snowRouteLayers).
  * Ways whose centroid latitude deviates more than HOBOKEN_STREET_LAT_TOLERANCE
  * from the expected Hoboken street latitude are skipped (JC bleed-through guard).
+ * Per-route minLon/maxLon fields further clip geometry to the designated
+ * cross-street extents.
  */
 export function renderSnowEmergencyRoutes(routes: SnowRoute[], visible: boolean): void {
   for (const layer of _snowRouteLayers) {
@@ -1462,7 +1484,8 @@ export function renderSnowEmergencyRoutes(routes: SnowRoute[], visible: boolean)
       }
       return true;
     });
-    for (const way of mergeWays(filtered)) {
+    const clipped = clipWaysByLon(filtered, route.minLon, route.maxLon);
+    for (const way of mergeWays(clipped)) {
       const layer = L.polyline(way, { color: "#3b82f6", weight: 12, opacity: 0.45 });
       _snowRouteLayers.push(layer);
       if (_snowRoutesVisible && _map !== null) {

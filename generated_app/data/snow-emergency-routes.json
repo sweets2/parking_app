@@ -1,0 +1,17 @@
+{
+  "_source": {
+    "page": "https://www.hobokennj.gov/resources/winter-weather-operations",
+    "imageUrl": "https://cdn.prod.website-files.com/58407e2ebca0e34c30a2d39c/685f3770ce4f1ff8e862b06c_5fda7912911d29683bff7bae_HobokenSnowRoutes_2018-03-06.png",
+    "lastChecked": "2026-06-12"
+  },
+  "routes": [
+    { "street": "3RD ST",       "side": "North", "from": "Jackson St",    "to": "River St" },
+    { "street": "4TH ST",       "side": "South", "from": "River St",      "to": "Jackson St" },
+    { "street": "5TH ST",       "side": "South", "from": "Clinton St",    "to": "River St",       "minLon": -74.036 },
+    { "street": "9TH ST",       "side": "North", "from": "Jackson St",    "to": "Castle Point Ter", "maxLon": -74.026 },
+    { "street": "13TH ST",      "side": "North", "from": "Washington St", "to": "Madison St" },
+    { "street": "13TH ST",      "side": "South", "from": "Washington St", "to": "Hudson St" },
+    { "street": "WILLOW AVE",   "side": "West",  "from": "Observer Hwy",  "to": "11th St" },
+    { "street": "OBSERVER HWY", "side": "Both",  "from": "Newark St",     "to": "Hudson St",      "minLon": -74.042 }
+  ]
+}
