@@ -31,10 +31,8 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const apiKey =
-    (globalThis as Record<string, string | undefined>)["RESEND_API_KEY"] ?? "";
-  const toEmail =
-    (globalThis as Record<string, string | undefined>)["FEEDBACK_EMAIL"] ?? "";
+  const apiKey = process.env["RESEND_API_KEY"] ?? "";
+  const toEmail = process.env["FEEDBACK_EMAIL"] ?? "";
   if (!apiKey || !toEmail) {
     return new Response(JSON.stringify({ error: "server misconfigured" }), {
       status: 500,
