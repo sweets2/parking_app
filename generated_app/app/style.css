@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
 html, body {
   margin: 0;
   padding: 0;
@@ -121,6 +123,7 @@ html, body {
 .sp-sched {
   color: #222;
   white-space: pre-wrap;
+  font-weight: 700;
 }
 @keyframes schedule-breathe {
   0%, 100% { color: #991b1b; }
@@ -173,6 +176,17 @@ html, body {
 }
 .leaflet-popup-content {
   margin: 10px 12px;
+  font-family: 'Roboto', sans-serif;
+}
+.leaflet-popup-close-button {
+  width: 32px !important;
+  height: 32px !important;
+  font-size: 22px !important;
+  line-height: 32px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ─── Tow Zone popup ──────────────────────────────────────── */
@@ -283,19 +297,22 @@ html, body {
 .tow-label {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   line-height: 1.2;
+  flex: 1;
 }
 
 .tow-title {
   font-size: 12px;
   font-weight: 700;
   color: #1e293b;
+  font-family: 'Roboto', sans-serif;
+  text-align: left;
 }
 
 /* OFF state */
 #tow-legend.tow-off #tow-toggle {
-  opacity: 0.35;
+  opacity: 0.55;
 }
 
 /* ─── Upcoming tow zones legend ─── */
@@ -329,19 +346,22 @@ html, body {
 .upcoming-label {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   line-height: 1.2;
+  flex: 1;
 }
 
 .upcoming-title {
   font-size: 12px;
   font-weight: 700;
   color: #1e293b;
+  font-family: 'Roboto', sans-serif;
+  text-align: left;
 }
 
 /* OFF state */
 #upcoming-legend.upcoming-off #upcoming-toggle {
-  opacity: 0.35;
+  opacity: 0.55;
 }
 
 /* ─── Street violation highlights legend ─── */
@@ -373,12 +393,13 @@ html, body {
 .violation-label {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   line-height: 1.2;
+  flex: 1;
 }
-.violation-title { font-size: 12px; font-weight: 700; color: #1e293b; text-align: center; }
+.violation-title { font-size: 12px; font-weight: 700; color: #1e293b; text-align: left; font-family: 'Roboto', sans-serif; }
 /* OFF state */
-#violation-legend.violation-off #violation-toggle { opacity: 0.35; }
+#violation-legend.violation-off #violation-toggle { opacity: 0.55; }
 
 /* ─── Municipal Garages legend ─── */
 #garage-legend {
@@ -412,17 +433,20 @@ html, body {
 .garage-label {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   line-height: 1.2;
+  flex: 1;
 }
 
 .garage-title {
   font-size: 12px;
   font-weight: 700;
   color: #1e293b;
+  font-family: 'Roboto', sans-serif;
+  text-align: left;
 }
 
-#garage-legend.garage-off #garage-toggle { opacity: 0.35; }
+#garage-legend.garage-off #garage-toggle { opacity: 0.55; }
 
 #snow-legend {
 }
@@ -452,17 +476,20 @@ html, body {
 .snow-label {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   line-height: 1.2;
+  flex: 1;
 }
 
 .snow-title {
   font-size: 12px;
   font-weight: 700;
   color: #1e293b;
+  font-family: 'Roboto', sans-serif;
+  text-align: left;
 }
 
-#snow-legend.snow-off #snow-toggle { opacity: 0.35; }
+#snow-legend.snow-off #snow-toggle { opacity: 0.55; }
 
 
 .sp-block--active {

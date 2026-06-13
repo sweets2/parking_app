@@ -499,6 +499,15 @@ function directionBadge(side: string): string {
   return `<span class="dir-badge dir-other">${side.charAt(0).toUpperCase()}</span>`;
 }
 
+function sideOrder(side: string): number {
+  const s = side.toLowerCase();
+  if (s === "north") return 0;
+  if (s === "south") return 1;
+  if (s === "east")  return 2;
+  if (s === "west")  return 3;
+  return 4;
+}
+
 function buildStreetPopupContent(
   streetName: string,
   entries: StreetCleaningEntry[],
@@ -536,7 +545,8 @@ function buildStreetPopupContent(
     const blockClass = isActive ? `sp-block sp-block--active` : `sp-block`;
     parts.push(`<div class="${blockClass}">`);
     parts.push(`<div class="sp-loc-label">${streetName} ${blockContext}</div>`);
-    for (const entry of locationEntries) {
+    const sortedEntries = [...locationEntries].sort((a, b) => sideOrder(a.side) - sideOrder(b.side));
+    for (const entry of sortedEntries) {
       const schedActive   = now !== undefined && isScheduleActiveNow(entry.schedule, now);
       const schedUpcoming = !schedActive && now !== undefined && isScheduleUpcomingSoon(entry.schedule, now);
       const schedClass = schedActive   ? "sp-sched sp-sched--active"
@@ -1914,3 +1924,4 @@ export function showStreetPopup(
     });
   }
 }
+
