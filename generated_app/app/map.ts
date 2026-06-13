@@ -136,7 +136,7 @@ const CLEANING_LANE_WIDTH_M = 3.5;
 const HOBOKEN_COS_LAT = Math.cos(40.744 * Math.PI / 180);
 
 const SPOT_COLOR = "#1d6fe3"; // blue — visually distinct from sign markers
-const POSITION_BASE_RADIUS = 7;
+const POSITION_BASE_RADIUS = 5;
 const SPOT_BASE_RADIUS = 10;
 
 // ─── F-10.3 signEmoji ─────────────────────────────────────────────────────────

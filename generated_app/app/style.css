@@ -252,7 +252,9 @@ html, body {
 #tow-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 130px;
   padding: 7px 12px;
   background: rgba(255, 255, 255, 0.96);
   border: 1.5px solid #d1d5db;
@@ -325,7 +327,9 @@ html, body {
 #upcoming-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 130px;
   padding: 7px 12px;
   background: rgba(255, 255, 255, 0.96);
   border: 1.5px solid #d1d5db;
@@ -398,7 +402,9 @@ html, body {
 #violation-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 130px;
   padding: 7px 12px;
   background: rgba(255, 255, 255, 0.96);
   border: 1.5px solid #d1d5db;
@@ -448,7 +454,9 @@ html, body {
 #garage-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 130px;
   padding: 7px 12px;
   background: rgba(255, 255, 255, 0.96);
   border: 1.5px solid #d1d5db;
@@ -504,7 +512,9 @@ html, body {
 #snow-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 130px;
   padding: 7px 12px;
   background: rgba(255, 255, 255, 0.96);
   border: 1.5px solid #d1d5db;
