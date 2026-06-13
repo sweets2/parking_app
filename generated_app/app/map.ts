@@ -552,7 +552,8 @@ function buildStreetPopupContent(
       const schedClass = schedActive   ? "sp-sched sp-sched--active"
                        : schedUpcoming ? "sp-sched sp-sched--upcoming"
                        : "sp-sched";
-      parts.push(`<div class="sp-entry">${directionBadge(entry.side)}<span class="${schedClass}">${entry.schedule}</span></div>`);
+      const schedText = entry.schedule.replace(/\bthrough\b/gi, '–');
+      parts.push(`<div class="sp-entry">${directionBadge(entry.side)}<span class="${schedClass}">${schedText}</span></div>`);
     }
     parts.push(`</div>`);
   }
