@@ -179,9 +179,9 @@ export function initMap(): LeafletMap {
   const map = L.map("map");
   map.setView([40.744, -74.0324], 15);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap contributors",
-    maxZoom: 19,
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 20,
   }).addTo(map);
 
   // Reset module state for this map instance
