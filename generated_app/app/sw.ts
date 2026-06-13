@@ -21,7 +21,7 @@ const sw = self as unknown as {
   addEventListener(type: string, listener: (event: Record<string, unknown>) => void): void;
 };
 
-const CACHE_NAME = "hoboken-parking-v1";
+const CACHE_NAME = "hoboken-parking-v2";
 
 const APP_SHELL_URLS: string[] = [
   '/',
