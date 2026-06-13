@@ -487,7 +487,7 @@ function formatLocation(location: string): string {
   }
   const from = (parts[0] ?? "").trim().replace(/\.$/, "");
   const to = (parts[1] ?? "").trim().replace(/\.$/, "");
-  return `between ${from} and ${to}`;
+  return `Between <b>${from}</b> and <b>${to}</b>`;
 }
 
 function directionBadge(side: string): string {
@@ -544,7 +544,7 @@ function buildStreetPopupContent(
     const isActive = activeSet.size > 0 && activeSet.has(location);
     const blockClass = isActive ? `sp-block sp-block--active` : `sp-block`;
     parts.push(`<div class="${blockClass}">`);
-    parts.push(`<div class="sp-loc-label">${streetName} ${blockContext}</div>`);
+    parts.push(`<div class="sp-loc-label">${blockContext}</div>`);
     const sortedEntries = [...locationEntries].sort((a, b) => sideOrder(a.side) - sideOrder(b.side));
     for (const entry of sortedEntries) {
       const schedActive   = now !== undefined && isScheduleActiveNow(entry.schedule, now);
