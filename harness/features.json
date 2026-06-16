@@ -1,46 +1,23 @@
 [
   {
-    "id": "F-00",
-    "name": "Project Bootstrap",
-    "status": "DONE",
-    "order": 0,
-    "depends_on": [],
-    "context_files": [
-      "ARCHITECTURE.md"
-    ],
-    "output_files": [
-      "package.json",
-      "tsconfig.json",
-      "vitest.config.ts",
-      "app/index.html",
-      "app/style.css",
-      "app/manifest.json"
-    ],
-    "post_build_command": "npm install"
-  },
-  {
-    "id": "F-D1",
+    "id": "CF-D1",
     "name": "API Discovery",
-    "status": "DONE",
-    "note": "Pre-seeded DONE before F-00 was formalized; depends_on preserved so fresh runs enforce correct order.",
+    "status": "TODO",
     "order": 1,
-    "depends_on": [
-      "F-00"
-    ],
+    "depends_on": [],
     "context_files": [],
     "output_files": [
       "docs/api-discovery.md"
     ],
-    "run_tests": false,
-    "pre_eval_command": "node -e \"const fs=require('fs'),dns=require('dns');const md=fs.readFileSync('docs/api-discovery.md','utf8');const m=md.match(/https?:\\/\\/[^\\s\\)>\\`'\\\"\\\\[\\\\]]+/);if(!m){console.error('VALIDATION FAIL: no URL found in docs/api-discovery.md');process.exit(1);}let u;try{u=new URL(m[0]);}catch(e){console.error('VALIDATION FAIL: invalid URL: '+m[0]);process.exit(1);}dns.resolve(u.hostname,function(err){if(err){console.error('VALIDATION FAIL: host does not resolve: '+u.hostname+' \u2014 '+err.message);process.exit(1);}else{console.log('PASS: URL valid, host resolves: '+u.hostname);process.exit(0);}});\""
+    "run_tests": false
   },
   {
-    "id": "F-D2",
+    "id": "CF-D2",
     "name": "Data Schema Analysis",
-    "status": "DONE",
+    "status": "TODO",
     "order": 2,
     "depends_on": [
-      "F-D1"
+      "CF-D1"
     ],
     "context_files": [
       "docs/api-discovery.md"
@@ -49,35 +26,44 @@
       "docs/data-schema.md",
       "data/latest.json"
     ],
-    "run_tests": false,
-    "pre_eval_command": "node -e \"const fs=require('fs');let raw;try{raw=fs.readFileSync('data/latest.json','utf8');}catch(e){console.error('VALIDATION FAIL: data/latest.json unreadable: '+e.message);process.exit(1);}let d;try{d=JSON.parse(raw);}catch(e){console.error('VALIDATION FAIL: not valid JSON: '+e.message);process.exit(1);}const errs=[];if(typeof d.fetched_at!=='string'||!d.fetched_at)errs.push('fetched_at missing or not a non-empty string');if(typeof d.count!=='number')errs.push('count missing or not a number');if(!Array.isArray(d.signs))errs.push('signs missing or not an array');else{if(d.signs.length===0)errs.push('signs array is empty \u2014 real fetched data required');if(typeof d.count==='number'&&d.count!==d.signs.length)errs.push('count ('+d.count+') does not match signs.length ('+d.signs.length+')');if(d.signs.length>0&&Object.keys(d.signs[0]).length<4)errs.push('signs[0] has fewer than 4 keys \u2014 appears to be a placeholder object');}if(errs.length>0){console.error('VALIDATION FAIL:\\n'+errs.map(function(e){return'  - '+e;}).join('\\n'));process.exit(1);}console.log('PASS: '+d.signs.length+' signs, fetched_at='+d.fetched_at);process.exit(0);\""
+    "run_tests": false
   },
   {
-    "id": "F-00.5",
-    "name": "Test Fixture",
-    "status": "DONE",
+    "id": "CF-00",
+    "name": "Project Bootstrap",
+    "status": "TODO",
     "order": 3,
     "depends_on": [
-      "F-D2",
-      "F-02"
+      "CF-D2"
     ],
-    "context_files": [
-      "data/latest.json",
-      "docs/data-schema.md",
-      "shared/types.ts"
-    ],
+    "context_files": [],
     "output_files": [
-      "tests/fixtures/signs.ts"
+      "package.json",
+      "tsconfig.json",
+      "vitest.config.ts"
+    ],
+    "post_build_command": "npm install"
+  },
+  {
+    "id": "CF-01",
+    "name": "CI/CD and GitHub Actions",
+    "status": "TODO",
+    "order": 4,
+    "depends_on": [
+      "CF-00"
+    ],
+    "context_files": [],
+    "output_files": [
+      ".github/workflows/fetch_daily.yml"
     ]
   },
   {
-    "id": "F-02",
-    "name": "Shared Types Contract",
-    "status": "DONE",
-    "order": 4,
+    "id": "CF-02",
+    "name": "Shared Types",
+    "status": "TODO",
+    "order": 5,
     "depends_on": [
-      "F-00",
-      "F-D2"
+      "CF-D2"
     ],
     "context_files": [
       "docs/data-schema.md"
@@ -87,27 +73,30 @@
     ]
   },
   {
-    "id": "F-02.5",
-    "name": "Street Cleaning Types",
-    "status": "DONE",
-    "order": 5,
+    "id": "CF-03",
+    "name": "Test Fixtures",
+    "status": "TODO",
+    "order": 6,
     "depends_on": [
-      "F-02"
+      "CF-00",
+      "CF-02"
     ],
     "context_files": [
-      "shared/types.ts"
+      "shared/types.ts",
+      "data/latest.json"
     ],
     "output_files": [
-      "shared/types.ts"
+      "tests/fixtures/signs.ts"
     ]
   },
   {
-    "id": "F-03",
-    "name": "Shared Pure Logic",
-    "status": "DONE",
-    "order": 6,
+    "id": "CF-04",
+    "name": "Core Parking Logic",
+    "status": "TODO",
+    "order": 7,
     "depends_on": [
-      "F-02"
+      "CF-02",
+      "CF-03"
     ],
     "context_files": [
       "shared/types.ts",
@@ -115,17 +104,16 @@
     ],
     "output_files": [
       "shared/parking-logic.ts",
-      "tests/unit/parking-logic.test.ts",
-      "tests/integration/pipeline.test.ts"
+      "tests/unit/parking-logic.test.ts"
     ]
   },
   {
-    "id": "F-04",
-    "name": "Shared Storage Module",
-    "status": "DONE",
-    "order": 7,
+    "id": "CF-05",
+    "name": "Storage Module",
+    "status": "TODO",
+    "order": 8,
     "depends_on": [
-      "F-02"
+      "CF-02"
     ],
     "context_files": [
       "shared/types.ts"
@@ -136,27 +124,58 @@
     ]
   },
   {
-    "id": "F-05",
-    "name": "GitHub Actions CI/CD",
-    "status": "DONE",
-    "order": 8,
-    "depends_on": [
-      "F-00"
-    ],
-    "context_files": [],
-    "output_files": [
-      ".github/workflows/fetch_daily.yml"
-    ]
-  },
-  {
-    "id": "F-06",
-    "name": "App State Machine",
-    "status": "DONE",
+    "id": "CF-06",
+    "name": "Data Fetchers",
+    "status": "TODO",
     "order": 9,
     "depends_on": [
-      "F-02",
-      "F-03",
-      "F-04"
+      "CF-02",
+      "CF-03"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "docs/api-discovery.md",
+      "docs/data-schema.md",
+      "tests/fixtures/signs.ts"
+    ],
+    "output_files": [
+      "fetcher/fetch.ts",
+      "fetcher/fetch-street-cleaning.ts",
+      "tests/unit/fetcher.test.ts"
+    ],
+    "post_build_command": "npm run fetch-cleaning && npm run normalize-schedules"
+  },
+  {
+    "id": "CF-07",
+    "name": "Build-Time Geocoding and Road Geometry",
+    "status": "TODO",
+    "order": 10,
+    "depends_on": [
+      "CF-02",
+      "CF-00"
+    ],
+    "context_files": [
+      "shared/types.ts"
+    ],
+    "output_files": [
+      "app/geo.ts",
+      "fetcher/geocode-cross-streets.ts",
+      "fetcher/build-road-geometry.ts",
+      "fetcher/build-street-parity.ts",
+      "fetcher/fetch-bus-stops.ts",
+      "tests/unit/geo.test.ts"
+    ],
+    "post_build_command": "npm run geocode-cross-streets && npm run build-road-geometry && npm run build-street-parity && npm run fetch-bus-stops"
+  },
+  {
+    "id": "CF-08",
+    "name": "App State Machine",
+    "status": "TODO",
+    "order": 11,
+    "depends_on": [
+      "CF-02",
+      "CF-04",
+      "CF-05"
     ],
     "context_files": [
       "shared/types.ts",
@@ -164,939 +183,149 @@
       "shared/storage.ts"
     ],
     "output_files": [
-      "app/app.ts"
+      "app/app.ts",
+      "tests/unit/app.test.ts"
     ]
   },
   {
-    "id": "F-07",
-    "name": "Map Module",
-    "status": "DONE",
-    "order": 10,
-    "depends_on": [
-      "F-02",
-      "F-03"
-    ],
-    "context_files": [
-      "shared/types.ts",
-      "shared/parking-logic.ts"
-    ],
-    "output_files": [
-      "app/map.ts"
-    ]
-  },
-  {
-    "id": "F-08.4",
-    "name": "Street Name Lookup",
-    "status": "DONE",
-    "order": 11,
-    "depends_on": [],
-    "context_files": [],
-    "output_files": [
-      "app/geo.ts",
-      "tests/unit/geo.test.ts"
-    ]
-  },
-  {
-    "id": "F-09",
+    "id": "CF-09",
     "name": "UI Rendering Module",
-    "status": "DONE",
-    "order": 13,
+    "status": "TODO",
+    "order": 12,
     "depends_on": [
-      "F-02",
-      "F-03"
+      "CF-02",
+      "CF-04"
     ],
     "context_files": [
       "shared/types.ts",
       "shared/parking-logic.ts"
     ],
     "output_files": [
-      "app/ui.ts"
-    ]
-  },
-  {
-    "id": "F-16",
-    "name": "Next Violation Window",
-    "status": "DONE",
-    "order": 14,
-    "depends_on": [
-      "F-03"
-    ],
-    "context_files": [
-      "shared/types.ts",
-      "shared/parking-logic.ts",
-      "tests/fixtures/signs.ts"
-    ],
-    "output_files": [
-      "shared/parking-logic.ts",
-      "tests/unit/parking-logic.test.ts"
-    ]
-  },
-  {
-    "id": "F-13",
-    "name": "Data Freshness Check",
-    "status": "DONE",
-    "order": 15,
-    "depends_on": [
-      "F-03",
-      "F-09"
-    ],
-    "context_files": [
-      "shared/parking-logic.ts",
-      "app/ui.ts",
-      "tests/fixtures/signs.ts"
-    ],
-    "output_files": [
-      "shared/parking-logic.ts",
-      "app/ui.ts",
-      "tests/unit/parking-logic.test.ts"
-    ]
-  },
-  {
-    "id": "F-14",
-    "name": "Auto Re-Fetch on Open",
-    "status": "DONE",
-    "order": 16,
-    "depends_on": [
-      "F-06",
-      "F-13"
-    ],
-    "context_files": [
-      "app/main.ts",
-      "shared/parking-logic.ts",
-      "tests/fixtures/signs.ts"
-    ],
-    "output_files": [
-      "app/main.ts",
-      "tests/unit/main.test.ts"
-    ]
-  },
-  {
-    "id": "F-15",
-    "name": "Manual Refresh Button",
-    "status": "DONE",
-    "order": 17,
-    "depends_on": [
-      "F-06",
-      "F-09",
-      "F-14"
-    ],
-    "context_files": [
-      "app/main.ts",
-      "app/ui.ts",
-      "shared/parking-logic.ts",
-      "tests/fixtures/signs.ts"
-    ],
-    "output_files": [
-      "app/main.ts",
       "app/ui.ts",
       "tests/unit/ui.test.ts"
     ]
   },
   {
-    "id": "F-10",
-    "name": "Flow 1 \u2014 Just Parked",
-    "status": "DONE",
-    "order": 18,
+    "id": "CF-12",
+    "name": "HTML and CSS",
+    "status": "TODO",
+    "order": 13,
     "depends_on": [
-      "F-06",
-      "F-07",
-      "F-09"
+      "CF-00"
     ],
-    "context_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/app.ts",
-      "app/map.ts",
-      "app/ui.ts",
-      "app/main.ts"
-    ],
-    "output_files": [
-      "app/main.ts",
-      "app/map.ts",
-      "tests/unit/main.test.ts"
-    ]
-  },
-  {
-    "id": "F-11",
-    "name": "Flow 2 \u2014 Returning",
-    "status": "DONE",
-    "order": 19,
-    "depends_on": [
-      "F-06",
-      "F-07",
-      "F-09"
-    ],
-    "context_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/app.ts",
-      "app/map.ts",
-      "app/ui.ts",
-      "app/main.ts"
-    ],
-    "output_files": [
-      "app/main.ts",
-      "tests/unit/f11.test.ts"
-    ]
-  },
-  {
-    "id": "F-12",
-    "name": "PWA Shell",
-    "status": "DONE",
-    "order": 21,
-    "depends_on": [
-      "F-06"
-    ],
-    "context_files": [
-      "app/app.ts",
-      "app/main.ts",
-      "app/manifest.json"
-    ],
-    "output_files": [
-      "app/manifest.json",
-      "app/sw.ts",
-      "app/main.ts"
-    ]
-  },
-  {
-    "id": "F-01",
-    "name": "Data Fetcher",
-    "status": "DONE",
-    "order": 22,
-    "depends_on": [
-      "F-00",
-      "F-02",
-      "F-00.5"
-    ],
-    "context_files": [
-      "shared/types.ts",
-      "docs/api-discovery.md",
-      "docs/data-schema.md"
-    ],
-    "output_files": [
-      "fetcher/fetch.ts",
-      "tests/unit/fetcher.test.ts"
-    ]
-  },
-  {
-    "id": "F-01.9",
-    "name": "Street Cleaning Data Scraper",
-    "status": "DONE",
-    "order": 23,
-    "depends_on": [
-      "F-02.5"
-    ],
-    "context_files": [
-      "shared/types.ts"
-    ],
-    "output_files": [
-      "fetcher/fetch-street-cleaning.ts"
-    ],
-    "post_build_command": "npm run fetch-cleaning && npm run normalize-schedules"
-  },
-  {
-    "id": "F-07.6",
-    "name": "Street Click Popup",
-    "status": "DONE",
-    "order": 24,
-    "depends_on": [
-      "F-02.5",
-      "F-07"
-    ],
-    "context_files": [
-      "shared/types.ts",
-      "app/map.ts"
-    ],
-    "output_files": [
-      "app/map.ts"
-    ]
-  },
-  {
-    "id": "F-17.5",
-    "name": "Street Popup Click Wiring",
-    "status": "DONE",
-    "order": 25,
-    "depends_on": [
-      "F-07.6",
-      "F-08.4",
-      "F-01.9"
-    ],
-    "context_files": [
-      "app/main.ts",
-      "app/map.ts",
-      "app/geo.ts",
-      "shared/types.ts"
-    ],
-    "output_files": [
-      "app/main.ts"
-    ]
-  },
-  {
-    "id": "F-18",
-    "name": "Deployment Readiness",
-    "status": "DONE",
-    "order": 26,
-    "depends_on": [
-      "F-12",
-      "F-07"
-    ],
-    "context_files": [
-      "app/index.html",
-      "app/manifest.json"
-    ],
+    "context_files": [],
     "output_files": [
       "app/index.html",
-      "app/icon-192.png",
-      "app/icon-512.png",
-      "package.json",
-      "vercel.json"
-    ]
-  },
-  {
-    "id": "F-19",
-    "name": "Tow Zones Legend Toggle",
-    "status": "DONE",
-    "order": 27,
-    "depends_on": [
-      "F-07",
-      "F-17.5",
-      "F-18"
-    ],
-    "context_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/map.ts",
-      "app/main.ts"
-    ],
-    "output_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/map.ts",
-      "app/main.ts"
-    ]
-  },
-  {
-    "id": "F-20",
-    "name": "Segment Auto-Highlight",
-    "status": "DONE",
-    "order": 28,
-    "depends_on": [
-      "F-07.6",
-      "F-17.5",
-      "F-08.4",
-      "F-19"
-    ],
-    "context_files": [
-      "shared/types.ts",
-      "shared/parking-logic.ts",
-      "app/geo.ts",
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/parking-logic.test.ts",
-      "tests/unit/geo.test.ts",
-      "tests/unit/map.test.ts",
-      "tests/unit/main.test.ts"
-    ],
-    "output_files": [
-      "shared/parking-logic.ts",
-      "app/geo.ts",
-      "app/style.css",
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/parking-logic.test.ts",
-      "tests/unit/geo.test.ts",
-      "tests/unit/map.test.ts",
-      "tests/unit/main.test.ts"
-    ]
-  },
-  {
-    "id": "F-20.5",
-    "name": "Multi-Segment Highlight",
-    "status": "DONE",
-    "order": 28.5,
-    "depends_on": [
-      "F-20"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/map.test.ts",
-      "tests/unit/main.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/map.test.ts",
-      "tests/unit/main.test.ts"
-    ]
-  },
-  {
-    "id": "F-21",
-    "name": "Build-Time Cross-Street Geocache",
-    "status": "DONE",
-    "order": 29,
-    "depends_on": [
-      "F-20"
-    ],
-    "context_files": [
-      "shared/parking-logic.ts",
-      "app/geo.ts",
-      "app/main.ts",
-      "package.json",
-      "tests/unit/geo.test.ts"
-    ],
-    "output_files": [
-      "fetcher/geocode-cross-streets.ts",
-      "app/geo.ts",
-      "app/main.ts",
-      "package.json",
-      "tests/unit/geo.test.ts"
-    ],
-    "post_build_command": "npm run geocode-cross-streets"
-  },
-  {
-    "id": "F-22",
-    "name": "Popup Zoom-Resize Fix",
-    "status": "DONE",
-    "order": 30,
-    "depends_on": [
-      "F-20.5"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts"
-    ]
-  },
-  {
-    "id": "F-23",
-    "name": "Tow Zone Segment Highlight",
-    "status": "DONE",
-    "order": 31,
-    "depends_on": [
-      "F-22"
-    ],
-    "context_files": [
-      "shared/parking-logic.ts",
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/parking-logic.test.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "shared/parking-logic.ts",
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/parking-logic.test.ts",
-      "tests/unit/map.test.ts"
-    ]
-  },
-  {
-    "id": "F-24",
-    "name": "Road-Geometry Tow Segment Lines",
-    "status": "DONE",
-    "order": 32,
-    "depends_on": [
-      "F-23"
-    ],
-    "context_files": [
-      "shared/types.ts",
-      "app/map.ts",
-      "app/main.ts",
-      "package.json",
-      "tests/unit/map.test.ts",
-      "fetcher/geocode-cross-streets.ts"
-    ],
-    "output_files": [
-      "fetcher/build-road-geometry.ts",
-      "shared/types.ts",
-      "app/map.ts",
-      "app/main.ts",
-      "package.json",
-      "tests/unit/map.test.ts"
-    ],
-    "post_build_command": "npm run build-road-geometry"
-  },
-  {
-    "id": "F-25",
-    "name": "Side-Aware Perpendicular Offset for Tow Zone Polylines",
-    "status": "DONE",
-    "order": 33,
-    "depends_on": [
-      "F-24"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts"
-    ]
-  },
-  {
-    "id": "F-26",
-    "name": "Await Road Geometry Before Rendering Tow Segments",
-    "status": "DONE",
-    "order": 34,
-    "depends_on": [
-      "F-25"
-    ],
-    "context_files": [
-      "app/main.ts"
-    ],
-    "output_files": [
-      "app/main.ts"
-    ]
-  },
-  {
-    "id": "F-27",
-    "name": "Get Current Location Button",
-    "status": "DONE",
-    "order": 35,
-    "depends_on": [
-      "F-26"
-    ],
-    "context_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/main.ts"
-    ],
-    "output_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/main.ts"
-    ]
-  },
-  {
-    "id": "F-28",
-    "name": "Floating Feedback Button",
-    "status": "DONE",
-    "order": 36,
-    "depends_on": [
-      "F-26"
-    ],
-    "context_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/main.ts"
-    ],
-    "output_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/feedback.ts",
-      "app/main.ts",
-      "api/feedback.ts",
-      "tests/unit/feedback.test.ts"
-    ]
-  },
-  {
-    "id": "F-29",
-    "name": "Direction Badge Redesign",
-    "status": "DONE",
-    "order": 37,
-    "depends_on": [
-      "F-28"
-    ],
-    "context_files": [
-      "app/style.css",
-      "app/map.ts"
-    ],
-    "output_files": [
-      "app/style.css",
-      "app/map.ts"
-    ]
-  },
-  {
-    "id": "F-30",
-    "name": "Schedule Violation Pulse Animation",
-    "status": "DONE",
-    "order": 38,
-    "depends_on": [
-      "F-29"
-    ],
-    "context_files": [
-      "shared/parking-logic.ts",
-      "app/map.ts",
-      "app/style.css",
-      "tests/unit/parking-logic.test.ts"
-    ],
-    "output_files": [
-      "shared/parking-logic.ts",
-      "app/map.ts",
-      "app/style.css",
-      "tests/unit/parking-logic.test.ts"
-    ]
-  },
-  {
-    "id": "F-31",
-    "name": "Fix Tow Segment Projection Bugs",
-    "status": "DONE",
-    "order": 39,
-    "depends_on": [
-      "F-25"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "fetcher/build-road-geometry.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "fetcher/build-road-geometry.ts",
-      "tests/unit/map.test.ts"
-    ]
-  },
-  {
-    "id": "F-32",
-    "name": "Tow Zone Popup Redesign",
-    "status": "DONE",
-    "order": 40,
-    "depends_on": [
-      "F-30",
-      "F-31"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/style.css",
-      "shared/parking-logic.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
       "app/style.css"
     ]
   },
   {
-    "id": "F-33",
-    "name": "Intersection-Based Segment Geocoding",
-    "status": "DONE",
-    "order": 41,
+    "id": "CF-10",
+    "name": "Map Module",
+    "status": "TODO",
+    "order": 14,
     "depends_on": [
-      "F-21",
-      "F-20.5"
+      "CF-02",
+      "CF-04",
+      "CF-07"
     ],
     "context_files": [
-      "app/geo.ts",
-      "app/main.ts",
-      "fetcher/geocode-cross-streets.ts",
-      "tests/unit/geo.test.ts",
-      "tests/unit/main.test.ts"
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "app/geo.ts"
     ],
     "output_files": [
-      "app/geo.ts",
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ]
+  },
+  {
+    "id": "CF-11",
+    "name": "App Entry Point",
+    "status": "TODO",
+    "order": 15,
+    "depends_on": [
+      "CF-08",
+      "CF-09",
+      "CF-10",
+      "CF-12"
+    ],
+    "context_files": [
+      "app/app.ts",
+      "app/ui.ts",
+      "app/map.ts",
+      "app/index.html",
+      "app/style.css",
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "shared/storage.ts"
+    ],
+    "output_files": [
       "app/main.ts",
-      "fetcher/geocode-cross-streets.ts",
-      "data/cross-streets.json",
-      "tests/unit/geo.test.ts",
       "tests/unit/main.test.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "post_build_command": "npm run geocode-cross-streets"
-  },
-  {
-    "id": "F-34",
-    "name": "Street Violation Highlights",
-    "status": "DONE",
-    "order": 42,
-    "depends_on": [
-      "F-32",
-      "F-33"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "shared/parking-logic.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "tests/unit/map.test.ts"
+      "tests/integration/pipeline.test.ts"
     ]
   },
   {
-    "id": "F-35",
-    "name": "Upcoming Tow Zone Signs (Orange Layer)",
-    "status": "DONE",
-    "order": 43,
+    "id": "CF-13",
+    "name": "PWA Shell",
+    "status": "TODO",
+    "order": 16,
     "depends_on": [
-      "F-34"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "fetcher/fetch.ts",
-      "shared/types.ts",
-      "shared/parking-logic.ts",
-      "tests/unit/map.test.ts",
-      "tests/unit/fetcher.test.ts"
-    ],
-    "output_files": [
-      "fetcher/fetch.ts",
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "package.json",
-      "tests/unit/map.test.ts",
-      "tests/unit/fetcher.test.ts",
-      "specs/F-35.md"
-    ]
-  },
-  {
-    "id": "F-36",
-    "name": "Municipal Garages Layer",
-    "status": "DONE",
-    "order": 44,
-    "depends_on": [
-      "F-35"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "shared/types.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "data/garages.json",
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "shared/types.ts",
-      "tests/unit/map.test.ts",
-      "specs/F-36.md"
-    ]
-  },
-  {
-    "id": "F-37",
-    "name": "Snow Emergency Routes Layer",
-    "status": "DONE",
-    "order": 45,
-    "depends_on": [
-      "F-36"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "shared/types.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "data/snow-emergency-routes.json",
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "shared/types.ts",
-      "tests/unit/map.test.ts",
-      "specs/F-37.md"
-    ]
-  },
-  {
-    "id": "F-38",
-    "name": "Bus Stops Layer",
-    "status": "DONE",
-    "order": 46,
-    "depends_on": [
-      "F-37"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "shared/types.ts",
-      "package.json",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "fetcher/fetch-bus-stops.ts",
-      "data/bus-stops.json",
-      "app/map.ts",
-      "app/main.ts",
-      "app/index.html",
-      "app/style.css",
-      "shared/types.ts",
-      "package.json",
-      "tests/unit/map.test.ts",
-      "specs/F-38.md"
-    ],
-    "post_build_command": "npm run fetch-bus-stops"
-  },
-  {
-    "id": "F-39",
-    "name": "Umami Analytics",
-    "status": "DONE",
-    "order": 47,
-    "depends_on": [
-      "F-38"
-    ],
-    "context_files": [
-      "app/main.ts",
-      "app/map.ts",
-      "app/feedback.ts",
-      "app/index.html",
-      "vercel.json"
-    ],
-    "output_files": [
-      "app/analytics.ts",
-      "app/main.ts",
-      "app/map.ts",
-      "app/feedback.ts",
-      "app/index.html",
-      "vercel.json",
-      "tests/unit/analytics.test.ts",
-      "specs/F-39.md"
-    ]
-  },
-  {
-    "id": "F-40",
-    "name": "Coffee Donation Button",
-    "status": "DONE",
-    "order": 48,
-    "depends_on": [
-      "F-39"
+      "CF-11"
     ],
     "context_files": [
       "app/index.html",
-      "app/style.css",
       "app/main.ts"
     ],
     "output_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/main.ts",
-      "tests/unit/coffee.test.ts",
-      "specs/F-40.md"
+      "app/manifest.json",
+      "app/sw.ts"
     ]
   },
   {
-    "id": "F-41",
-    "name": "Fix: Tow-Zone Curb Offset via Address Parity",
-    "status": "DONE",
-    "order": 49,
+    "id": "CF-14",
+    "name": "Analytics and Feedback",
+    "status": "TODO",
+    "order": 17,
     "depends_on": [
-      "F-35"
+      "CF-11"
     ],
     "context_files": [
-      "app/map.ts",
       "app/main.ts",
-      "package.json",
-      "tests/unit/map.test.ts",
-      "fetcher/build-road-geometry.ts"
+      "app/index.html"
     ],
     "output_files": [
-      "fetcher/build-street-parity.ts",
-      "data/street-parity.json",
-      "app/map.ts",
-      "app/main.ts",
-      "package.json",
-      "tests/unit/map.test.ts",
-      "specs/F-41.md"
-    ],
-    "post_build_command": "npm run build-street-parity"
+      "app/analytics.ts",
+      "app/feedback.ts",
+      "api/feedback.ts",
+      "tests/unit/analytics.test.ts",
+      "tests/unit/feedback.test.ts"
+    ]
   },
   {
-    "id": "F-42",
-    "name": "Fix: Offset Tow Sign Pin Markers to Curb",
-    "status": "DONE",
-    "order": 50,
+    "id": "CF-15",
+    "name": "Static Data Files",
+    "status": "TODO",
+    "order": 18,
     "depends_on": [
-      "F-41"
+      "CF-07"
     ],
     "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/map.test.ts"
+      "shared/types.ts"
     ],
     "output_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/map.test.ts",
-      "specs/F-42.md"
-    ],
-    "run_tests": true
-  },
-  {
-    "id": "F-43",
-    "name": "Fix: Move Tow Sign Pin Markers Further from Road onto Property Side",
-    "status": "DONE",
-    "order": 51,
-    "depends_on": [
-      "F-42"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts",
-      "specs/F-43.md"
-    ],
-    "run_tests": true
-  },
-  {
-    "id": "F-44",
-    "name": "Fix: Correct Sign Positions Using Address-Number Interpolation",
-    "status": "DONE",
-    "order": 52,
-    "depends_on": [
-      "F-43"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "app/main.ts",
-      "tests/unit/map.test.ts",
-      "specs/F-44.md"
-    ],
-    "run_tests": true
-  },
-  {
-    "id": "F-45",
-    "name": "Fix: Street Cleaning Block-Level Highlight Clipping",
-    "status": "DONE",
-    "order": 53,
-    "depends_on": [
-      "F-44"
-    ],
-    "context_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts"
-    ],
-    "output_files": [
-      "app/map.ts",
-      "tests/unit/map.test.ts",
-      "specs/F-45.md"
-    ],
-    "run_tests": true
+      "data/garages.json",
+      "data/snow-emergency-routes.json"
+    ]
   },
   {
     "id": "F-46",
     "name": "Query Input Bar",
     "status": "TODO",
-    "order": 54,
+    "order": 19,
     "depends_on": [
-      "F-45"
+      "CF-11"
     ],
     "context_files": [
       "app/index.html",
@@ -1114,11 +343,13 @@
     "id": "F-47",
     "name": "Natural Language Time Parser",
     "status": "TODO",
-    "order": 55,
+    "order": 20,
     "depends_on": [
-      "F-45"
+      "CF-02"
     ],
-    "context_files": [],
+    "context_files": [
+      "shared/types.ts"
+    ],
     "output_files": [
       "shared/query-parser.ts",
       "tests/unit/query-parser.test.ts"
@@ -1129,12 +360,15 @@
     "id": "F-48",
     "name": "Window-Based Schedule Evaluator",
     "status": "TODO",
-    "order": 56,
+    "order": 21,
     "depends_on": [
-      "F-47"
+      "F-47",
+      "CF-04"
     ],
     "context_files": [
       "shared/parking-logic.ts",
+      "shared/query-parser.ts",
+      "tests/unit/parking-logic.test.ts",
       "tests/fixtures/signs.ts"
     ],
     "output_files": [
@@ -1147,8 +381,10 @@
     "id": "F-49",
     "name": "Choropleth Map Sweep Renderer",
     "status": "TODO",
-    "order": 57,
+    "order": 22,
     "depends_on": [
+      "CF-10",
+      "CF-11",
       "F-46",
       "F-47",
       "F-48"
