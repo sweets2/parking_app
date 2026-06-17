@@ -2613,7 +2613,7 @@ describe("F-51 renderCheckResults", () => {
     expect(L.polyline.mock.calls.length).toBe(0);
   });
 
-  it("Given a ticket segment with matching road geometry, When renderCheckResults is called, Then a dashed red polyline is drawn with color '#ef4444' and dashArray '8,6'", async () => {
+  it("Given a ticket segment with matching road geometry, When renderCheckResults is called, Then a red polyline is drawn with color '#ef4444'", async () => {
     const { initMap, initRoadGeometry, renderCheckResults } = await import("../../app/map");
     initMap();
     initRoadGeometry(CHECK_TEST_ROAD_GEOMETRY);
@@ -2627,49 +2627,21 @@ describe("F-51 renderCheckResults", () => {
     expect(L.polyline.mock.calls.length).toBeGreaterThan(0);
     const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
     expect(callArgs[1]["color"]).toBe("#ef4444");
-    expect(callArgs[1]["dashArray"]).toBe("8,6");
   });
 
-  it("Given a tow segment with a matching sign, When renderCheckResults is called with signs, Then 2 polylines are drawn (white casing + red inner)", async () => {
-    const { initMap, initRoadGeometry, renderCheckResults } = await import("../../app/map");
-    initMap();
-    // The tow path looks up _roadGeometry[streetName] where streetName is extracted
-    // from sign.address (e.g. "123-129 Test St" → "Test St"). Must match exactly.
-    initRoadGeometry({
-      "Test St": [[[40.744, -74.040], [40.744, -74.035], [40.744, -74.030]]],
-    });
-    const sign = makeSign({ id: "sign-1", address: "123-129 Test St", lat: 40.744, lng: -74.035 });
-    const segment = makeCheckSegment("seg-tow", "tow", {
-      street: "Test St",
-      location: "1st St to 2nd St",
-      conflicts: [{ status: "tow" as const, reason: "Tow zone", label: "Tow zone", sourceType: "tow-sign" as const, sourceId: "sign-1" }],
-    });
-    renderCheckResults([segment], [sign]);
-    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
-    // white casing + red inner
-    expect(L.polyline.mock.calls.length).toBe(2);
-    const colors = (L.polyline.mock.calls as [[number, number][], Record<string, unknown>][])
-      .map(([, opts]) => opts["color"]);
-    expect(colors).toContain("#fff");
-    expect(colors).toContain("#dc2626");
-  });
-
-  it("Given a tow segment without a matching sign, When renderCheckResults is called, Then block-scoped solid red polyline is drawn with color '#dc2626'", async () => {
+  it("Given a tow segment with matching road geometry, When renderCheckResults is called, Then a block-scoped solid red polyline is drawn with color '#dc2626'", async () => {
     const { initMap, initRoadGeometry, renderCheckResults } = await import("../../app/map");
     initMap();
     initRoadGeometry(CHECK_TEST_ROAD_GEOMETRY);
     const segment = makeCheckSegment("seg-tow", "tow", {
       street: "Test St",
       location: "1st St to 2nd St",
-      conflicts: [],
     });
     renderCheckResults([segment]);
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
     expect(L.polyline.mock.calls.length).toBeGreaterThan(0);
     const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
     expect(callArgs[1]["color"]).toBe("#dc2626");
-    // No dashArray for solid red fallback
-    expect(callArgs[1]["dashArray"]).toBeUndefined();
   });
 
   it("Given an unknown segment with matching road geometry, When renderCheckResults is called, Then a gray polyline is drawn with color '#94a3b8'", async () => {

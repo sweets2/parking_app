@@ -90,7 +90,7 @@ interface LeafletStatic {
   popup(): LeafletPopup;
   polyline(
     latlngs: [number, number][],
-    options: { color?: string; weight?: number; opacity?: number; className?: string; dashArray?: string }
+    options: { color?: string; weight?: number; opacity?: number; className?: string }
   ): LeafletPolyline;
   createPane?(name: string): HTMLElement;
   getPane?(name: string): HTMLElement | undefined;
@@ -1189,19 +1189,16 @@ function resolveCheckCurbWays(street: string, location: string): [number, number
   return clipped.length > 0 ? clipped : null;
 }
 
-function drawCheckPolylines(
+function buildWayPolylines(
   ways: [number, number][][],
-  side: string | null,
   color: string,
   opacity: number,
-  segId: string,
-  dashArray?: string,
-): void {
-  if (ways.length === 0 || _map === null) return;
+  side: string | null,
+): LeafletPolyline[] {
   const L = getL();
   const merged = mergeWays(ways);
 
-  const zoom = _map.getZoom();
+  const zoom = _map !== null ? _map.getZoom() : DEFAULT_ZOOM;
   const mPerPx = 40075000 * HOBOKEN_COS_LAT / (Math.pow(2, zoom) * 256);
   const tileBoost = zoom >= 18 ? 1.0 : zoom >= 17 ? 2.0 : 3.0;
   const effectiveLaneM = CLEANING_LANE_WIDTH_M * tileBoost;
@@ -1213,6 +1210,7 @@ function drawCheckPolylines(
     ? Math.max(effectiveLaneM / 2, MIN_SPLIT_OFFSET_PX * mPerPx)
     : 0;
 
+  const result: LeafletPolyline[] = [];
   for (const way of merged) {
     if (way.length === 0) continue;
     let pts: [number, number][] = way;
@@ -1229,14 +1227,9 @@ function drawCheckPolylines(
         pts = offsetPolylinePoints(way, refLat, refLng, offsetM);
       }
     }
-    const options: { color: string; weight: number; opacity: number; dashArray?: string } = { color, weight, opacity };
-    if (dashArray !== undefined) options.dashArray = dashArray;
-    const layer = L.polyline(pts, options);
-    layer.addTo(_map);
-    const existing = _checkLayers.get(segId) ?? [];
-    existing.push(layer);
-    _checkLayers.set(segId, existing);
+    result.push(L.polyline(pts, { color, weight, opacity }));
   }
+  return result;
 }
 
 function clipWaysToBounds(
@@ -1344,6 +1337,11 @@ function mergeWays(ways: [number, number][][]): [number, number][][] {
   return result;
 }
 
+// Scale polyline weight and offset to fill the relevant lane at the current zoom.
+// tileBoost compensates for OSM tiles rendering roads at roughly constant pixel
+// width regardless of zoom: zoom 18 = geographic (1.0×), zoom 17 = 2.0×,
+// zoom ≤16 = 3.0×. Split curb is always used when side is specified — falling
+// back to centerline stacks both East+West layers and doubles opacity.
 function drawWaysHighlight(
   ways: [number, number][][],
   color: string,
@@ -1351,46 +1349,8 @@ function drawWaysHighlight(
   side: string | null,
 ): void {
   if (ways.length === 0) return;
-  const L = getL();
-  const merged = mergeWays(ways);
-
-  // Scale polyline weight and offset to fill the relevant lane at the current zoom.
-  // tileBoost compensates for OSM tiles rendering roads at roughly constant pixel
-  // width regardless of zoom: zoom 18 = geographic (1.0×), zoom 17 = 2.0×,
-  // zoom ≤16 = 3.0×. Split curb is always used when side is specified — falling
-  // back to centerline stacks both East+West layers and doubles opacity.
-  const zoom = _map !== null ? _map.getZoom() : DEFAULT_ZOOM;
-  const mPerPx = 40075000 * HOBOKEN_COS_LAT / (Math.pow(2, zoom) * 256);
-  const tileBoost = zoom >= 18 ? 1.0 : zoom >= 17 ? 2.0 : 3.0;
-  const effectiveLaneM = CLEANING_LANE_WIDTH_M * tileBoost;
-  const laneWidthPx = Math.max(1, Math.round(effectiveLaneM / mPerPx));
-  const useLaneSplit = side !== null;
-  const weight = side === null ? Math.max(3, laneWidthPx * 2) : Math.max(2, laneWidthPx);
-  const drawOpacity = opacity;
-  const MIN_SPLIT_OFFSET_PX = 2;
-  const offsetM = useLaneSplit
-    ? Math.max(effectiveLaneM / 2, MIN_SPLIT_OFFSET_PX * mPerPx)
-    : 0;
-
-  for (const way of merged) {
-    if (way.length === 0) continue;
-    let pts: [number, number][] = way;
-
-    if (side !== null && offsetM > 0) {
-      const mid = way[Math.floor(way.length / 2)];
-      if (mid !== undefined) {
-        const DELTA = 0.0001;
-        let refLat = mid[0];
-        let refLng = mid[1];
-        if (side === "East")       refLng += DELTA;
-        else if (side === "West")  refLng -= DELTA;
-        else if (side === "North") refLat += DELTA;
-        else if (side === "South") refLat -= DELTA;
-        pts = offsetPolylinePoints(way, refLat, refLng, offsetM);
-      }
-    }
-
-    const layer = L.polyline(pts, { color, weight, opacity: drawOpacity });
+  const polylines = buildWayPolylines(ways, color, opacity, side);
+  for (const layer of polylines) {
     _violationLayers.push(layer);
     if (_violationHighlightsVisible && _map !== null) {
       layer.addTo(_map);
@@ -2019,66 +1979,41 @@ export function clearCheckResults(): void {
 }
 
 /** Render Check result segments on the map as classified polylines. */
-export function renderCheckResults(results: CheckResultSegment[], signs: Sign[] = []): void {
+export function renderCheckResults(results: CheckResultSegment[]): void {
   clearCheckResults();
   if (_map === null) return;
 
-  const signMap = new Map(signs.map(s => [s.id, s]));
-
   for (const result of results) {
-    const side = (result.side !== "Both" && result.side !== "Unknown") ? result.side : null;
-
+    let color: string;
+    let opacity: number;
     if (result.status === "safe") {
-      const ways = resolveCheckCurbWays(result.street, result.location);
-      if (ways !== null) drawCheckPolylines(ways, side, "#22c55e", 0.40, result.id);
+      color = "#22c55e"; opacity = 0.40;
     } else if (result.status === "ticket") {
-      const ways = resolveCheckCurbWays(result.street, result.location);
-      if (ways !== null) drawCheckPolylines(ways, side, "#ef4444", 0.60, result.id, "8,6");
+      color = "#ef4444"; opacity = 0.60;
     } else if (result.status === "tow") {
-      const towConflict = result.conflicts.find(c => c.sourceType === "tow-sign");
-      const sign = towConflict?.sourceId !== undefined ? signMap.get(towConflict.sourceId) : undefined;
-      if (sign !== undefined) {
-        // Tow subsegment: same logic as renderTowSegments for one sign
-        const addrMatch = sign.address.match(/^(\d+)-(\d+)\s+/);
-        const addrRange = addrMatch
-          ? Math.max(0, parseInt(addrMatch[2], 10) - parseInt(addrMatch[1], 10))
-          : 0;
-        const halfLengthM = Math.max(5, (addrRange / 2 + 1) * 4);
-        const streetName = sign.address.replace(/^\d[\d-]*\s+/, "").trim();
-        const ways = _roadGeometry[streetName];
-        if (ways !== undefined && ways.length > 0 && ways.some(w => w.length > 0)) {
-          let waypoints = getSubsegment(ways, sign.lat, sign.lng, halfLengthM);
-          if (waypoints.length >= 2) {
-            const numMatch = sign.address.match(/^(\d+)/);
-            let forcedDir: 1 | -1 | undefined;
-            if (numMatch !== null) {
-              const oddDir = _streetParity[normalizeToGeometryKey(streetName)];
-              if (oddDir !== undefined) {
-                const isOdd = parseInt(numMatch[1], 10) % 2 === 1;
-                forcedDir = isOdd ? oddDir : (oddDir === 1 ? -1 : 1);
-              }
-            }
-            waypoints = offsetPolylinePoints(waypoints, sign.lat, sign.lng, LATERAL_OFFSET_M, forcedDir);
-            const L = getL();
-            const outer = L.polyline(waypoints, { color: "#fff", weight: 7, opacity: 0.65 });
-            const inner = L.polyline(waypoints, { color: "#dc2626", weight: 3, opacity: 0.85 });
-            outer.addTo(_map);
-            inner.addTo(_map);
-            const existing = _checkLayers.get(result.id) ?? [];
-            existing.push(outer, inner);
-            _checkLayers.set(result.id, existing);
-          }
-        }
-      } else {
-        // Fallback: block-scoped solid red when sign not available
-        const ways = resolveCheckCurbWays(result.street, result.location);
-        if (ways !== null) drawCheckPolylines(ways, side, "#dc2626", 0.75, result.id);
-      }
+      color = "#dc2626"; opacity = 0.75;
     } else if (result.status === "unknown") {
-      const ways = resolveCheckCurbWays(result.street, result.location);
-      if (ways !== null) drawCheckPolylines(ways, side, "#94a3b8", 0.40, result.id);
+      color = "#94a3b8"; opacity = 0.40;
+    } else {
+      continue; // snow, limited — no stripe in Check mode
     }
-    // snow: not produced by evaluateParkingWindow currently — skip
+
+    const ways = resolveCheckCurbWays(result.street, result.location);
+    if (ways === null) continue;
+
+    const side = (result.side === "North" || result.side === "South" ||
+                  result.side === "East"  || result.side === "West")
+      ? result.side : null;
+
+    const polylines = buildWayPolylines(ways, color, opacity, side);
+    const existing = _checkLayers.get(result.id) ?? [];
+    for (const layer of polylines) {
+      layer.addTo(_map);
+      existing.push(layer);
+    }
+    if (existing.length > 0) {
+      _checkLayers.set(result.id, existing);
+    }
   }
 }
 

@@ -77,7 +77,7 @@ export function wireCheckControls(app: App): void {
     );
 
     clearCheckResults();
-    renderCheckResults(checkResults, state.allSigns);
+    renderCheckResults(checkResults);
   });
 
   const queryInput = document.getElementById("query-input") as HTMLInputElement | null;
@@ -90,7 +90,7 @@ export function wireCheckControls(app: App): void {
     track("check-query-run", { label: parsed.label });
     checkResults = state.parkingSegments.map((seg) => evaluateParkingWindow(seg, parsed));
     clearCheckResults();
-    renderCheckResults(checkResults, state.allSigns);
+    renderCheckResults(checkResults);
   }
 
   querySubmitBtn?.addEventListener("click", () => {
