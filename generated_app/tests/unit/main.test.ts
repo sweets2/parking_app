@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { StreetCleaningEntry, ParkingSegment, RulesInspectionSection } from "../../shared/types";
+import type { StreetCleaningEntry, ParkingSegment, RulesInspectionSection, Sign } from "../../shared/types";
 import type { App, AppState } from "../../app/app";
 // Use an inline stable date rather than importing from fixtures/signs.ts,
 // which reads data/latest.json via readFileSync at module-load time (ENOENT in CI).
@@ -157,6 +157,17 @@ const mockAppSetActiveMode = vi.fn<[string], void>((mode) => {
 });
 const mockAppSetRulesLocation = vi.fn<[number, number], void>();
 const mockAppSetRulesInspectionSections = vi.fn<[RulesInspectionSection[]], void>();
+const mockAppSetRulesTimeNow = vi.fn<[Date], void>((selectedTime) => {
+  if (mockAppState.mode === "ready") {
+    mockAppState = { ...mockAppState, rulesTime: { mode: "now", selectedTime } };
+  }
+});
+const mockAppSetRulesTimeCustom = vi.fn<[Date], void>((selectedTime) => {
+  if (mockAppState.mode === "ready") {
+    mockAppState = { ...mockAppState, rulesTime: { mode: "custom", selectedTime } };
+  }
+});
+const mockAppReplaceParkingData = vi.fn();
 const mockAppTick = vi.fn<[Date], void>();
 let capturedRenderState: ((state: AppState) => void) | null = null;
 const mockCreateApp = vi.fn(
@@ -167,6 +178,9 @@ const mockCreateApp = vi.fn(
       setActiveMode: mockAppSetActiveMode,
       setRulesLocation: mockAppSetRulesLocation,
       setRulesInspectionSections: mockAppSetRulesInspectionSections,
+      setRulesTimeNow: mockAppSetRulesTimeNow,
+      setRulesTimeCustom: mockAppSetRulesTimeCustom,
+      replaceParkingData: mockAppReplaceParkingData,
       tick: mockAppTick,
     } as App;
   }
@@ -655,6 +669,7 @@ describe("F-10.1 initBrowserApp cold open", () => {
     vi.resetModules();
 
     mockBuildParkingSegmentCatalog.mockImplementation(() => []);
+    mockCorrectSignPositions.mockImplementation((signs: unknown[]) => signs);
     mockAppState = makeReadyState();
     mockAppGetState.mockImplementation(() => mockAppState);
     capturedRenderState = null;
@@ -665,6 +680,9 @@ describe("F-10.1 initBrowserApp cold open", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -770,6 +788,9 @@ describe("F-10.2 map tap sets position marker", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -866,6 +887,7 @@ describe("F-10.3 signEmoji", () => {
 
     // Re-install mocks
     mockBuildParkingSegmentCatalog.mockImplementation(() => []);
+    mockCorrectSignPositions.mockImplementation((signs: unknown[]) => signs);
     mockAppState = makeReadyState();
     mockAppGetState.mockImplementation(() => mockAppState);
     mockCreateApp.mockImplementation((deps: { renderState: (state: AppState) => void }) => {
@@ -876,6 +898,9 @@ describe("F-10.3 signEmoji", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1076,6 +1101,9 @@ describe("F-46D map click routing via initBrowserApp", () => {
     mockInspectRulesAtLocation.mockReturnValue([
       { title: "No matching segment", content: "No parking segment found near this location.", priority: "unknown" },
     ]);
+    mockInspectRulesAtLocation.mockReturnValue([
+      { title: "No matching segment", content: "No parking segment found near this location.", priority: "unknown" },
+    ]);
 
     mockAppState = makeReadyState();
     mockAppGetState.mockImplementation(() => mockAppState);
@@ -1087,6 +1115,9 @@ describe("F-46D map click routing via initBrowserApp", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1221,6 +1252,9 @@ describe("F-10.4 initBrowserApp map-click (check mode stub)", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1343,6 +1377,9 @@ describe("F-14 automatic re-fetch on open", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1482,6 +1519,7 @@ describe("auto-refresh staleness check", () => {
     vi.resetModules();
 
     mockBuildParkingSegmentCatalog.mockImplementation(() => []);
+    mockCorrectSignPositions.mockImplementation((signs: unknown[]) => signs);
     mockAppState = makeReadyState();
     mockAppGetState.mockImplementation(() => mockAppState);
     capturedRenderState = null;
@@ -1492,6 +1530,9 @@ describe("auto-refresh staleness check", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1548,6 +1589,73 @@ describe("auto-refresh staleness check", () => {
     });
     expect(staleRefreshCall).toBeDefined();
   });
+
+  it("GIVEN refreshed sign data arrives, WHEN silent refresh completes, THEN app.replaceParkingData receives fresh signs and rebuilt segments", async () => {
+    const yesterdayPayload = { fetched_at: "2026-06-08T11:00:00Z", signs: [] };
+    const freshSign: Sign = {
+      id: "fresh-sign",
+      address: "100 TEST ST",
+      reason: "CONSTRUCTION",
+      permit_number: "P-1",
+      lat: 40.744,
+      lng: -74.032,
+      start_date: "6/9/2026",
+      start_time: "10:00:00",
+      stop_date: "6/9/2026",
+      end_time: "18:00:00",
+      start_iso: "2026-06-09T10:00:00",
+      end_iso: "2026-06-09T18:00:00",
+      active_at_fetch: true,
+    };
+    const todayPayload = { fetched_at: "2026-06-09T11:00:00Z", signs: [freshSign] };
+    const rebuiltSegment: ParkingSegment = {
+      id: "rebuilt-segment",
+      street: "TEST ST",
+      location: "100 TEST ST",
+      side: "Unknown",
+      cleaningEntries: [],
+      towSigns: [freshSign],
+      snowRoutes: [],
+    };
+
+    const capturedCallbacks: Array<() => void> = [];
+    const origSetInterval = globalThis.setInterval.bind(globalThis) as typeof setInterval;
+    (globalThis as Record<string, unknown>)["setInterval"] = (fn: () => void, delay: number) => {
+      if (delay === 60_000) { capturedCallbacks.push(fn); return 0; }
+      return origSetInterval(fn as TimerHandler, delay);
+    };
+
+    mockBuildParkingSegmentCatalog.mockReturnValue(rebuiltSegment === undefined ? [] : [rebuiltSegment]);
+    mockFetchImpl = () =>
+      Promise.resolve({ ok: true, json: async () => yesterdayPayload } as Response);
+
+    const { initBrowserApp } = await import("../../app/main");
+    installDocumentMockAR();
+    await initBrowserApp();
+    await new Promise<void>((resolve) => origSetInterval(resolve as TimerHandler, 0));
+
+    (globalThis as Record<string, unknown>)["setInterval"] = origSetInterval;
+    mockAppReplaceParkingData.mockClear();
+
+    const fetchSpy = global.fetch as ReturnType<typeof vi.fn>;
+    fetchSpy.mockImplementation((url: string) => {
+      if (url === "data/latest.json") {
+        return Promise.resolve({ ok: true, json: async () => todayPayload } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ fetched_at: "2026-06-09T11:00:00Z", signs: [] }) } as Response);
+    });
+
+    const tick = capturedCallbacks[0];
+    if (tick) tick();
+    await new Promise<void>((resolve) => origSetInterval(resolve as TimerHandler, 10));
+
+    expect(mockAppReplaceParkingData).toHaveBeenCalledOnce();
+    const call = mockAppReplaceParkingData.mock.calls[0];
+    const dataArg = call?.[0] as { signs: unknown[]; fetchTime: Date; parkingSegments: ParkingSegment[] };
+    expect(dataArg.signs).toEqual([freshSign]);
+    expect(dataArg.fetchTime.toISOString()).toBe("2026-06-09T11:00:00.000Z");
+    expect(dataArg.parkingSegments).toEqual([rebuiltSegment]);
+  });
 });
 
 // ─── F-46B dev override removal ───────────────────────────────────────────────
@@ -1602,6 +1710,9 @@ describe("F-46B dev override removal", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1660,6 +1771,9 @@ describe("F-46B dev override removal", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1826,6 +1940,19 @@ describe("F-47 check-controls visibility based on activeMode", () => {
     mockBuildParkingSegmentCatalog.mockImplementation(() => []);
     mockCorrectSignPositions.mockImplementation((signs: unknown[]) => signs);
     mockGetRoadGeometry.mockImplementation(() => ({}));
+    mockInspectRulesAtLocation.mockReturnValue([
+      { title: "No matching segment", content: "No parking segment found near this location.", priority: "unknown" },
+    ]);
+    mockAppSetRulesTimeNow.mockImplementation((selectedTime) => {
+      if (mockAppState.mode === "ready") {
+        mockAppState = { ...mockAppState, rulesTime: { mode: "now", selectedTime } };
+      }
+    });
+    mockAppSetRulesTimeCustom.mockImplementation((selectedTime) => {
+      if (mockAppState.mode === "ready") {
+        mockAppState = { ...mockAppState, rulesTime: { mode: "custom", selectedTime } };
+      }
+    });
 
     capturedRenderState = null;
     mockCreateApp.mockImplementation((deps: { renderState: (state: AppState) => void }) => {
@@ -1835,6 +1962,9 @@ describe("F-47 check-controls visibility based on activeMode", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -1945,6 +2075,9 @@ describe("F-50 parking data loader", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -2236,6 +2369,9 @@ describe("F-51 mode switch clears check results", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -2398,6 +2534,19 @@ describe("F-53 rules mode time selector", () => {
     mockBuildParkingSegmentCatalog.mockImplementation(() => []);
     mockCorrectSignPositions.mockImplementation((signs: unknown[]) => signs);
     mockGetRoadGeometry.mockImplementation(() => ({}));
+    mockInspectRulesAtLocation.mockReturnValue([
+      { title: "No matching segment", content: "No parking segment found near this location.", priority: "unknown" },
+    ]);
+    mockAppSetRulesTimeNow.mockImplementation((selectedTime) => {
+      if (mockAppState.mode === "ready") {
+        mockAppState = { ...mockAppState, rulesTime: { mode: "now", selectedTime } };
+      }
+    });
+    mockAppSetRulesTimeCustom.mockImplementation((selectedTime) => {
+      if (mockAppState.mode === "ready") {
+        mockAppState = { ...mockAppState, rulesTime: { mode: "custom", selectedTime } };
+      }
+    });
 
     capturedRenderState = null;
     mockCreateApp.mockImplementation((deps: { renderState: (state: AppState) => void }) => {
@@ -2407,6 +2556,9 @@ describe("F-53 rules mode time selector", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });
@@ -2481,8 +2633,8 @@ describe("F-53 rules mode time selector", () => {
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Click the "Now" button — should not throw
     expect(() => rulesTimeNowBtn.click()).not.toThrow();
+    expect(mockAppSetRulesTimeNow).toHaveBeenCalledOnce();
   });
 
   it("F-53: GIVEN #rules-time-custom is clicked and a valid time is entered (09:30), WHEN the change event fires on #rules-time-input, THEN no error is thrown", async () => {
@@ -2500,6 +2652,38 @@ describe("F-53 rules mode time selector", () => {
       rulesTimeCustomBtn.click();
       rulesTimeInput.change("09:30");
     }).not.toThrow();
+    expect(mockAppSetRulesTimeCustom).toHaveBeenCalledOnce();
+    const selectedTime = mockAppSetRulesTimeCustom.mock.calls[0]?.[0];
+    expect(selectedTime?.getHours()).toBe(9);
+    expect(selectedTime?.getMinutes()).toBe(30);
+  });
+
+  it("F-53: GIVEN custom rules time is set, WHEN map is clicked in rules mode, THEN inspectRulesAtLocation receives that custom time", async () => {
+    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+    mockFetchImpl = () =>
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
+
+    installDocumentMockF53("rules");
+    const { initBrowserApp } = await import("../../app/main");
+    await initBrowserApp();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    rulesTimeCustomBtn.click();
+    rulesTimeInput.change("09:30");
+
+    const handler = getCapturedClickHandler();
+    expect(handler).not.toBeNull();
+    if (handler === null) return;
+
+    mockInspectRulesAtLocation.mockClear();
+    await handler(40.744, -74.032);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const callArgs = (mockInspectRulesAtLocation.mock.calls[0] as unknown[])[0] as {
+      selectedTime: Date;
+    };
+    expect(callArgs.selectedTime.getHours()).toBe(9);
+    expect(callArgs.selectedTime.getMinutes()).toBe(30);
   });
 
   it("F-53: GIVEN the mode switches to 'rules', WHEN renderState fires with rules mode, THEN #rules-controls is visible", async () => {
@@ -2597,6 +2781,9 @@ describe("F-55 rules inspection UI", () => {
         setActiveMode: mockAppSetActiveMode,
         setRulesLocation: mockAppSetRulesLocation,
         setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
         tick: mockAppTick,
       } as App;
     });

@@ -1,86 +1,11 @@
 import type { Sign, ParkingSegment, CheckQuery, CheckResultSegment, ParkingWindowConflict, NextRestriction } from "../shared/types";
-
-// ─── Street cleaning active-now / upcoming checks ────────────────────────────
-
-const SCHEDULE_DAY_INDEX: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-  thursday: 4, friday: 5, saturday: 6,
-};
-
-function parseScheduleHour(token: string): number {
-  const m = token.trim().match(/^(\d+)\s+(am|pm)$/i);
-  if (!m) return -1;
-  let h = parseInt(m[1], 10);
-  const p = m[2].toLowerCase();
-  if (p === "pm" && h !== 12) h += 12;
-  if (p === "am" && h === 12) h = 0;
-  return h;
-}
-
-function getEasternParts(now: Date): { dayIdx: number; minutesOfDay: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "long",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const weekday = (parts.find((p) => p.type === "weekday")?.value ?? "").toLowerCase();
-  const rawHour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
-  const minute  = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
-  return {
-    dayIdx: SCHEDULE_DAY_INDEX[weekday] ?? -1,
-    minutesOfDay: (rawHour % 24) * 60 + minute, // % 24 normalises "24" for midnight
-  };
-}
-
-type ScheduleRange = { startDayIdx: number; endDayIdx: number; startMinutes: number; endMinutes: number };
-
-function parseScheduleRange(schedule: string): ScheduleRange | null {
-  const sepIdx = schedule.indexOf("   ");
-  if (sepIdx === -1) return null;
-  const dayPart  = schedule.slice(0, sepIdx).trim();
-  const timePart = schedule.slice(sepIdx).trim();
-
-  const throughMatch = dayPart.match(/^(.+?)\s+through\s+(.+)$/i);
-  let startDayIdx: number, endDayIdx: number;
-  if (throughMatch) {
-    startDayIdx = SCHEDULE_DAY_INDEX[throughMatch[1].toLowerCase().trim()] ?? -1;
-    endDayIdx   = SCHEDULE_DAY_INDEX[throughMatch[2].toLowerCase().trim()] ?? -1;
-  } else {
-    startDayIdx = SCHEDULE_DAY_INDEX[dayPart.toLowerCase()] ?? -1;
-    endDayIdx   = startDayIdx;
-  }
-  if (startDayIdx === -1 || endDayIdx === -1) return null;
-
-  const timeMatch = timePart.match(/^(.+?)\s*[–-]\s*(.+)$/);
-  if (!timeMatch) return null;
-  const startHour = parseScheduleHour(timeMatch[1]);
-  const endHour   = parseScheduleHour(timeMatch[2]);
-  if (startHour === -1 || endHour === -1) return null;
-
-  return { startDayIdx, endDayIdx, startMinutes: startHour * 60, endMinutes: endHour * 60 };
-}
-
-/** Returns true if `schedule` is currently active in Eastern Time. */
-export function isScheduleActiveNow(schedule: string, now: Date): boolean {
-  const { dayIdx, minutesOfDay } = getEasternParts(now);
-  if (dayIdx === -1) return false;
-  const r = parseScheduleRange(schedule);
-  if (!r) return false;
-  if (dayIdx < r.startDayIdx || dayIdx > r.endDayIdx) return false;
-  return minutesOfDay >= r.startMinutes && minutesOfDay < r.endMinutes;
-}
-
-/** Returns true if `schedule` starts within the next 60 minutes in Eastern Time. */
-export function isScheduleUpcomingSoon(schedule: string, now: Date): boolean {
-  const { dayIdx, minutesOfDay } = getEasternParts(now);
-  if (dayIdx === -1) return false;
-  const r = parseScheduleRange(schedule);
-  if (!r) return false;
-  if (dayIdx < r.startDayIdx || dayIdx > r.endDayIdx) return false;
-  return minutesOfDay >= r.startMinutes - 60 && minutesOfDay < r.startMinutes;
-}
+export {
+  getEasternParts,
+  isScheduleActiveNow,
+  isScheduleUpcomingSoon,
+  parseScheduleRange,
+} from "./schedule";
+import { getEasternParts, parseScheduleRange } from "./schedule";
 
 // ─── F-03.1 HOBOKEN_BOUNDS ───────────────────────────────────────────────────
 

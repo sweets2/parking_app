@@ -12,6 +12,7 @@ import type {
   NextRestriction,
 } from "../shared/types";
 import { haversineMeters, isSignActive, getNextRestriction } from "../shared/parking-logic";
+import { isScheduleActiveNow } from "./schedule";
 
 // ─── Priority ordering ────────────────────────────────────────────────────────
 
@@ -89,82 +90,12 @@ function getActivePriority(
   // using the segment's cleaningEntries and the selectedTime.
   // Since parking-logic is in scope (same shared/ directory), we import directly.
   for (const entry of segment.cleaningEntries) {
-    if (isCleaningActive(entry.schedule, selectedTime)) {
+    if (isScheduleActiveNow(entry.schedule, selectedTime)) {
       priority = higherPriority(priority, "ticket");
     }
   }
 
   return priority;
-}
-
-// ─── Inline schedule active check ────────────────────────────────────────────
-
-/**
- * Re-implements isScheduleActiveNow locally so we don't create a circular
- * dependency chain. Mirrors the logic in parking-logic.ts.
- */
-const SCHEDULE_DAY_INDEX: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-  thursday: 4, friday: 5, saturday: 6,
-};
-
-function parseScheduleHour(token: string): number {
-  const m = token.trim().match(/^(\d+)\s+(am|pm)$/i);
-  if (!m) return -1;
-  let h = parseInt(m[1], 10);
-  const p = m[2].toLowerCase();
-  if (p === "pm" && h !== 12) h += 12;
-  if (p === "am" && h === 12) h = 0;
-  return h;
-}
-
-function getEasternParts(now: Date): { dayIdx: number; minutesOfDay: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "long",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const weekday = (parts.find((p) => p.type === "weekday")?.value ?? "").toLowerCase();
-  const rawHour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
-  const minute  = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
-  return {
-    dayIdx: SCHEDULE_DAY_INDEX[weekday] ?? -1,
-    minutesOfDay: (rawHour % 24) * 60 + minute,
-  };
-}
-
-function isCleaningActive(schedule: string, now: Date): boolean {
-  const { dayIdx, minutesOfDay } = getEasternParts(now);
-  if (dayIdx === -1) return false;
-
-  const sepIdx = schedule.indexOf("   ");
-  if (sepIdx === -1) return false;
-  const dayPart  = schedule.slice(0, sepIdx).trim();
-  const timePart = schedule.slice(sepIdx).trim();
-
-  const throughMatch = dayPart.match(/^(.+?)\s+through\s+(.+)$/i);
-  let startDayIdx: number, endDayIdx: number;
-  if (throughMatch) {
-    startDayIdx = SCHEDULE_DAY_INDEX[throughMatch[1].toLowerCase().trim()] ?? -1;
-    endDayIdx   = SCHEDULE_DAY_INDEX[throughMatch[2].toLowerCase().trim()] ?? -1;
-  } else {
-    startDayIdx = SCHEDULE_DAY_INDEX[dayPart.toLowerCase()] ?? -1;
-    endDayIdx   = startDayIdx;
-  }
-  if (startDayIdx === -1 || endDayIdx === -1) return false;
-  if (dayIdx < startDayIdx || dayIdx > endDayIdx) return false;
-
-  const timeMatch = timePart.match(/^(.+?)\s*[–-]\s*(.+)$/);
-  if (!timeMatch) return false;
-  const startHour = parseScheduleHour(timeMatch[1]);
-  const endHour   = parseScheduleHour(timeMatch[2]);
-  if (startHour === -1 || endHour === -1) return false;
-
-  const startMinutes = startHour * 60;
-  const endMinutes   = endHour   * 60;
-  return minutesOfDay >= startMinutes && minutesOfDay < endMinutes;
 }
 
 // ─── Content summary ──────────────────────────────────────────────────────────
@@ -201,7 +132,7 @@ function buildContent(
     }
 
     for (const entry of segment.cleaningEntries) {
-      if (isCleaningActive(entry.schedule, selectedTime)) {
+      if (isScheduleActiveNow(entry.schedule, selectedTime)) {
         labels.push(`Street cleaning: ${entry.schedule}`);
       }
     }

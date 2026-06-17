@@ -126,8 +126,8 @@ let _lastNowForHighlights: Date | null = null;
 let _pinchSuppressUntil: number | null = null;
 let _activeTouches = 0;
 
-// F-51 Check result layers: id → polyline
-const _checkLayers = new Map<string, LeafletPolyline>();
+// F-51 Check result layers: id → all polylines for that segment
+const _checkLayers = new Map<string, LeafletPolyline[]>();
 
 // F-55 Rules inspection marker
 let _rulesMarker: LeafletLayer | null = null;
@@ -1942,8 +1942,10 @@ export function showStreetPopup(
 
 /** Remove all Check result layers from the map and empty _checkLayers. */
 export function clearCheckResults(): void {
-  for (const polyline of _checkLayers.values()) {
-    polyline.remove();
+  for (const polylines of _checkLayers.values()) {
+    for (const polyline of polylines) {
+      polyline.remove();
+    }
   }
   _checkLayers.clear();
 }
@@ -1977,16 +1979,20 @@ export function renderCheckResults(results: CheckResultSegment[]): void {
       });
 
       polyline.addTo(_map);
-      _checkLayers.set(result.id, polyline);
+      const existing = _checkLayers.get(result.id) ?? [];
+      existing.push(polyline);
+      _checkLayers.set(result.id, existing);
     }
   }
 }
 
 /** Apply the "check-selected" CSS class to the polyline for the given segment id. */
 export function selectCheckSegment(id: string): void {
-  const polyline = _checkLayers.get(id);
-  if (polyline === undefined) return;
-  polyline.setStyle({ className: "check-selected" });
+  const polylines = _checkLayers.get(id);
+  if (polylines === undefined) return;
+  for (const polyline of polylines) {
+    polyline.setStyle({ className: "check-selected" });
+  }
 }
 
 /** Remove all Rules inspection layers from the map. Stub — real rendering added later. */

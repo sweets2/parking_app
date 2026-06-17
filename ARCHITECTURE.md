@@ -34,32 +34,26 @@ allSigns  (~93 valid signs)
      ▼
 activeSigns
      │
-     ├─ BROWSING mode  →  map pins for all active signs
+     ├─ CHECK mode  →  map pins + evaluated parking segments for a time window
      │
-     └─ PARKED mode    →  filterNearby(spot, 150m)
-                               →  sign cards + countdown
+     └─ RULES mode  →  click location + selected time
+                          → nearby parking segments + exact rule sections
 ```
 
 ---
 
 ## User Flows
 
-**Flow 1 — Just parked**
-Tap map to set position → map shows colored sign pins → tap SAVE MY SPOT → pick street side → spot saved to localStorage
+**Flow 1 — Check a parking window**
+Choose a duration or query → app evaluates all parking segments → map highlights unsafe/limited/tow/snow segments → bottom sheet can show segment details.
 
-**Flow 2 — Returning**
-App detects saved spot → centers map on spot → checks for nearby active signs → green clear / red warning with countdown
+**Flow 2 — Inspect exact rules**
+Switch to Rules → choose now or a custom time → tap the map → app finds nearby parking segments → bottom sheet lists active and upcoming rules for that location.
 
-**Flow 3 — Monitor / Reminder** *(planned, not yet implemented)*
-Proactively warns the user when their parked car is approaching a violation, without requiring them to remember to check.
+**Flow 3 — Browse map context**
+Toggle tow zones, upcoming tow zones, street-cleaning highlights, municipal garages, and snow emergency routes. These layers are visual context only; they do not save a parked spot or run background monitoring.
 
-Two layers:
-
-- **Layer 1 — Automatic (on every app open):** If a saved spot exists, the app re-fetches `latest.json` before rendering anything else. If a new violation appeared overnight near the saved spot, the very first thing the user sees is a warning — not a map. This handles the overnight scenario: park Thursday evening, new restriction posted Friday morning, user picks up their phone and sees the alert immediately.
-
-- **Layer 2 — Manual refresh (user-initiated):** A "Refresh signs" button visible whenever a spot is saved. Tapping it re-fetches `latest.json` bypassing the browser cache and re-evaluates the saved spot. The button displays the data freshness timestamp from the file (e.g., *"Signs last updated today at 6:02 AM"*) so the user understands what they are refreshing and why it might have changed since they parked.
-
-Both layers run the same pipeline: fetch → filter → evaluate spot → update banner. No new logic — only new triggers. Background push notifications and Periodic Background Sync are explicitly out of scope; iOS does not support them reliably in a static PWA without a server.
+Saved spots, reminders, push notifications, and background monitoring are intentionally out of scope for the current product direction. Some legacy helpers/tests still exist from earlier feature generations, but the runtime product model is Check | Rules.
 
 ---
 
@@ -76,15 +70,23 @@ parking_app/                  ← repo root (scaffolding only)
 └── generated_app/            ← everything the harness builds (rm -rf to reset)
     ├── shared/
     │   ├── types.ts          sign types shared between fetcher and app
-    │   ├── parking-logic.ts  all pure logic: filtering, distance, countdowns
-    │   └── storage.ts        localStorage interface (injectable for tests)
+    │   ├── parking-logic.ts  pure parking-window and sign logic
+    │   ├── schedule.ts       shared street-cleaning schedule parser
+    │   ├── segment-catalog.ts builds side/location parking segments
+    │   ├── rules-inspector.ts exact rules for clicked map locations
+    │   └── storage.ts        legacy saved-spot storage, retained for tests
     ├── fetcher/
     │   └── fetch.ts          hits Hoboken API, validates, writes latest.json
     ├── app/
     │   ├── index.html        single HTML shell
     │   ├── style.css         mobile-first styles
-    │   ├── app.ts            state machine, wires all modules together
-    │   ├── map.ts            Leaflet wrapper (only file that touches L.*)
+    │   ├── app.ts            Check | Rules state machine
+    │   ├── main.ts           browser bootstrap/orchestration
+    │   ├── data-loader.ts    JSON fetch/load helpers
+    │   ├── check-controller.ts Check controls and query execution
+    │   ├── rules-controller.ts Rules controls and inspection rendering
+    │   ├── layer-toggles.ts  map layer toggle wiring
+    │   ├── map.ts            Leaflet wrapper and layer renderers
     │   ├── ui.ts             DOM rendering helpers
     │   ├── geo.ts            street name lookup via Nominatim reverse geocoding
     │   ├── manifest.json     PWA install metadata
@@ -118,13 +120,23 @@ parking_app/                  ← repo root (scaffolding only)
 ```typescript
 type AppState =
   | { mode: "loading" }
-  | { mode: "browsing"; tappedLat: number | null; tappedLng: number | null }
-  | { mode: "parked";   spot: SavedSpot; nearbySigns: Sign[] }
+  | { mode: "error"; message: string }
+  | {
+      mode: "ready";
+      activeMode: "check" | "rules";
+      allSigns: Sign[];
+      activeSigns: Sign[];
+      parkingSegments: ParkingSegment[];
+      checkQuery: CheckQuery;
+      checkResults: CheckResultSegment[];
+      selectedCheckSegment: CheckResultSegment | null;
+      rulesTime: { mode: "now" | "custom"; selectedTime: Date };
+      selectedRulesLocation: { lat: number; lng: number; street?: string } | null;
+      rulesInspectionSections: RulesInspectionSection[];
+    }
 ```
 
-State lives in `app.ts`. Logic lives in `shared/`. The map and UI modules only render what they're given.
-
-**Planned addition for Flow 3** *(not yet implemented):* The parked state will also carry a `nextViolation` field — the result of a `nextViolationWindow()` function in `shared/parking-logic.ts` that computes the nearest upcoming conflict window for the saved spot. This is what drives the warning banner: not just "there are nearby signs" but "this sign becomes active in 2 hours, move before then."
+State lives in `app.ts`. Shared parking rules live in `shared/`. Browser orchestration is split across `main.ts`, `data-loader.ts`, `check-controller.ts`, `rules-controller.ts`, and `layer-toggles.ts`. The map module owns Leaflet access and layer rendering.
 
 ---
 

@@ -329,6 +329,81 @@ describe("F-46D tick", () => {
   });
 });
 
+describe("Phase 2 state updates", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Given setRulesTimeNow is called, Then rulesTime is set to now mode with the provided Date", () => {
+    const { app } = makeApp();
+    const selectedTime = new Date("2026-06-09T20:15:00.000Z");
+
+    app.setRulesTimeNow(selectedTime);
+
+    const state = app.getState();
+    expect(state.mode).toBe("ready");
+    if (state.mode === "ready") {
+      expect(state.rulesTime.mode).toBe("now");
+      expect(state.rulesTime.selectedTime.getTime()).toBe(selectedTime.getTime());
+    }
+  });
+
+  it("Given setRulesTimeCustom is called, Then rulesTime is set to custom mode with the provided Date", () => {
+    const { app } = makeApp();
+    const selectedTime = new Date("2026-06-09T13:30:00.000Z");
+
+    app.setRulesTimeCustom(selectedTime);
+
+    const state = app.getState();
+    expect(state.mode).toBe("ready");
+    if (state.mode === "ready") {
+      expect(state.rulesTime.mode).toBe("custom");
+      expect(state.rulesTime.selectedTime.getTime()).toBe(selectedTime.getTime());
+    }
+  });
+
+  it("Given replaceParkingData is called, Then allSigns activeSigns and parkingSegments are replaced from fresh data", () => {
+    const { app } = makeApp([VALID_SIGN_1]);
+    const freshActiveSign = makeSign("fresh-active", {
+      startIso: "2026-06-09T11:00:00",
+      endIso: "2026-06-09T19:00:00",
+    });
+    const freshExpiredSign = makeSign("fresh-expired", {
+      startIso: "2026-06-09T08:00:00",
+      endIso: "2026-06-09T09:00:00",
+      activeAtFetch: false,
+    });
+    const parkingSegment = {
+      id: "fresh-segment",
+      street: "Test St",
+      location: "100 Test St",
+      side: "Unknown" as const,
+      cleaningEntries: [],
+      towSigns: [freshActiveSign],
+      snowRoutes: [],
+    };
+
+    app.replaceParkingData(
+      {
+        signs: [freshActiveSign, freshExpiredSign],
+        fetchTime: FETCH_TIME,
+        parkingSegments: [parkingSegment],
+      },
+      NOW_STABLE
+    );
+
+    const state = app.getState();
+    expect(state.mode).toBe("ready");
+    if (state.mode === "ready") {
+      expect(state.allSigns.map((sign) => sign.id)).toEqual(["fresh-active"]);
+      expect(state.activeSigns.map((sign) => sign.id)).toEqual(["fresh-active"]);
+      expect(state.parkingSegments).toEqual([parkingSegment]);
+      expect(state.checkResults).toEqual([]);
+      expect(state.selectedCheckSegment).toBeNull();
+    }
+  });
+});
+
 describe("F-46D renderState callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();

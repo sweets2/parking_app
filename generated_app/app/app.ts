@@ -40,6 +40,12 @@ export type App = {
   setActiveMode(mode: AppMode): void;
   setRulesLocation(lat: number, lng: number): void;
   setRulesInspectionSections(sections: RulesInspectionSection[]): void;
+  setRulesTimeNow(now: Date): void;
+  setRulesTimeCustom(selectedTime: Date): void;
+  replaceParkingData(
+    data: { signs: Sign[]; fetchTime: Date; parkingSegments: ParkingSegment[] },
+    now: Date
+  ): void;
   tick(now: Date): void;
 };
 
@@ -131,6 +137,41 @@ export function createApp(
       setState({
         ...currentState,
         rulesInspectionSections: sections,
+      });
+    },
+
+    setRulesTimeNow(nowForRules: Date): void {
+      if (currentState.mode !== "ready") return;
+      setState({
+        ...currentState,
+        rulesTime: { mode: "now", selectedTime: nowForRules },
+      });
+    },
+
+    setRulesTimeCustom(selectedTime: Date): void {
+      if (currentState.mode !== "ready") return;
+      setState({
+        ...currentState,
+        rulesTime: { mode: "custom", selectedTime },
+      });
+    },
+
+    replaceParkingData(
+      data: { signs: Sign[]; fetchTime: Date; parkingSegments: ParkingSegment[] },
+      refreshNow: Date
+    ): void {
+      if (currentState.mode !== "ready") return;
+
+      const updatedAllSigns = filterLoadTimeNoise(data.signs, data.fetchTime);
+      const updatedActiveSigns = filterActive(updatedAllSigns, refreshNow);
+
+      setState({
+        ...currentState,
+        allSigns: updatedAllSigns,
+        activeSigns: updatedActiveSigns,
+        parkingSegments: data.parkingSegments,
+        checkResults: [],
+        selectedCheckSegment: null,
       });
     },
 

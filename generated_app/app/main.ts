@@ -13,7 +13,6 @@
 
 import { initFeedback } from "./feedback";
 import { track } from "./analytics";
-import { createDurationCheckQuery, parseCheckQuery } from "../shared/query-parser";
 import {
   initMap,
   registerMapClickHandler,
@@ -22,63 +21,53 @@ import {
   renderTowSegments,
   centerOnSpot,
   showStreetPopup,
-  setTowSignsVisible,
   initRoadGeometry,
   renderViolationHighlights,
-  setViolationHighlightsVisible,
   renderUpcomingSignPins,
   renderUpcomingTowSegments,
-  setUpcomingSignsVisible,
   renderGarageMarkers,
-  setGarageMarkersVisible,
   renderSnowEmergencyRoutes,
-  setSnowRoutesVisible,
   initStreetParity,
   correctSignPositions,
   getRoadGeometry,
   clearCheckResults,
   renderCheckResults,
   clearRulesInspection,
-  setRulesInspectionMarker,
-  renderRulesInspection,
 } from "./map";
 import { getStreetName, geocodeCrossStreet, seedGeocodeCache } from "./geo";
 import { createApp } from "./app";
 import type { App, AppState } from "./app";
 import {
+  loadCrossStreetCache,
+  loadFutureSignData,
+  loadGarages,
+  loadSignData,
+  loadStartupStaticData,
+} from "./data-loader";
+import { wireLayerToggles } from "./layer-toggles";
+import { getCheckResults, wireCheckControls } from "./check-controller";
+import { renderRulesClickInspection, wireRulesControls } from "./rules-controller";
+import {
   filterLoadTimeNoise,
-  filterActive,
   extractCrossStreets,
   detectMatchingSegment,
   isSignActive,
-  evaluateParkingWindow,
 } from "../shared/parking-logic";
-import type { Sign, StreetCleaningEntry, StreetCleaningData, RoadGeometry, Garage, SnowRoute, ParkingSegment, RulesInspectionSection, AppMode, CheckQuery, CheckResultSegment } from "../shared/types";
+import type { Sign, StreetCleaningEntry, StreetCleaningData, RoadGeometry, SnowRoute, ParkingSegment, AppMode } from "../shared/types";
 import { buildParkingSegmentCatalog } from "../shared/segment-catalog";
-import { inspectRulesAtLocation } from "../shared/rules-inspector";
 import {
   renderLoading,
   hideLoading,
   renderBrowsingMode,
   hideBottomSheet,
-  showBottomSheet,
-  setBottomSheetContent,
-  setBottomSheetMode,
 } from "./ui";
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 
 let cleaningEntries: StreetCleaningEntry[] = [];
 let upcomingSignsData: Sign[] = [];
-
-/** Last evaluated Check results — persists across renders so renderState can reuse them. */
-let _checkResults: CheckResultSegment[] = [];
-
-/** F-53: Rules time selection state — local to main.ts, not yet in app state machine. */
-const rulesState: { mode: "now" | "custom"; selectedTime: Date } = {
-  mode: "now",
-  selectedTime: new Date(),
-};
+let roadGeometryData: RoadGeometry | undefined = undefined;
+let snowRoutesData: SnowRoute[] = [];
 
 /** ISO string of when sign data was last successfully fetched — used for staleness detection. */
 let _fetchedAt: string = new Date().toISOString();
@@ -183,40 +172,6 @@ function handleCheckClick(_lat: number, _lng: number): void {
   // stub: Check click behavior added in later features
 }
 
-/**
- * Handle a map click in Rules mode.
- * Inspects rules at the clicked location and renders the results in the bottom sheet.
- * Returns the computed sections so the caller can store them in app state.
- */
-function handleRulesClick(
-  lat: number,
-  lng: number,
-  selectedTime: Date,
-  segments: ParkingSegment[]
-): RulesInspectionSection[] {
-  const sections = inspectRulesAtLocation({ lat, lng, selectedTime, segments });
-  setRulesInspectionMarker(lat, lng);
-  renderRulesInspection(sections);
-
-  // Build bottom sheet HTML — one .rules-section div per returned section
-  const html = sections
-    .map((section) => {
-      const priorityClass = `rules-section--${section.priority}`;
-      return (
-        `<div class="rules-section ${priorityClass}">` +
-        `<div class="rules-section-title">${section.title}</div>` +
-        `<div class="rules-section-content">${section.content}</div>` +
-        `</div>`
-      );
-    })
-    .join("");
-
-  setBottomSheetContent(html);
-  setBottomSheetMode("rules");
-  showBottomSheet();
-  return sections;
-}
-
 // ─── renderState callback ─────────────────────────────────────────────────────
 
 /**
@@ -282,7 +237,7 @@ function renderState(state: AppState): void {
 
     // F-51: render check results when in check mode
     if (state.activeMode === "check") {
-      renderCheckResults(_checkResults);
+      renderCheckResults(getCheckResults());
     }
 
     return;
@@ -293,30 +248,27 @@ function renderState(state: AppState): void {
 
 async function silentRefresh(app: App, now: Date): Promise<void> {
   try {
-    const res = await fetch("data/latest.json", { cache: "no-cache" });
-    const json = await res.json() as { fetched_at: string; signs: Sign[] };
-    _fetchedAt = json.fetched_at;
-    const filtered = filterLoadTimeNoise(json.signs, new Date(json.fetched_at));
-    const activeNow = filterActive(filtered, now);
-    const state = app.getState();
-    if (state.mode === "ready") {
-      renderSignPins(activeNow, now);
-      renderTowSegments(activeNow);
-      renderViolationHighlights(cleaningEntries, now);
-      renderBrowsingMode(activeNow, now);
-    }
+    const refreshed = await loadSignData("no-cache");
+    _fetchedAt = refreshed.fetchedAt;
+    const correctedSigns = correctSignPositions(refreshed.signs, getRoadGeometry());
+    const parkingSegments = buildParkingSegmentCatalog({
+      signs: correctedSigns,
+      cleaningEntries,
+      snowRoutes: snowRoutesData,
+      roadGeometry: roadGeometryData,
+    });
+    app.replaceParkingData(
+      { signs: correctedSigns, fetchTime: refreshed.fetchTime, parkingSegments },
+      now
+    );
     // Refresh upcoming signs
-    try {
-      const futureRes = await fetch("data/future.json", { cache: "no-cache" });
-      const futureJson = await futureRes.json() as { fetched_at: string; signs: Sign[] };
-      upcomingSignsData = filterLoadTimeNoise(futureJson.signs, new Date(futureJson.fetched_at))
+    const futureData = await loadFutureSignData("no-cache");
+    if (futureData !== null) {
+      upcomingSignsData = filterLoadTimeNoise(futureData.signs, futureData.fetchTime)
         .filter((s) => !isSignActive(s, now));
-    } catch {
-      // Silent — upcoming data stays as-is
     }
     renderUpcomingSignPins(upcomingSignsData, now);
     renderUpcomingTowSegments(upcomingSignsData);
-    app.tick(now);
   } catch {
     // Silent — cached data remains in use
   }
@@ -380,60 +332,30 @@ export async function initBrowserApp(): Promise<void> {
   initFeedback();
   initCoffee();
 
-  // Fire-and-forget: seed the geocode cache from the build-time lookup table.
-  // If the file is absent or stale, geocodeCrossStreet falls back to Nominatim.
-  fetch("data/cross-streets.json")
-    .then((res) => res.json())
-    .then((data: unknown) => {
-      seedGeocodeCache(data as Record<string, { lat: number; lng: number } | null>);
-    })
-    .catch(() => { /* non-fatal — runtime Nominatim calls serve as fallback */ });
+  void loadCrossStreetCache()
+    .then((data) => {
+      if (data !== null) seedGeocodeCache(data);
+    });
 
-  // Await road geometry + street parity + street cleaning + snow routes before
-  // calling createApp — all four are needed to build parkingSegments.
-  let loadedRoadGeometry: RoadGeometry | undefined = undefined;
-  let loadedCleaningEntries: StreetCleaningEntry[] = [];
-  let loadedSnowRoutes: SnowRoute[] = [];
-
-  await Promise.all([
-    fetch("data/road-geometry.json")
-      .then((r) => r.json())
-      .then((g: RoadGeometry) => {
-        loadedRoadGeometry = g;
-        initRoadGeometry(g);
-      })
-      .catch(() => { /* non-fatal — road geometry stays undefined */ }),
-    fetch("data/street-parity.json")
-      .then((r) => r.json())
-      .then((data: unknown) => { initStreetParity(data as Record<string, 1 | -1>); })
-      .catch(() => { /* non-fatal */ }),
-    fetch("data/street-cleaning.json")
-      .then((res) => res.json())
-      .then((data: unknown) => {
-        const entries = (data as { entries?: StreetCleaningEntry[] }).entries;
-        loadedCleaningEntries = entries ?? [];
-        // Also update the module-level variable used by renderViolationHighlights
-        cleaningEntries = loadedCleaningEntries;
-      })
-      .catch(() => { /* non-fatal — cleaningEntries stays empty */ }),
-    fetch("data/snow-emergency-routes.json")
-      .then((r) => r.json())
-      .then((data: unknown) => {
-        const routes = (data as { routes?: SnowRoute[] }).routes;
-        loadedSnowRoutes = routes ?? [];
-      })
-      .catch(() => { /* non-fatal — snowRoutes stays empty */ }),
-  ]);
+  const staticData = await loadStartupStaticData();
+  roadGeometryData = staticData.roadGeometry;
+  if (staticData.roadGeometry !== undefined) {
+    initRoadGeometry(staticData.roadGeometry);
+  }
+  if (staticData.streetParity !== undefined) {
+    initStreetParity(staticData.streetParity);
+  }
+  cleaningEntries = staticData.cleaningEntries;
+  snowRoutesData = staticData.snowRoutes;
 
   // Fetch sign data — required; return early on failure
   let signsData: { signs: Sign[]; fetchTime: Date };
   try {
-    const res = await fetch("data/latest.json");
-    const json = await res.json() as { fetched_at: string; signs: Sign[] };
-    _fetchedAt = json.fetched_at;
+    const latest = await loadSignData();
+    _fetchedAt = latest.fetchedAt;
     signsData = {
-      signs: json.signs,
-      fetchTime: new Date(json.fetched_at),
+      signs: latest.signs,
+      fetchTime: latest.fetchTime,
     };
   } catch {
     hideLoading();
@@ -446,14 +368,11 @@ export async function initBrowserApp(): Promise<void> {
   }
 
   // Fetch upcoming signs (fire-and-forget, non-fatal)
-  try {
-    const futureRes = await fetch("data/future.json");
-    const futureJson = await futureRes.json() as { fetched_at: string; signs: Sign[] };
+  const futureData = await loadFutureSignData();
+  if (futureData !== null) {
     const now = new Date();
-    upcomingSignsData = filterLoadTimeNoise(futureJson.signs, new Date(futureJson.fetched_at))
+    upcomingSignsData = filterLoadTimeNoise(futureData.signs, futureData.fetchTime)
       .filter((s) => !isSignActive(s, now));
-  } catch {
-    // file missing or network error — layer stays empty
   }
 
   // Use address numbers as source of truth — fix signs whose geocoded position
@@ -463,9 +382,9 @@ export async function initBrowserApp(): Promise<void> {
   // Build the parking segment catalog from all loaded data sources
   const parkingSegments = buildParkingSegmentCatalog({
     signs: signsData.signs,
-    cleaningEntries: loadedCleaningEntries,
-    snowRoutes: loadedSnowRoutes,
-    roadGeometry: loadedRoadGeometry,
+    cleaningEntries,
+    snowRoutes: snowRoutesData,
+    roadGeometry: roadGeometryData,
   });
 
   // Create app state machine (no storage — saved-spot flow removed in F-46D)
@@ -502,77 +421,17 @@ export async function initBrowserApp(): Promise<void> {
   scheduleViolationRefresh(app.getState.bind(app));
 
   // Fire-and-forget: fetch municipal garages and render markers.
-  fetch("data/garages.json")
-    .then((r) => r.json())
-    .then((garages: Garage[]) => { renderGarageMarkers(garages, true); })
-    .catch(() => { /* non-fatal */ });
+  void loadGarages()
+    .then((garages) => {
+      if (garages !== null) renderGarageMarkers(garages, true);
+    });
 
   // Render snow emergency routes now that we have the data (already awaited above)
-  if (loadedSnowRoutes.length > 0) {
-    renderSnowEmergencyRoutes(loadedSnowRoutes, true);
+  if (snowRoutesData.length > 0) {
+    renderSnowEmergencyRoutes(snowRoutesData, true);
   }
 
-  // Wire tow-zones legend toggle
-  const towLegend = document.getElementById("tow-legend");
-  const towToggle = document.getElementById("tow-toggle");
-  if (towLegend !== null && towToggle !== null) {
-    towToggle.addEventListener("click", () => {
-      const isOn = !towLegend.classList.contains("tow-off");
-      setTowSignsVisible(!isOn);
-      track("tow-zones-toggled", { enabled: !isOn });
-      towLegend.classList.toggle("tow-off", isOn);
-      towToggle.setAttribute("aria-pressed", String(!isOn));
-    });
-  }
-
-  // Wire violation highlights legend toggle
-  const violationLegend = document.getElementById("violation-legend");
-  const violationToggle = document.getElementById("violation-toggle");
-  if (violationLegend !== null && violationToggle !== null) {
-    violationToggle.addEventListener("click", () => {
-      const isOn = !violationLegend.classList.contains("violation-off");
-      setViolationHighlightsVisible(!isOn);
-      track("violation-highlights-toggled", { enabled: !isOn });
-      violationLegend.classList.toggle("violation-off", isOn);
-      violationToggle.setAttribute("aria-pressed", String(!isOn));
-    });
-  }
-
-  // Wire upcoming signs legend toggle
-  const upcomingToggle = document.getElementById("upcoming-toggle");
-  upcomingToggle?.addEventListener("click", () => {
-    const isOn = upcomingToggle.getAttribute("aria-pressed") === "true";
-    const next = !isOn;
-    setUpcomingSignsVisible(next);
-    track("upcoming-signs-toggled", { enabled: next });
-    upcomingToggle.setAttribute("aria-pressed", String(next));
-    document.getElementById("upcoming-legend")?.classList.toggle("upcoming-off", !next);
-  });
-  // Upcoming signs off by default — sync legend to match
-  upcomingToggle?.setAttribute("aria-pressed", "false");
-  document.getElementById("upcoming-legend")?.classList.add("upcoming-off");
-
-  // Wire garage toggle
-  const garageToggle = document.getElementById("garage-toggle");
-  garageToggle?.addEventListener("click", () => {
-    const isOn = garageToggle.getAttribute("aria-pressed") === "true";
-    const next = !isOn;
-    setGarageMarkersVisible(next);
-    track("garages-toggled", { enabled: next });
-    garageToggle.setAttribute("aria-pressed", String(next));
-    document.getElementById("garage-legend")?.classList.toggle("garage-off", !next);
-  });
-
-  // Wire snow routes toggle
-  const snowToggle = document.getElementById("snow-toggle");
-  snowToggle?.addEventListener("click", () => {
-    const isOn = snowToggle.getAttribute("aria-pressed") === "true";
-    const next = !isOn;
-    setSnowRoutesVisible(next);
-    track("snow-routes-toggled", { enabled: next });
-    snowToggle.setAttribute("aria-pressed", String(next));
-    document.getElementById("snow-legend")?.classList.toggle("snow-off", !next);
-  });
+  wireLayerToggles();
 
   // Wire "Get Current Location" button
   const locateBtn = document.getElementById("locate-btn");
@@ -595,134 +454,8 @@ export async function initBrowserApp(): Promise<void> {
     });
   }
 
-  // ─── Wire check controls (F-47) ────────────────────────────────────────────
-
-  const dur30Btn = document.getElementById("check-duration-30");
-  const dur60Btn = document.getElementById("check-duration-60");
-  const dur120Btn = document.getElementById("check-duration-120");
-  const checkQueryInput = document.getElementById("check-query-input") as HTMLInputElement | null;
-  const checkRunBtn = document.getElementById("check-run-button");
-
-  let _activeCheckQuery: CheckQuery | null = null;
-
-  function setDurationPressedState(activeBtn: HTMLElement | null): void {
-    [dur30Btn, dur60Btn, dur120Btn].forEach((btn) => {
-      btn?.setAttribute("aria-pressed", String(btn === activeBtn));
-    });
-  }
-
-  function selectDuration(btn: HTMLElement | null, minutes: number): void {
-    _activeCheckQuery = createDurationCheckQuery(minutes, new Date());
-    setDurationPressedState(btn);
-    if (checkQueryInput !== null) checkQueryInput.value = "";
-  }
-
-  dur30Btn?.addEventListener("click", () => {
-    selectDuration(dur30Btn, 30);
-    track("check-duration-selected", { minutes: 30 });
-  });
-
-  dur60Btn?.addEventListener("click", () => {
-    selectDuration(dur60Btn, 60);
-    track("check-duration-selected", { minutes: 60 });
-  });
-
-  dur120Btn?.addEventListener("click", () => {
-    selectDuration(dur120Btn, 120);
-    track("check-duration-selected", { minutes: 120 });
-  });
-
-  checkQueryInput?.addEventListener("input", () => {
-    _activeCheckQuery = null;
-    setDurationPressedState(null);
-  });
-
-  checkRunBtn?.addEventListener("click", () => {
-    const state = app.getState();
-    if (state.mode !== "ready") return;
-
-    let query: CheckQuery | null = _activeCheckQuery;
-
-    if (query === null) {
-      const rawText = checkQueryInput?.value.trim() ?? "";
-      if (rawText.length > 0) {
-        query = parseCheckQuery(rawText, new Date());
-      }
-    }
-
-    const resolvedQuery: CheckQuery = query ?? createDurationCheckQuery(120, new Date());
-
-    track("check-query-run", { label: resolvedQuery.label });
-
-    _checkResults = state.parkingSegments.map((seg) =>
-      evaluateParkingWindow(seg, resolvedQuery)
-    );
-
-    clearCheckResults();
-    renderCheckResults(_checkResults);
-  });
-
-  // ─── Wire top query bar to Check evaluation ──────────────────────────────
-
-  const queryInput = document.getElementById("query-input") as HTMLInputElement | null;
-  const querySubmitBtn = document.getElementById("query-submit-btn");
-
-  function runQueryBarCheck(text: string): void {
-    const st = app.getState();
-    if (st.mode !== "ready") return;
-    const parsed = parseCheckQuery(text, new Date()) ?? createDurationCheckQuery(120, new Date());
-    track("check-query-run", { label: parsed.label });
-    _checkResults = st.parkingSegments.map((seg) => evaluateParkingWindow(seg, parsed));
-    clearCheckResults();
-    renderCheckResults(_checkResults);
-  }
-
-  querySubmitBtn?.addEventListener("click", () => {
-    runQueryBarCheck(queryInput?.value.trim() ?? "");
-  });
-
-  queryInput?.addEventListener("keydown", (e: KeyboardEvent) => {
-    if (e.key === "Enter") runQueryBarCheck(queryInput.value.trim());
-  });
-
-  // ─── Wire rules controls (F-53) ───────────────────────────────────────────
-
-  const rulesTimeNowBtn = document.getElementById("rules-time-now");
-  const rulesTimeCustomBtn = document.getElementById("rules-time-custom");
-  const rulesTimeInput = document.getElementById("rules-time-input") as HTMLInputElement | null;
-
-  /** Track local rules time selection — not yet wired to app state machine. */
-  rulesState.mode = "now";
-  rulesState.selectedTime = new Date();
-
-  rulesTimeNowBtn?.addEventListener("click", () => {
-    rulesState.mode = "now";
-    rulesState.selectedTime = new Date();
-    rulesTimeNowBtn?.setAttribute("aria-pressed", "true");
-    rulesTimeCustomBtn?.setAttribute("aria-pressed", "false");
-    track("rules-time-mode-selected", { mode: "now" });
-  });
-
-  rulesTimeCustomBtn?.addEventListener("click", () => {
-    rulesState.mode = "custom";
-    rulesTimeNowBtn?.setAttribute("aria-pressed", "false");
-    rulesTimeCustomBtn?.setAttribute("aria-pressed", "true");
-    track("rules-time-mode-selected", { mode: "custom" });
-  });
-
-  rulesTimeInput?.addEventListener("change", () => {
-    rulesState.mode = "custom";
-    const val = rulesTimeInput !== null ? rulesTimeInput.value : "";
-    if (val.length > 0) {
-      // Parse HH:MM time input as today's local date at that time
-      const nowT = new Date();
-      const [hoursStr, minutesStr] = val.split(":");
-      const hours = parseInt(hoursStr ?? "0", 10);
-      const minutes = parseInt(minutesStr ?? "0", 10);
-      rulesState.selectedTime = new Date(nowT.getFullYear(), nowT.getMonth(), nowT.getDate(), hours, minutes, 0, 0);
-      track("rules-time-custom-set", { time: val });
-    }
-  });
+  wireCheckControls(app);
+  wireRulesControls(app);
 
   // Wire the single map click handler — routes by activeMode.
   registerMapClickHandler((lat: number, lng: number) => {
@@ -733,7 +466,12 @@ export async function initBrowserApp(): Promise<void> {
     } else {
       // Store selected location in app state before computing sections
       app.setRulesLocation(lat, lng);
-      const sections = handleRulesClick(lat, lng, state.rulesTime.selectedTime, state.parkingSegments);
+      const sections = renderRulesClickInspection({
+        lat,
+        lng,
+        selectedTime: state.rulesTime.selectedTime,
+        segments: state.parkingSegments,
+      });
       app.setRulesInspectionSections(sections);
     }
   });
@@ -805,7 +543,14 @@ export async function init(initialMode: "browsing" | "parked" = "browsing"): Pro
 
 // ─── Browser entry point ──────────────────────────────────────────────────────
 
-// Only run in browser context (not in Node test environment)
-if (typeof document !== "undefined") {
+function shouldAutoStartBrowserApp(): boolean {
+  if (typeof document === "undefined") return false;
+  const processLike = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  return processLike?.env?.["VITEST"] !== "true";
+}
+
+// Only run in real browser context. Vitest may provide jsdom's document while
+// importing helpers from this module, but tests call initBrowserApp explicitly.
+if (shouldAutoStartBrowserApp()) {
   void initBrowserApp();
 }

@@ -2673,6 +2673,28 @@ describe("F-51 renderCheckResults", () => {
     expect(polylines.length).toBe(1);
   });
 
+  it("Given renderCheckResults is called with one segment containing two geometry ways, Then two polylines are drawn for that segment", async () => {
+    const { initMap, renderCheckResults } = await import("../../app/map");
+    initMap();
+    const segment = makeCheckSegment("seg-multi-way", "ticket", {
+      geometry: {
+        ways: [
+          [[40.744, -74.032], [40.745, -74.033]],
+          [[40.746, -74.034], [40.747, -74.035]],
+        ],
+        clipped: false,
+        source: "road-geometry",
+      },
+    });
+
+    renderCheckResults([segment]);
+
+    const polylines = mockMapInstance._layers.filter(
+      (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
+    );
+    expect(polylines.length).toBe(2);
+  });
+
   it("Given a segment without geometry, When renderCheckResults is called, Then the segment is skipped (no polyline created)", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
@@ -2754,6 +2776,32 @@ describe("F-51 selectCheckSegment", () => {
     initMap();
     expect(() => selectCheckSegment("nonexistent-id")).not.toThrow();
   });
+
+  it("Given a selected segment has multiple geometry ways, When selectCheckSegment is called, Then every polyline for that segment is styled", async () => {
+    const { initMap, renderCheckResults, selectCheckSegment } = await import("../../app/map");
+    initMap();
+    const segment = makeCheckSegment("seg-multi-way", "ticket", {
+      geometry: {
+        ways: [
+          [[40.744, -74.032], [40.745, -74.033]],
+          [[40.746, -74.034], [40.747, -74.035]],
+        ],
+        clipped: false,
+        source: "road-geometry",
+      },
+    });
+
+    renderCheckResults([segment]);
+    selectCheckSegment("seg-multi-way");
+
+    const polylines = mockMapInstance._layers.filter(
+      (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
+    );
+    expect(polylines.length).toBe(2);
+    for (const polyline of polylines) {
+      expect(polyline._setStyleCalls).toContainEqual({ className: "check-selected" });
+    }
+  });
 });
 
 describe("F-51 clearCheckResults", () => {
@@ -2805,6 +2853,32 @@ describe("F-51 clearCheckResults", () => {
     expect(mockMapInstance._layers.filter(
       (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
     ).length).toBe(1);
+  });
+
+  it("Given a rendered check segment has multiple geometry ways, When clearCheckResults runs, Then all of its polylines are removed", async () => {
+    const { initMap, renderCheckResults, clearCheckResults } = await import("../../app/map");
+    initMap();
+    const segment = makeCheckSegment("seg-multi-way", "ticket", {
+      geometry: {
+        ways: [
+          [[40.744, -74.032], [40.745, -74.033]],
+          [[40.746, -74.034], [40.747, -74.035]],
+        ],
+        clipped: false,
+        source: "road-geometry",
+      },
+    });
+
+    renderCheckResults([segment]);
+    expect(mockMapInstance._layers.filter(
+      (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
+    ).length).toBe(2);
+
+    clearCheckResults();
+
+    expect(mockMapInstance._layers.filter(
+      (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
+    ).length).toBe(0);
   });
 });
 
