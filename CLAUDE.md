@@ -17,7 +17,7 @@ Open this project in Claude Code and invoke the Workflow tool with:
 **Target a specific feature:**
 Pass args to the Workflow tool:
   scriptPath: harness/workflow.js
-  args: { "feature": "F-00" }
+  args: { "feature": "CF-00" }
 
 The workflow picks the first feature whose dependencies are all DONE (or the one you specify), runs the creator/evaluator loop, and writes the result back to `harness/features.json`.
 
@@ -25,15 +25,31 @@ The workflow picks the first feature whose dependencies are all DONE (or the one
 
 ## What you receive per run
 
-Each agent run targets **one feature** from `specs/`. You receive:
+Each agent run targets **one feature** from the spec path listed in
+`harness/features.json`. You receive:
 
 1. A role/format instruction block from `harness/prompts/creator.md`
 2. This document (`CLAUDE.md`)
-3. The feature spec from `specs/<id>.md` (e.g., `specs/F-03.md`)
+3. The feature spec from the feature's `spec_file` path
 4. The files listed under **Context to load** for that feature (see table below)
 5. The list of expected output files you must write to disk
 
 You do not receive the full codebase. Do not import files that are not in your context unless they are listed as dependencies for the feature you are building.
+
+---
+
+## Spec Authority
+
+`harness/features.json` is authoritative for active feature specs.
+
+Current active specs are:
+
+- `specs/v2/CF-*.md` for foundation/current CF features.
+- `specs/F-46A.md` through `specs/F-58.md` for the current Check | Rules sequence.
+
+Historical `F-*` specs that are not referenced by `harness/features.json` have
+been moved to `specs/archive/`. Archived specs are retained for traceability
+only and must not be treated as implementation authority.
 
 ---
 
@@ -92,41 +108,7 @@ See `harness/features.json` for the authoritative feature dependency graph (`dep
 
 *Human-readable reference — `harness/features.json` (`context_files` field) is authoritative.*
 
-These are the files an agent must read before implementing each feature. Do not read beyond them unless a specific error or missing dependency requires it — and then read only the minimum needed to resolve it.
-
-| Feature | Load these files |
-|---------|-----------------|
-| F-00 | `ARCHITECTURE.md` (file structure only) |
-| F-D1 | nothing (discovery feature — no code context needed) |
-| F-D2 | `docs/api-discovery.md` |
-| F-00.5 | `data/latest.json`, `docs/data-schema.md`, `shared/types.ts` |
-| F-01 | `shared/types.ts`, `docs/api-discovery.md`, `docs/data-schema.md` |
-| F-02 | `docs/data-schema.md` |
-| F-03 | `shared/types.ts`, `tests/fixtures/signs.ts` |
-| F-04 | `shared/types.ts` |
-| F-05 | nothing |
-| F-06 | `shared/types.ts`, `shared/parking-logic.ts`, `shared/storage.ts` |
-| F-07 | `shared/types.ts`, `shared/parking-logic.ts` |
-| F-09 | `shared/types.ts`, `shared/parking-logic.ts` |
-| F-10 | `app/index.html`, `app/style.css`, `app/app.ts`, `app/map.ts`, `app/ui.ts`, `app/main.ts` |
-| F-11 | `app/index.html`, `app/style.css`, `app/app.ts`, `app/map.ts`, `app/ui.ts`, `app/main.ts` |
-| F-12 | `app/app.ts` |
-| F-13 | `shared/parking-logic.ts`, `app/ui.ts` |
-| F-14 | `app/app.ts`, `shared/parking-logic.ts` |
-| F-15 | `app/app.ts`, `app/ui.ts`, `shared/parking-logic.ts` |
-| F-16 | `shared/types.ts`, `shared/parking-logic.ts`, `tests/fixtures/signs.ts` |
-| F-01.9 | `shared/types.ts` (for StreetCleaningData), `fetcher/fetch-street-cleaning.ts` |
-| F-02.5 | `shared/types.ts` |
-| F-07.6 | `shared/types.ts`, `app/map.ts` |
-| F-08.4 | nothing (creates `app/geo.ts` from scratch) |
-| F-17.5 | `app/main.ts`, `app/map.ts`, `app/geo.ts`, `shared/types.ts` |
-| F-18 | `app/index.html`, `app/manifest.json` |
-| F-19 | `app/index.html`, `app/style.css`, `app/map.ts`, `app/main.ts` |
-| F-20 | `shared/types.ts`, `shared/parking-logic.ts`, `app/geo.ts`, `app/map.ts`, `app/main.ts`, `tests/unit/parking-logic.test.ts`, `tests/unit/geo.test.ts`, `tests/unit/map.test.ts`, `tests/unit/main.test.ts` |
-| F-20.5 | `app/map.ts`, `app/main.ts`, `tests/unit/map.test.ts`, `tests/unit/main.test.ts` |
-| F-21 | `shared/parking-logic.ts`, `app/geo.ts`, `app/main.ts`, `package.json`, `tests/unit/geo.test.ts` |
-| F-22 | `app/map.ts`, `tests/unit/map.test.ts` |
-| F-34 | `app/map.ts`, `app/main.ts`, `app/index.html`, `app/style.css`, `shared/parking-logic.ts`, `tests/unit/map.test.ts` |
+Do not use a hand-maintained context table. Load context from the active feature's `context_files` field in `harness/features.json`. Archived specs under `specs/archive/` are not active context.
 
 ---
 

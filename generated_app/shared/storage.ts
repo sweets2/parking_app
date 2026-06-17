@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy saved-spot storage retained for CF-05/historical tests.
+ * The current runtime product is Check | Rules and does not save parked spots.
+ */
 export interface StorageBackend {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

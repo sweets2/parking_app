@@ -426,6 +426,8 @@ export function clearPositionMarker(): void {
 
 /**
  * Render a visually distinct marker at the saved spot's coordinates.
+ *
+ * @deprecated Legacy saved-spot flow helper retained for historical tests.
  */
 export function renderSpotMarker(spot: SavedSpot): void {
   if (_map === null) return;
@@ -449,7 +451,11 @@ export function renderSpotMarker(spot: SavedSpot): void {
   _spotMarker = marker;
 }
 
-/** Remove the saved spot marker if present. */
+/**
+ * Remove the saved spot marker if present.
+ *
+ * @deprecated Legacy saved-spot flow helper retained for historical tests.
+ */
 export function clearSpotMarker(): void {
   if (_spotMarker !== null) {
     _spotMarker.remove();
@@ -461,6 +467,8 @@ export function clearSpotMarker(): void {
 
 /**
  * Pan the map to the saved spot's coordinates without changing zoom.
+ *
+ * Kept for current locate-button behavior as well as legacy saved-spot tests.
  */
 export function centerOnSpot(spot: SavedSpot): void {
   if (_map === null) return;

@@ -510,6 +510,9 @@ export async function initBrowserApp(): Promise<void> {
  *
  * In a test environment (no document), only the map click handler is wired
  * so the F-17.5 click tests continue to work.
+ *
+ * @deprecated Legacy compatibility entry point. Production uses initBrowserApp()
+ * and the Check | Rules state machine.
  */
 export async function init(initialMode: "browsing" | "parked" = "browsing"): Promise<void> {
   initMap();

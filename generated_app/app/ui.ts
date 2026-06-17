@@ -132,6 +132,10 @@ export function renderBrowsingMode(activeSigns: Sign[], now: Date): void {
 
 // ─── F-09.4 Parked Mode — Clear Banner ───────────────────────────────────────
 
+/**
+ * @deprecated Legacy parked-flow banner retained for historical tests.
+ * Current product UI is Check | Rules.
+ */
 export function renderClearBanner(): void {
   const banner = getEl("banner");
   if (banner) {
@@ -155,6 +159,10 @@ export function renderClearBanner(): void {
 
 // ─── F-09.5 Parked Mode — Warning Banner ─────────────────────────────────────
 
+/**
+ * @deprecated Legacy parked-flow banner retained for historical tests.
+ * Current product UI is Check | Rules.
+ */
 export function renderWarningBanner(nearbySigns: Sign[], now: Date): void {
   if (nearbySigns.length === 0) {
     renderClearBanner();
@@ -202,6 +210,9 @@ export function renderWarningBanner(nearbySigns: Sign[], now: Date): void {
   if (hereBtn) hereBtn.style.display = "";
 }
 
+/**
+ * @deprecated Legacy saved-spot toast retained for historical tests.
+ */
 export function showSpotToast(address: string): void {
   // Remove any existing toast
   const existing = document.getElementById("spot-toast");
@@ -221,6 +232,9 @@ export function showSpotToast(address: string): void {
 
 // ─── F-13.2 Stale Data Banner ─────────────────────────────────────────────────
 
+/**
+ * @deprecated Legacy saved-spot refresh banner retained for historical tests.
+ */
 export function showStaleBanner(hoursAgo: number): void {
   const existing = document.getElementById("stale-banner");
   if (existing) existing.remove();
@@ -298,4 +312,3 @@ export function renderCheckSegmentDetails(
     `</div>`
   );
 }
-
