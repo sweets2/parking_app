@@ -1418,3 +1418,31 @@ html, body {
     left: 370px;
   }
 }
+
+/* ─── Check Legend ──────────────────────────────────────────── */
+#check-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.85);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+.check-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1f2937;
+}
+.check-legend-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+}
+.check-legend-safe     { background: #22c55e; }
+.check-legend-cleaning { background: #ef4444; border-top: 2px dashed #ef4444; height: 0; }
+.check-legend-tow      { background: #dc2626; }

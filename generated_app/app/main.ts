@@ -237,7 +237,12 @@ function renderState(state: AppState): void {
 
     // F-51: render check results when in check mode
     if (state.activeMode === "check") {
-      renderCheckResults(getCheckResults());
+      renderCheckResults(getCheckResults(), state.allSigns);
+    }
+
+    const checkLegend = document.getElementById("check-legend");
+    if (checkLegend !== null) {
+      checkLegend.style.display = state.activeMode === "check" ? "" : "none";
     }
 
     return;

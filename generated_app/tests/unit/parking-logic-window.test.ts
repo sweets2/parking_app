@@ -175,8 +175,9 @@ describe("F-48 evaluateParkingWindow (window test file)", () => {
     expect(result.primaryConflict?.status).toBe("tow");
   });
 
-  // Test 5: snow wins over cleaning when both overlap the query (no tow sign)
-  it("GIVEN segment has snow route AND cleaning interval both overlapping query (no tow sign), THEN status=snow and primaryConflict.status=snow", () => {
+  // Test 5: cleaning conflict when segment has snow route AND cleaning interval both overlapping query (no tow sign)
+  // Snow routes are not treated as active conflicts (no real-time declaration data); only cleaning is evaluated.
+  it("GIVEN segment has snow route AND cleaning interval both overlapping query (no tow sign), THEN status=ticket and primaryConflict.status=ticket", () => {
     const queryStart = new Date(PREV_MONDAY_10AM_ET_UTC.getTime() - 1 * 60 * 1000);
     const queryEnd   = new Date(PREV_MONDAY_10AM_ET_UTC.getTime() + 1 * 60 * 1000);
 
@@ -191,9 +192,9 @@ describe("F-48 evaluateParkingWindow (window test file)", () => {
       source: "duration",
     };
     const result = evaluateParkingWindow(seg, query);
-    expect(result.status).toBe("snow");
+    expect(result.status).toBe("ticket");
     expect(result.primaryConflict).not.toBeUndefined();
-    expect(result.primaryConflict?.status).toBe("snow");
+    expect(result.primaryConflict?.status).toBe("ticket");
   });
 
   // Test 6: safe — segment with no restrictions

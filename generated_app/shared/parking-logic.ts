@@ -445,17 +445,6 @@ export function evaluateParkingWindow(
     }
   }
 
-  // --- Snow routes ---
-  for (const route of segment.snowRoutes) {
-    // Snow routes are always-active seasonal restrictions
-    conflicts.push({
-      status: "snow",
-      reason: `Snow emergency route: ${route.street} (${route.from} to ${route.to})`,
-      label: `Snow emergency route`,
-      sourceType: "snow-route",
-    });
-  }
-
   // --- Street cleaning entries ---
   // Track whether any entry was unparseable
   let hasUnparseable = false;
