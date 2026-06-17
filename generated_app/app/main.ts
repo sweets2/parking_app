@@ -1,32 +1,29 @@
 /**
- * app/main.ts — F-10 / F-11 / F-14 / F-15 / F-17.5
+ * app/main.ts — F-10 / F-11 / F-14 / F-15 / F-17.5 / F-46D / F-50 / F-53
  *
  * Browser entry point. Initializes the map, fetches sign and street cleaning
  * data, creates the app state machine, wires UI buttons, and registers the
  * map click handler.
  *
- * In browsing mode: map tap sets position marker and updates app state.
- * In parked mode: map tap shows street cleaning popup.
+ * In check mode: map tap invokes handleCheckClick.
+ * In rules mode: map tap invokes handleRulesClick.
  *
- * Exports: normalizeStreet, findCleaningEntries, init (for testing)
+ * Exports: normalizeStreet, findCleaningEntries, init, initBrowserApp (for testing)
  */
 
 import { initFeedback } from "./feedback";
 import { track } from "./analytics";
+import { createDurationCheckQuery, parseCheckQuery } from "../shared/query-parser";
 import {
   initMap,
   registerMapClickHandler,
   renderPositionMarker,
-  clearPositionMarker,
   renderSignPins,
   renderTowSegments,
-  renderSpotMarker,
-  clearSpotMarker,
   centerOnSpot,
   showStreetPopup,
   setTowSignsVisible,
   initRoadGeometry,
-  clearViolationHighlights,
   renderViolationHighlights,
   setViolationHighlightsVisible,
   renderUpcomingSignPins,
@@ -39,6 +36,11 @@ import {
   initStreetParity,
   correctSignPositions,
   getRoadGeometry,
+  clearCheckResults,
+  renderCheckResults,
+  clearRulesInspection,
+  setRulesInspectionMarker,
+  renderRulesInspection,
 } from "./map";
 import { getStreetName, geocodeCrossStreet, seedGeocodeCache } from "./geo";
 import { createApp } from "./app";
@@ -46,58 +48,35 @@ import type { App, AppState } from "./app";
 import {
   filterLoadTimeNoise,
   filterActive,
-  filterNearby,
   extractCrossStreets,
   detectMatchingSegment,
   isSignActive,
 } from "../shared/parking-logic";
-import { createSpotStorage } from "../shared/storage";
-import type { SavedSpot } from "../shared/storage";
-import type { Sign, StreetCleaningEntry, StreetCleaningData, RoadGeometry, Garage, SnowRoute } from "../shared/types";
+import type { Sign, StreetCleaningEntry, StreetCleaningData, RoadGeometry, Garage, SnowRoute, ParkingSegment, RulesInspectionSection } from "../shared/types";
+import { buildParkingSegmentCatalog } from "../shared/segment-catalog";
+import { inspectRulesAtLocation } from "../shared/rules-inspector";
 import {
   renderLoading,
   hideLoading,
   renderBrowsingMode,
-  renderWarningBanner,
-  renderClearBanner,
+  showBottomSheet,
+  setBottomSheetContent,
+  setBottomSheetMode,
 } from "./ui";
-
-// ─── Dev time override ────────────────────────────────────────────────────────
-// Set DEV_FORCE_NOW to a Date to test the split-highlight on one street only.
-// Only entries matching DEV_TEST_STREET are shown — all other streets hidden.
-// Washington St East=active + West=upcoming: any weekday 8:00–8:59 am ET
-// To enable: set DEV_FORCE_NOW = new Date("2026-06-09T12:30:00Z")
-// To disable: set DEV_FORCE_NOW = null
-const DEV_FORCE_NOW: Date | null = new Date("2026-06-15T13:01:00Z"); // Mon 9:01am EDT
-const DEV_TEST_STREET = "Washington St.";
-function devNow(): Date { return DEV_FORCE_NOW ?? new Date(); }
-function devEntries(entries: StreetCleaningEntry[]): StreetCleaningEntry[] {
-  if (DEV_FORCE_NOW === null) return entries;
-  return entries.filter(e => e.street === DEV_TEST_STREET);
-}
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 
 let cleaningEntries: StreetCleaningEntry[] = [];
 let upcomingSignsData: Sign[] = [];
-let appMode: "browsing" | "parked" = "browsing";
+
+/** F-53: Rules time selection state — local to main.ts, not yet in app state machine. */
+const rulesState: { mode: "now" | "custom"; selectedTime: Date } = {
+  mode: "now",
+  selectedTime: new Date(),
+};
 
 /** ISO string of when sign data was last successfully fetched — used for staleness detection. */
 let _fetchedAt: string = new Date().toISOString();
-
-/**
- * Tracks whether the map has been centered on the saved spot for the current
- * parked session. Reset to false whenever the app leaves parked mode.
- * Used to center once on initial parked load (F-11.1) without re-centering
- * on every 60-second tick.
- */
-let _centeredOnSpot = false;
-
-/**
- * Tracks the last banner state so tow-warning-shown and safe-banner-shown
- * fire only on transitions, not on every 60-second tick.
- */
-let _lastAlertState: "warn" | "clear" | null = null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -189,6 +168,50 @@ function buildDetectSegmentCallback(
   };
 }
 
+// ─── Map click handlers ───────────────────────────────────────────────────────
+
+/**
+ * Handle a map click in Check mode.
+ * Currently a stub — real Check behavior is added in later features.
+ */
+function handleCheckClick(_lat: number, _lng: number): void {
+  // stub: Check click behavior added in later features
+}
+
+/**
+ * Handle a map click in Rules mode.
+ * Inspects rules at the clicked location and renders the results in the bottom sheet.
+ * Returns the computed sections so the caller can store them in app state.
+ */
+function handleRulesClick(
+  lat: number,
+  lng: number,
+  selectedTime: Date,
+  segments: ParkingSegment[]
+): RulesInspectionSection[] {
+  const sections = inspectRulesAtLocation({ lat, lng, selectedTime, segments });
+  setRulesInspectionMarker(lat, lng);
+  renderRulesInspection(sections);
+
+  // Build bottom sheet HTML — one .rules-section div per returned section
+  const html = sections
+    .map((section) => {
+      const priorityClass = `rules-section--${section.priority}`;
+      return (
+        `<div class="rules-section ${priorityClass}">` +
+        `<div class="rules-section-title">${section.title}</div>` +
+        `<div class="rules-section-content">${section.content}</div>` +
+        `</div>`
+      );
+    })
+    .join("");
+
+  setBottomSheetContent(html);
+  setBottomSheetMode("rules");
+  showBottomSheet();
+  return sections;
+}
+
 // ─── renderState callback ─────────────────────────────────────────────────────
 
 /**
@@ -197,7 +220,7 @@ function buildDetectSegmentCallback(
  * Only used in browser context where document is defined.
  */
 function renderState(state: AppState): void {
-  const now = devNow();
+  const now = new Date();
 
   if (state.mode === "loading") {
     renderLoading();
@@ -215,62 +238,41 @@ function renderState(state: AppState): void {
     return;
   }
 
-  if (state.mode === "browsing") {
-    appMode = "browsing";
-    // Reset the centering flag so the next parked session centers fresh (F-11.1).
-    _centeredOnSpot = false;
-    _lastAlertState = null;
+  if (state.mode === "ready") {
+    // Update check-controls visibility based on activeMode
+    const checkControls = document.getElementById("check-controls");
+    if (checkControls !== null) {
+      checkControls.style.display = state.activeMode === "rules" ? "none" : "";
+    }
+
+    // F-53: Update rules-controls visibility based on activeMode
+    const rulesControls = document.getElementById("rules-controls");
+    if (rulesControls !== null) {
+      rulesControls.style.display = state.activeMode === "rules" ? "" : "none";
+    }
+
+    // F-51: when switching to rules mode, clear Check result layers
+    if (state.activeMode === "rules") {
+      clearCheckResults();
+    }
+
+    // F-55: when switching to check mode, clear Rules inspection layers
+    if (state.activeMode === "check") {
+      clearRulesInspection();
+    }
+
     renderBrowsingMode(state.activeSigns, now);
     renderSignPins(state.activeSigns, now);
     renderTowSegments(state.activeSigns);
-    renderViolationHighlights(devEntries(cleaningEntries), now);
+    renderViolationHighlights(cleaningEntries, now);
     renderUpcomingSignPins(upcomingSignsData, now);
     renderUpcomingTowSegments(upcomingSignsData);
-    return;
-  }
 
-  if (state.mode === "parked") {
-    appMode = "parked";
-
-    // F-11.1: Center the map on the saved spot once per parked session.
-    // Do not re-center on every 60-second tick.
-    if (!_centeredOnSpot) {
-      centerOnSpot(state.spot);
-      _centeredOnSpot = true;
-      track("parked-mode-entered", { nearby_signs: state.nearbySigns.length });
-      // Auto-open street popup for the saved spot's location (initial save and reload).
-      void getStreetName(state.spot.lat, state.spot.lng).then((road) => {
-        if (road !== null) {
-          const detectSegment = buildDetectSegmentCallback(state.spot.lat, state.spot.lng, road);
-          showStreetPopup(state.spot.lat, state.spot.lng, road, findCleaningEntries(road), detectSegment, devNow());
-        }
-      });
+    // F-51: render check results when in check mode
+    if (state.activeMode === "check") {
+      renderCheckResults(state.checkResults);
     }
 
-    // F-11.2 / F-11.3: Show green "clear" banner or red warning banner.
-    // Deduped: only fire analytics events on state transitions, not every 60-second tick.
-    if (state.nearbySigns.length > 0) {
-      renderWarningBanner(state.nearbySigns, now);
-      if (_lastAlertState !== "warn") {
-        track("tow-warning-shown", { sign_count: state.nearbySigns.length });
-        _lastAlertState = "warn";
-      }
-    } else {
-      renderClearBanner();
-      if (_lastAlertState !== "clear") {
-        track("safe-banner-shown");
-        _lastAlertState = "clear";
-      }
-    }
-
-    // Show all active sign pins in parked mode (not just nearby ones).
-    renderSignPins(filterActive(state.allSigns, now), now);
-    renderTowSegments(filterActive(state.allSigns, now));
-    renderViolationHighlights(devEntries(cleaningEntries), now);
-    renderUpcomingSignPins(upcomingSignsData, now);
-    renderUpcomingTowSegments(upcomingSignsData);
-    renderSpotMarker(state.spot);
-    clearPositionMarker();
     return;
   }
 }
@@ -285,20 +287,10 @@ async function silentRefresh(app: App, now: Date): Promise<void> {
     const filtered = filterLoadTimeNoise(json.signs, new Date(json.fetched_at));
     const activeNow = filterActive(filtered, now);
     const state = app.getState();
-    if (state.mode === "parked") {
-      const nearby = filterNearby(filtered, state.spot.lat, state.spot.lng, 150, now);
-      renderSignPins(nearby, now);
-      renderTowSegments(nearby);
-      renderViolationHighlights(devEntries(cleaningEntries), now);
-      if (nearby.length > 0) {
-        renderWarningBanner(nearby, now);
-      } else {
-        renderClearBanner();
-      }
-    } else if (state.mode === "browsing") {
+    if (state.mode === "ready") {
       renderSignPins(activeNow, now);
       renderTowSegments(activeNow);
-      renderViolationHighlights(devEntries(cleaningEntries), now);
+      renderViolationHighlights(cleaningEntries, now);
       renderBrowsingMode(activeNow, now);
     }
     // Refresh upcoming signs
@@ -326,8 +318,8 @@ function scheduleViolationRefresh(getState: () => AppState): void {
   const msUntilNextHour = (3600 - secIntoHour) * 1000 - now.getMilliseconds();
   setTimeout(() => {
     const st = getState();
-    if (st.mode !== "loading" && st.mode !== "error") {
-      renderViolationHighlights(devEntries(cleaningEntries), devNow());
+    if (st.mode === "ready") {
+      renderViolationHighlights(cleaningEntries, new Date());
     }
     scheduleViolationRefresh(getState);
   }, msUntilNextHour);
@@ -376,14 +368,6 @@ export async function initBrowserApp(): Promise<void> {
   initFeedback();
   initCoffee();
 
-  // Fire-and-forget: fetch street cleaning schedule.
-  fetch("data/street-cleaning.json")
-    .then((res) => res.json())
-    .then((data: unknown) => {
-      cleaningEntries = (data as { entries: StreetCleaningEntry[] }).entries;
-    })
-    .catch(() => { /* non-fatal — cleaningEntries stays empty */ });
-
   // Fire-and-forget: seed the geocode cache from the build-time lookup table.
   // If the file is absent or stale, geocodeCrossStreet falls back to Nominatim.
   fetch("data/cross-streets.json")
@@ -393,20 +377,43 @@ export async function initBrowserApp(): Promise<void> {
     })
     .catch(() => { /* non-fatal — runtime Nominatim calls serve as fallback */ });
 
-  // Await road geometry + street parity before rendering signs — both are needed
-  // before the first renderTowSegments call so offsets are applied on initial render.
+  // Await road geometry + street parity + street cleaning + snow routes before
+  // calling createApp — all four are needed to build parkingSegments.
+  let loadedRoadGeometry: RoadGeometry | undefined = undefined;
+  let loadedCleaningEntries: StreetCleaningEntry[] = [];
+  let loadedSnowRoutes: SnowRoute[] = [];
+
   await Promise.all([
     fetch("data/road-geometry.json")
       .then((r) => r.json())
-      .then((g: RoadGeometry) => { initRoadGeometry(g); })
-      .catch(() => { /* non-fatal */ }),
+      .then((g: RoadGeometry) => {
+        loadedRoadGeometry = g;
+        initRoadGeometry(g);
+      })
+      .catch(() => { /* non-fatal — road geometry stays undefined */ }),
     fetch("data/street-parity.json")
       .then((r) => r.json())
       .then((data: unknown) => { initStreetParity(data as Record<string, 1 | -1>); })
       .catch(() => { /* non-fatal */ }),
+    fetch("data/street-cleaning.json")
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        const entries = (data as { entries?: StreetCleaningEntry[] }).entries;
+        loadedCleaningEntries = entries ?? [];
+        // Also update the module-level variable used by renderViolationHighlights
+        cleaningEntries = loadedCleaningEntries;
+      })
+      .catch(() => { /* non-fatal — cleaningEntries stays empty */ }),
+    fetch("data/snow-emergency-routes.json")
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        const routes = (data as { routes?: SnowRoute[] }).routes;
+        loadedSnowRoutes = routes ?? [];
+      })
+      .catch(() => { /* non-fatal — snowRoutes stays empty */ }),
   ]);
 
-  // Fetch sign data
+  // Fetch sign data — required; return early on failure
   let signsData: { signs: Sign[]; fetchTime: Date };
   try {
     const res = await fetch("data/latest.json");
@@ -430,50 +437,38 @@ export async function initBrowserApp(): Promise<void> {
   try {
     const futureRes = await fetch("data/future.json");
     const futureJson = await futureRes.json() as { fetched_at: string; signs: Sign[] };
-    const now = devNow();
+    const now = new Date();
     upcomingSignsData = filterLoadTimeNoise(futureJson.signs, new Date(futureJson.fetched_at))
       .filter((s) => !isSignActive(s, now));
   } catch {
     // file missing or network error — layer stays empty
   }
 
-  // Create storage backed by localStorage
-  const storage = createSpotStorage(localStorage);
-
-  // F-14: If a saved spot exists, re-fetch latest.json with cache: "no-cache"
-  // to get fresh sign data before rendering the parked view.
-  const hasSavedSpot = storage.load() !== null;
-  if (hasSavedSpot) {
-    try {
-      const freshRes = await fetch("data/latest.json", { cache: "no-cache" });
-      const freshJson = await freshRes.json() as { fetched_at: string; signs: Sign[] };
-      _fetchedAt = freshJson.fetched_at;
-      signsData = {
-        signs: freshJson.signs,
-        fetchTime: new Date(freshJson.fetched_at),
-      };
-    } catch {
-      // Fall back to the first fetch's signs — signsData is unchanged
-    }
-  }
-
   // Use address numbers as source of truth — fix signs whose geocoded position
   // violates the monotonic house-number ordering along their street.
   signsData = { ...signsData, signs: correctSignPositions(signsData.signs, getRoadGeometry()) };
 
-  // Create app state machine
-  const app: App = createApp({ storage, renderState }, signsData);
+  // Build the parking segment catalog from all loaded data sources
+  const parkingSegments = buildParkingSegmentCatalog({
+    signs: signsData.signs,
+    cleaningEntries: loadedCleaningEntries,
+    snowRoutes: loadedSnowRoutes,
+    roadGeometry: loadedRoadGeometry,
+  });
+
+  // Create app state machine (no storage — saved-spot flow removed in F-46D)
+  const now = new Date();
+  const app: App = createApp(
+    { renderState },
+    { signs: signsData.signs, fetchTime: signsData.fetchTime, parkingSegments },
+    now
+  );
   track("app-loaded");
 
-  // Update appMode to match the app's initial state
-  const initialState = app.getState();
-  if (initialState.mode === "parked") {
-    appMode = "parked";
-  }
-
   // F-34: initial violation highlight render + hourly schedule
-  if (initialState.mode !== "loading" && initialState.mode !== "error") {
-    renderViolationHighlights(devEntries(cleaningEntries), devNow());
+  const initialState = app.getState();
+  if (initialState.mode === "ready") {
+    renderViolationHighlights(cleaningEntries, now);
   }
   scheduleViolationRefresh(app.getState.bind(app));
 
@@ -483,13 +478,10 @@ export async function initBrowserApp(): Promise<void> {
     .then((garages: Garage[]) => { renderGarageMarkers(garages, true); })
     .catch(() => { /* non-fatal */ });
 
-  // Fire-and-forget: fetch snow emergency routes and render blue polylines.
-  fetch("data/snow-emergency-routes.json")
-    .then((r) => r.json())
-    .then(({ routes }: { routes: SnowRoute[] }) => {
-      renderSnowEmergencyRoutes(routes, true);
-    })
-    .catch(() => { /* non-fatal */ });
+  // Render snow emergency routes now that we have the data (already awaited above)
+  if (loadedSnowRoutes.length > 0) {
+    renderSnowEmergencyRoutes(loadedSnowRoutes, true);
+  }
 
   // Wire tow-zones legend toggle
   const towLegend = document.getElementById("tow-legend");
@@ -574,66 +566,102 @@ export async function initBrowserApp(): Promise<void> {
     });
   }
 
-  // Wire clear button — F-11.4: removes spot from storage, transitions to browsing,
-  // clears spot marker, shows all active signs as pins (via renderState browsing branch).
-  const clearBtn = document.getElementById("clear-btn");
-  if (clearBtn) {
-    clearBtn.addEventListener("click", () => {
-      track("spot-cleared");
-      clearSpotMarker();
-      app.onClearSpot();
-    });
-  }
+  // ─── Wire check controls (F-47) ────────────────────────────────────────────
 
-  // Wire "I'm Here Now" button — F-11.1: re-centers map on saved spot on demand.
-  const hereBtn = document.getElementById("here-btn");
-  if (hereBtn) {
-    hereBtn.addEventListener("click", () => {
-      track("here-now-tapped");
-      const state = app.getState();
-      if (state.mode === "parked") {
-        centerOnSpot(state.spot);
+  const dur30Btn = document.getElementById("check-duration-30");
+  const dur60Btn = document.getElementById("check-duration-60");
+  const dur120Btn = document.getElementById("check-duration-120");
+  const checkQueryInput = document.getElementById("check-query-input") as HTMLInputElement | null;
+  const checkRunBtn = document.getElementById("check-run-button");
+
+  dur30Btn?.addEventListener("click", () => {
+    createDurationCheckQuery(30, new Date());
+    track("check-duration-selected", { minutes: 30 });
+  });
+
+  dur60Btn?.addEventListener("click", () => {
+    createDurationCheckQuery(60, new Date());
+    track("check-duration-selected", { minutes: 60 });
+  });
+
+  dur120Btn?.addEventListener("click", () => {
+    createDurationCheckQuery(120, new Date());
+    track("check-duration-selected", { minutes: 120 });
+  });
+
+  checkRunBtn?.addEventListener("click", () => {
+    const rawText = checkQueryInput !== null ? checkQueryInput.value : "";
+    if (rawText.trim().length > 0) {
+      const parsed = parseCheckQuery(rawText, new Date());
+      if (parsed !== null) {
+        track("check-query-parsed", { label: parsed.label });
       }
-    });
-  }
-
-  // Wire map click handler — every click saves (or moves) the spot.
-  registerMapClickHandler((lat: number, lng: number) => {
-    const wasParked = appMode === "parked";
-    track(wasParked ? "spot-moved" : "spot-saved");
-    const spot: SavedSpot = {
-      lat,
-      lng,
-      savedAt: new Date().toISOString(),
-      address: null,
-    };
-    app.onSaveSpot(spot);
-    // When already parked, _centeredOnSpot stays true so renderState won't
-    // re-center (preventing snaps on zoom/pan). Center and re-open the popup
-    // explicitly here for intentional dot moves.
-    if (wasParked) {
-      centerOnSpot(spot);
-      void getStreetName(lat, lng).then((road) => {
-        if (road !== null) {
-          const detectSegment = buildDetectSegmentCallback(lat, lng, road);
-          showStreetPopup(lat, lng, road, findCleaningEntries(road), detectSegment, devNow());
-        }
-      });
     }
-    // Browsing → parked transition: _centeredOnSpot is false (reset by the
-    // browsing branch of renderState), so renderState handles center + popup.
+  });
+
+  // ─── Wire rules controls (F-53) ───────────────────────────────────────────
+
+  const rulesTimeNowBtn = document.getElementById("rules-time-now");
+  const rulesTimeCustomBtn = document.getElementById("rules-time-custom");
+  const rulesTimeInput = document.getElementById("rules-time-input") as HTMLInputElement | null;
+
+  /** Track local rules time selection — not yet wired to app state machine. */
+  rulesState.mode = "now";
+  rulesState.selectedTime = new Date();
+
+  rulesTimeNowBtn?.addEventListener("click", () => {
+    rulesState.mode = "now";
+    rulesState.selectedTime = new Date();
+    rulesTimeNowBtn?.setAttribute("aria-pressed", "true");
+    rulesTimeCustomBtn?.setAttribute("aria-pressed", "false");
+    track("rules-time-mode-selected", { mode: "now" });
+  });
+
+  rulesTimeCustomBtn?.addEventListener("click", () => {
+    rulesState.mode = "custom";
+    rulesTimeNowBtn?.setAttribute("aria-pressed", "false");
+    rulesTimeCustomBtn?.setAttribute("aria-pressed", "true");
+    track("rules-time-mode-selected", { mode: "custom" });
+  });
+
+  rulesTimeInput?.addEventListener("change", () => {
+    rulesState.mode = "custom";
+    const val = rulesTimeInput !== null ? rulesTimeInput.value : "";
+    if (val.length > 0) {
+      // Parse HH:MM time input as today's local date at that time
+      const nowT = new Date();
+      const [hoursStr, minutesStr] = val.split(":");
+      const hours = parseInt(hoursStr ?? "0", 10);
+      const minutes = parseInt(minutesStr ?? "0", 10);
+      rulesState.selectedTime = new Date(nowT.getFullYear(), nowT.getMonth(), nowT.getDate(), hours, minutes, 0, 0);
+      track("rules-time-custom-set", { time: val });
+    }
+  });
+
+  // Wire the single map click handler — routes by activeMode.
+  registerMapClickHandler((lat: number, lng: number) => {
+    const state = app.getState();
+    if (state.mode !== "ready") return;
+    if (state.activeMode === "check") {
+      handleCheckClick(lat, lng);
+    } else {
+      // Store selected location in app state before computing sections
+      app.setRulesLocation(lat, lng);
+      const sections = handleRulesClick(lat, lng, state.rulesTime.selectedTime, state.parkingSegments);
+      app.setRulesInspectionSections(sections);
+    }
   });
 
   // Start 60-second tick; auto-refresh data when it's from a previous UTC calendar day.
   setInterval(() => {
-    const now = devNow();
+    const tickNow = new Date();
     const fetched = new Date(_fetchedAt);
     const stale =
-      fetched.getUTCFullYear() !== now.getUTCFullYear() ||
-      fetched.getUTCMonth() !== now.getUTCMonth() ||
-      fetched.getUTCDate() !== now.getUTCDate();
-    if (stale) void silentRefresh(app, now);
-    app.tick(now);
+      fetched.getUTCFullYear() !== tickNow.getUTCFullYear() ||
+      fetched.getUTCMonth() !== tickNow.getUTCMonth() ||
+      fetched.getUTCDate() !== tickNow.getUTCDate();
+    if (stale) void silentRefresh(app, tickNow);
+    app.tick(tickNow);
   }, 60_000);
 
   // F-12.2: Register service worker for PWA offline support.
@@ -654,14 +682,12 @@ export async function initBrowserApp(): Promise<void> {
  * the map click handler.
  *
  * The optional `initialMode` parameter is accepted for testing purposes;
- * production code omits it and defaults to "browsing".
+ * production code omits it and defaults to "browsing" (now "check" in F-46D).
  *
  * In a test environment (no document), only the map click handler is wired
  * so the F-17.5 click tests continue to work.
  */
 export async function init(initialMode: "browsing" | "parked" = "browsing"): Promise<void> {
-  appMode = initialMode;
-
   initMap();
 
   // Fire-and-forget: fetch street cleaning schedule after map is ready.
@@ -677,15 +703,15 @@ export async function init(initialMode: "browsing" | "parked" = "browsing"): Pro
     });
 
   registerMapClickHandler(async (lat: number, lng: number) => {
-    if (appMode === "browsing") {
-      // Browsing mode: set the tapped position marker
+    if (initialMode === "browsing") {
+      // Check mode (was browsing): set the tapped position marker
       renderPositionMarker(lat, lng);
     } else {
-      // Parked mode: show street cleaning popup
+      // Rules mode (was parked): show street cleaning popup
       const road = await getStreetName(lat, lng);
       if (road !== null) {
         const detectSegment = buildDetectSegmentCallback(lat, lng, road);
-        showStreetPopup(lat, lng, road, findCleaningEntries(road), detectSegment, devNow());
+        showStreetPopup(lat, lng, road, findCleaningEntries(road), detectSegment, new Date());
       }
     }
   });

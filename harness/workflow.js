@@ -108,11 +108,88 @@ function fmtRegressionAttribution(baseline, currentResult, owningFiles) {
 
 // Prefix a file path with OUTPUT_DIR if it lives in the generated project.
 // Root-level scaffolding (docs/, data/, ARCHITECTURE.md, specs/) is not prefixed.
-const GENERATED_PREFIXES = ['app/', 'shared/', 'fetcher/', 'tests/', '.github/', 'package.json', 'tsconfig.json', 'vitest.config.ts']
+const GENERATED_PREFIXES = [
+  'app/',
+  'api/',
+  'shared/',
+  'fetcher/',
+  'tests/',
+  'data/',
+  '.github/',
+  'package.json',
+  'tsconfig.json',
+  'vitest.config.ts',
+  'vercel.json',
+]
 function toOutputPath(f) {
   return GENERATED_PREFIXES.some(p => f.startsWith(p) || f === p.replace(/\/$/, ''))
     ? `${OUTPUT_DIR}/${f}`
     : f
+}
+
+const SKILL_RULES = [
+  {
+    skill: 'harness-engineering',
+    path: 'harness/skills/harness-engineering/SKILL.md',
+    when: f => f.output_files.some(p => p.startsWith('harness/')),
+  },
+  {
+    skill: 'spec-authoring',
+    path: 'harness/skills/spec-authoring/SKILL.md',
+    when: f => f.output_files.some(p =>
+      p.startsWith('specs/') ||
+      p === 'harness/features.json' ||
+      p === 'docs/harness-readiness.md'
+    ),
+  },
+  {
+    skill: 'app-state-ui',
+    path: 'harness/skills/app-state-ui/SKILL.md',
+    when: f => f.output_files.some(p =>
+      p.startsWith('app/') ||
+      p === 'shared/types.ts'
+    ),
+  },
+  {
+    skill: 'visual-ui-reference',
+    path: 'harness/skills/visual-ui-reference/SKILL.md',
+    when: f => f.output_files.some(p =>
+      p === 'app/index.html' ||
+      p === 'app/style.css' ||
+      p === 'app/main.ts' ||
+      p === 'app/ui.ts' ||
+      p === 'app/map.ts'
+    ),
+  },
+  {
+    skill: 'map-layers',
+    path: 'harness/skills/map-layers/SKILL.md',
+    when: f => f.output_files.includes('app/map.ts'),
+  },
+  {
+    skill: 'parking-domain-logic',
+    path: 'harness/skills/parking-domain-logic/SKILL.md',
+    when: f => f.output_files.some(p =>
+      p.startsWith('shared/') &&
+      p !== 'shared/types.ts'
+    ),
+  },
+  {
+    skill: 'static-data-build',
+    path: 'harness/skills/static-data-build/SKILL.md',
+    when: f => f.output_files.some(p =>
+      p.startsWith('data/') ||
+      p.startsWith('fetcher/') ||
+      p === 'package.json' ||
+      p === 'vercel.json'
+    ),
+  },
+]
+
+function getRelevantSkillPaths(feature) {
+  return SKILL_RULES
+    .filter(rule => rule.when(feature))
+    .map(rule => rule.path)
 }
 
 // Strips sections from contextContent whose file paths overlap with outputFiles.
@@ -122,7 +199,15 @@ function toOutputPath(f) {
 // appears in exactly one place — the fresh writtenFiles block wins.
 function filterContextForReviser(contextContent, outputFiles) {
   if (!contextContent || outputFiles.length === 0) return contextContent
-  const outputSet = new Set(outputFiles)
+  const outputSet = new Set()
+  for (const f of outputFiles) {
+    outputSet.add(f)
+    if (f.startsWith(`${OUTPUT_DIR}/`)) {
+      outputSet.add(f.slice(OUTPUT_DIR.length + 1))
+    } else {
+      outputSet.add(`${OUTPUT_DIR}/${f}`)
+    }
+  }
   // Split on section headers: "=== FILE: <path> ==="
   const sections = contextContent.split(/(=== FILE: [^\n]+ ===)/)
   const kept = []
@@ -219,6 +304,8 @@ const FRONT_MATTER_SCHEMA = {
           post_build_command: { type: 'string' },
           pre_eval_command:   { type: 'string' },
           run_tests:          { type: 'boolean' },
+          spec_file:          { type: 'string' },
+          harness_task:       { type: 'boolean' },
         },
       },
     },
@@ -244,10 +331,11 @@ const BASELINE_SCHEMA = {
 
 const STATIC_READS_SCHEMA = {
   type: 'object',
-  required: ['claudeMd', 'featureSpec'],
+  required: ['claudeMd', 'featureSpec', 'relevantSkills'],
   properties: {
-    claudeMd:    { type: 'string' },
-    featureSpec: { type: 'string' },
+    claudeMd:       { type: 'string' },
+    featureSpec:    { type: 'string' },
+    relevantSkills: { type: 'string' },
   },
 }
 
@@ -492,6 +580,7 @@ const outputFiles      = target.output_files || []
 const postBuildCommand = target.post_build_command || null
 const preEvalCommand   = target.pre_eval_command   || null
 const runTests         = target.run_tests !== false
+const specPath         = target.spec_file ?? `specs/${targetId}.md`
 const contextFilePaths = target.context_files || []
 
 log(`Target: ${targetId} — ${targetName}`)
@@ -499,8 +588,8 @@ log(`Output files expected: ${outputFiles.join(', ')}`)
 log(`Tokens spent: ${budget.spent().toLocaleString()}`)
 
 const featureTestFiles  = outputFiles.filter(f => f.startsWith('tests/'))
-const outputPaths       = outputFiles.map(f => `${OUTPUT_DIR}/${f}`)
-const featureTestPaths  = featureTestFiles.map(f => `${OUTPUT_DIR}/${f}`)
+const outputPaths       = outputFiles.map(toOutputPath)
+const featureTestPaths  = featureTestFiles.map(toOutputPath)
 
 // Detect mutation features: output files this feature modifies that were already written by a DONE feature.
 // Pure JS — no agent call needed.
@@ -518,7 +607,7 @@ for (const mutatedFile of mutatedFiles) {
   }
 }
 const isMutationFeature = mutatedFiles.length > 0 && owningTestFiles.length > 0
-const owningTestPaths   = owningTestFiles.map(f => `${OUTPUT_DIR}/${f}`)
+const owningTestPaths   = owningTestFiles.map(toOutputPath)
 
 const tokensAtStart    = budget.spent()
 const metricVerdicts   = []   // e.g. ["FAIL", "NEEDS-REVISION", "PASS"]
@@ -527,10 +616,17 @@ const metricFailures   = []   // all evaluator failure strings, accumulated
 
 // Step 4: Pipeline reads — fire both immediately, await static first (2 small files),
 // then overlap spec-lint with the still-running context read.
+const skillPaths = getRelevantSkillPaths(target)
+
+const skillReadInstructions = skillPaths.length > 0
+  ? `\nAlso read these skill files and concatenate their full contents into "relevantSkills":\n${skillPaths.join('\n')}\n`
+  : `\nReturn an empty string for "relevantSkills" — no skill files apply.\n`
+
 const staticReadsPromise = agent(
-  `Read two files and return their exact full contents — do not summarize or paraphrase either.
-File 1: CLAUDE.md → return as the "claudeMd" field.
-File 2: specs/${targetId}.md → return as the "featureSpec" field.`,
+  `Read files and return exact full contents. Do not summarize.
+File 1: CLAUDE.md → "claudeMd" field.
+File 2: ${specPath} → "featureSpec" field.
+${skillReadInstructions}`,
   { schema: STATIC_READS_SCHEMA, label: `read-static:${targetId}`, phase: 'Setup' }
 )
 const contextPromise = contextFilePaths.length > 0
@@ -554,8 +650,9 @@ if (!staticReads) {
   log('Failed to read CLAUDE.md or feature spec — aborting.')
   return { done: false, reason: `Failed to read static files for ${targetId}` }
 }
-const featureSpec = staticReads.featureSpec
-const agentMd     = staticReads.claudeMd
+const featureSpec    = staticReads.featureSpec
+const agentMd        = staticReads.claudeMd
+const relevantSkills = staticReads.relevantSkills || ''
 
 // Filtered views of CLAUDE.md for agents that only need specific sections.
 // The spec linter and evaluator don't need the pipeline description, dependency
@@ -569,6 +666,7 @@ const hardConstraintsOnly = agentMd.slice(_hcStart, _hcEnd)
 const _gotchasStart = agentMd.indexOf('\n## Known gotchas')
 const _gotchasEnd   = agentMd.indexOf('\n## ', _gotchasStart + 1)
 const evalMd        = hardConstraintsOnly + agentMd.slice(_gotchasStart, _gotchasEnd)
+  + (relevantSkills ? `\n\n=== RELEVANT SKILLS ===\n${relevantSkills}` : '')
 
 // ─── Phase 1.5: Validate Spec (pure JS — runs before contextPromise resolves) ────
 
@@ -584,7 +682,7 @@ if (!runTests) {
 
   if (issues.length > 0) {
     issues.forEach(i => log(`  ⚠ ${i}`))
-    log(`Spec invalid — fix specs/${targetId}.md before retrying ${targetId}`)
+    log(`Spec invalid — fix ${specPath} before retrying ${targetId}`)
     const blockedSpecStuck = `# ${targetId} — Blocked at spec validation\n\n## Reason\nSpec validation failed before the Creator ran.\n\n## Issues\n${issues.map(i => `- ${i}`).join('\n')}`
     // contextPromise is still running; we abandon it and return early.
     return await blockFeature(targetId, blockedSpecStuck, {
@@ -681,12 +779,32 @@ const preflightNotes = (preflight && preflight.issues && preflight.issues.length
   ? `\n\n## Pre-flight Spec Notes\nThe spec linter flagged potential ambiguities. Be alert to these when writing tests and implementation:\n${preflight.issues.map(i => `- ${i.text}`).join('\n')}`
   : ''
 
+// Deterministic validator preflight — blocks Creator if harness state is invalid
+const validatorPreflight = await agent(
+  `Run these commands in sequence in the project root. Return passed=true only if ALL exit code 0.
+
+node harness/validate-paths.js && node harness/validate-feature-graph.js && node harness/validate-specs.js
+
+Capture combined stdout+stderr as "output". Return passed=false if any command fails or is not found.`,
+  { schema: PRE_EVAL_VALIDATION_SCHEMA, label: `validator-preflight:${targetId}`, phase: 'Create' }
+)
+
+if (validatorPreflight && !validatorPreflight.passed) {
+  log(`Validator preflight FAIL — blocking ${targetId}`)
+  log(`  ${validatorPreflight.output.split('\n')[0]}`)
+  const blockedValidatorStuck = `# ${targetId} — Blocked at validator preflight\n\n## Reason\nDeterministic harness validator failed before Creator ran.\n\n## Output\n${validatorPreflight.output}`
+  return await blockFeature(targetId, blockedValidatorStuck, {
+    label: 'validator-preflight', phase: 'Create',
+    reason: 'Validator preflight failed: ' + validatorPreflight.output.split('\n')[0],
+  })
+}
+
 await agent(
   `${CREATOR_TEMPLATE}
 
 === PROJECT PROCESS AND CONSTRAINTS (CLAUDE.md) ===
 ${agentMd}
-
+${relevantSkills ? `\n=== RELEVANT SKILLS ===\n${relevantSkills}\n` : ''}
 === FEATURE SPEC ===
 ${featureSpec}${preflightNotes}
 
@@ -908,7 +1026,7 @@ Issue your verdict now.`
 
 === PROJECT PROCESS AND CONSTRAINTS (CLAUDE.md) ===
 ${agentMd}
-
+${relevantSkills ? `\n=== RELEVANT SKILLS ===\n${relevantSkills}\n` : ''}
 === CONTEXT FILES ===
 ${filterContextForReviser(contextContent, outputPaths)}
 
@@ -1098,7 +1216,7 @@ If 2 or more records exist:
    - spec_ambiguity: the spec does not clearly define expected behavior for this case
    - constraint_violation: a CLAUDE.md hard constraint is not prominently stated in the spec
    - model_confusion: the model understands the spec but makes a reasoning error (hints cannot fix this)
-5. For spec_ambiguity and constraint_violation failures only, append the section below to specs/${targetId}.md.
+5. For spec_ambiguity and constraint_violation failures only, append the section below to ${specPath}.
    Do NOT remove or replace any existing content (including any existing "## Hints for Retry" section).
 
 Section to append (fill in the <...> placeholders with actual content):

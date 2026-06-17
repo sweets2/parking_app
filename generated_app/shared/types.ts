@@ -81,3 +81,88 @@ export interface BusStop {
   lat: number;   // stop_lat
   lng: number;   // stop_lon
 }
+
+export type AppMode = "check" | "rules";
+
+export type ParkingStatus =
+  | "safe"
+  | "unknown"
+  | "limited"
+  | "ticket"
+  | "tow"
+  | "snow";
+
+export type ParkingSide =
+  | "North"
+  | "South"
+  | "East"
+  | "West"
+  | "Both"
+  | "Unknown";
+
+export interface CheckQuery {
+  startTime: Date;
+  endTime: Date;
+  label: string;
+  source: "duration" | "parser";
+}
+
+export interface ParkingWindowConflict {
+  status: ParkingStatus;
+  reason: string;
+  label: string;
+  startsAt?: Date;
+  endsAt?: Date;
+  sourceId?: string;
+  sourceType?:
+    | "street-cleaning"
+    | "tow-sign"
+    | "snow-route"
+    | "unknown";
+}
+
+export interface SegmentGeometry {
+  ways: Array<Array<[number, number]>>;
+  clipped: boolean;
+  source: "road-geometry";
+}
+
+export interface ParkingSegment {
+  id: string;
+  street: string;
+  location: string;
+  side: ParkingSide;
+  geometry?: SegmentGeometry;
+  cleaningEntries: StreetCleaningEntry[];
+  towSigns: Sign[];
+  snowRoutes: SnowRoute[];
+}
+
+export interface CheckResultSegment {
+  id: string;
+  street: string;
+  location: string;
+  side: ParkingSide;
+  status: ParkingStatus;
+  conflicts: ParkingWindowConflict[];
+  primaryConflict?: ParkingWindowConflict;
+  geometry?: SegmentGeometry;
+}
+
+export interface RulesTimeSelection {
+  mode: "now" | "custom";
+  selectedTime: Date;
+}
+
+export interface RulesInspectionSection {
+  title: string;
+  content: string;
+  priority: ParkingStatus;
+}
+
+export interface NextRestriction {
+  startsAt: Date;
+  endsAt: Date;
+  label: string;
+  status: ParkingStatus;
+}

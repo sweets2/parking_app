@@ -2,8 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["tests/**/*.test.ts"],
     environment: "node",
-    sequence: { shuffle: false },
+    include: ["tests/**/*.test.ts"],
   },
 });

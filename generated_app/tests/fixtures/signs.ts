@@ -50,7 +50,7 @@ export const NOW_AFTER_EXPIRED: Date = new Date("2031-01-01T12:00:00.000Z");
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Shape of a sign entry in data/latest.json (raw field names). */
+/** Shape of a sign entry in data/latest.json (normalized field names). */
 interface RawJsonSign {
   id: string;
   address: string;
@@ -60,8 +60,11 @@ interface RawJsonSign {
   end_time: string;
   reason: string;
   permit_number: string;
-  latitude: number;
-  longitude: number;
+  lat: number;
+  lng: number;
+  start_iso: string;
+  end_iso: string;
+  active_at_fetch: boolean;
 }
 
 /** Shape of the top-level object in data/latest.json. */
@@ -108,8 +111,8 @@ function transform(raw: RawJsonSign): Sign {
     address: raw.address,
     reason: toSignReason(raw.reason),
     permit_number: raw.permit_number,
-    lat: raw.latitude,
-    lng: raw.longitude,
+    lat: raw.lat,
+    lng: raw.lng,
     start_date: raw.start_date,
     start_time: raw.start_time,
     stop_date: raw.stop_date,
@@ -126,7 +129,7 @@ function transform(raw: RawJsonSign): Sign {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const dataPath = join(__dirname, "../../../data/latest.json");
+const dataPath = join(__dirname, "../../data/latest.json");
 const raw = JSON.parse(readFileSync(dataPath, "utf-8")) as RawJsonFile;
 
 /** Mirrors the top-level ParkingData shape (count + signs length must match). */

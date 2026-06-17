@@ -16,6 +16,9 @@ import {
   extractCrossStreets,
   detectMatchingSegment,
   getStreetOrientation,
+  evaluateParkingWindow,
+  getPrimaryConflict,
+  getNextRestriction,
 } from "../../shared/parking-logic";
 import type { ViolationWindow } from "../../shared/parking-logic";
 import {
@@ -32,7 +35,7 @@ import {
   NOW_STABLE,
   NOW_AFTER_EXPIRED,
 } from "../fixtures/signs";
-import type { Sign } from "../../shared/types";
+import type { Sign, ParkingSegment, ParkingWindowConflict, StreetCleaningEntry, SnowRoute } from "../../shared/types";
 
 // Helper: build a minimal Sign for inline tests
 function makeSign(overrides: Partial<Sign>): Sign {
@@ -50,6 +53,20 @@ function makeSign(overrides: Partial<Sign>): Sign {
     start_iso: "2020-01-01T00:00:00",
     end_iso: "2030-12-31T07:00:00",
     active_at_fetch: true,
+    ...overrides,
+  };
+}
+
+// Helper to build a ParkingSegment
+function makeSegment(overrides: Partial<ParkingSegment>): ParkingSegment {
+  return {
+    id: "seg-test",
+    street: "Test St",
+    location: "1st Ave to 2nd Ave",
+    side: "East",
+    cleaningEntries: [],
+    towSigns: [],
+    snowRoutes: [],
     ...overrides,
   };
 }
@@ -788,5 +805,347 @@ describe("F-23 getStreetOrientation", () => {
 
   it("GIVEN '500 WASHINGTON ST' (single house number, named NS street), THEN returns 'NS' — verifies house digits are not mistaken for street digits", () => {
     expect(getStreetOrientation("500 WASHINGTON ST")).toBe("NS");
+  });
+});
+
+// ─── F-48 evaluateParkingWindow ─────────────────────────────────────────────
+//
+// All time-sensitive test dates are anchored to NOW_STABLE (2026-06-09T16:00:00Z)
+// which is 2026-06-09 noon ET. We pick a specific UTC date for the cleaning
+// interval tests. NOW_STABLE is on a Tuesday (2026-06-09 UTC).
+//
+// For cleaning schedule tests we use a Monday cleaning schedule:
+//   schedule: "Monday   10 am – 12 pm"
+// We construct the query dates as offsets from NOW_STABLE.
+// NOW_STABLE = 2026-06-09T16:00:00Z (Tuesday noon ET)
+// We pick the previous Monday: 2026-06-08T14:00:00Z = Monday 10 AM ET
+// (14:00 UTC = 10:00 AM ET when EDT = UTC-4)
+//
+// Cleaning interval: 10 am – 12 pm on Monday = 14:00Z – 16:00Z on 2026-06-08
+// schedule string format: "Monday   10 am – 12 pm"
+//   (three spaces between day and time, en-dash between hours)
+
+// Monday 2026-06-08 times in UTC (EDT = UTC-4):
+// 09:00 ET = 13:00 UTC
+// 09:59 ET = 13:59 UTC
+// 10:00 ET = 14:00 UTC
+// 10:01 ET = 14:01 UTC
+// 12:00 ET = 16:00 UTC
+// 13:00 ET = 17:00 UTC
+//
+// We use the UTC timestamps directly.
+
+const MONDAY_10AM_UTC = new Date(NOW_STABLE.getTime() - 3 * 60 * 60 * 1000); // 13:00 UTC on 2026-06-09
+// Actually let's anchor to the previous Monday 2026-06-08.
+// NOW_STABLE is 2026-06-09T16:00:00Z (Tuesday 12:00 ET)
+// Previous Monday 14:00 UTC = Monday 10:00 AM ET
+const PREV_MONDAY_14UTC = new Date(NOW_STABLE.getTime() - 26 * 60 * 60 * 1000); // 2026-06-08T14:00:00Z
+
+function makeCleaningEntry(schedule: string): StreetCleaningEntry {
+  return {
+    street: "Test Street",
+    side: "East",
+    schedule,
+    location: "1st Ave to 2nd Ave",
+  };
+}
+
+function makeSnowRoute(): SnowRoute {
+  return {
+    street: "TEST ST",
+    side: "Both",
+    from: "1st Ave",
+    to: "2nd Ave",
+  };
+}
+
+describe("F-48 evaluateParkingWindow", () => {
+  // Case 1: safe — query ends exactly at restriction start (end-exclusive)
+  // Cleaning interval [10:00 AM, 12:00 PM) on Monday
+  // Query [09:00 AM, 10:00 AM) → no overlap (end-exclusive on both sides)
+  it("GIVEN cleaning interval 10am–12pm on Monday, WHEN query is 09:00–10:00 on that Monday, THEN status=safe, conflicts=[]", () => {
+    // Monday 2026-06-08: 09:00 ET = 13:00 UTC, 10:00 ET = 14:00 UTC
+    const queryStart = new Date(PREV_MONDAY_14UTC.getTime() - 60 * 60 * 1000); // 13:00 UTC
+    const queryEnd   = new Date(PREV_MONDAY_14UTC.getTime());                   // 14:00 UTC
+
+    const seg = makeSegment({
+      cleaningEntries: [makeCleaningEntry("Monday   10 am – 12 pm")],
+    });
+    const result = evaluateParkingWindow(seg, {
+      startTime: queryStart,
+      endTime: queryEnd,
+      label: "1h",
+      source: "duration",
+    });
+    expect(result.status).toBe("safe");
+    expect(result.conflicts.length).toBe(0);
+  });
+
+  // Case 2: ticket — query overlaps restriction start
+  // Query [09:59 AM, 10:01 AM) overlaps [10:00 AM, 12:00 PM)
+  it("GIVEN cleaning interval 10am–12pm on Monday, WHEN query is 09:59–10:01 on that Monday, THEN status=ticket, conflicts.length=1, conflicts[0].status=ticket", () => {
+    // 09:59 ET = 13:59 UTC, 10:01 ET = 14:01 UTC
+    const queryStart = new Date(PREV_MONDAY_14UTC.getTime() - 1 * 60 * 1000);  // 13:59 UTC
+    const queryEnd   = new Date(PREV_MONDAY_14UTC.getTime() + 1 * 60 * 1000);  // 14:01 UTC
+
+    const seg = makeSegment({
+      cleaningEntries: [makeCleaningEntry("Monday   10 am – 12 pm")],
+    });
+    const result = evaluateParkingWindow(seg, {
+      startTime: queryStart,
+      endTime: queryEnd,
+      label: "2m",
+      source: "duration",
+    });
+    expect(result.status).toBe("ticket");
+    expect(result.conflicts.length).toBe(1);
+    expect(result.conflicts[0].status).toBe("ticket");
+  });
+
+  // Case 3: safe — end-exclusive boundary at 12:00 PM
+  // Cleaning interval [10:00 AM, 12:00 PM) — end is exclusive
+  // Query [12:00 PM, 13:00 PM) → no overlap
+  it("GIVEN cleaning interval 10am–12pm on Monday, WHEN query is 12:00–13:00 on that Monday, THEN status=safe, conflicts=[] (end exclusive)", () => {
+    // 12:00 ET = 16:00 UTC, 13:00 ET = 17:00 UTC
+    const queryStart = new Date(PREV_MONDAY_14UTC.getTime() + 2 * 60 * 60 * 1000); // 16:00 UTC
+    const queryEnd   = new Date(PREV_MONDAY_14UTC.getTime() + 3 * 60 * 60 * 1000); // 17:00 UTC
+
+    const seg = makeSegment({
+      cleaningEntries: [makeCleaningEntry("Monday   10 am – 12 pm")],
+    });
+    const result = evaluateParkingWindow(seg, {
+      startTime: queryStart,
+      endTime: queryEnd,
+      label: "1h",
+      source: "duration",
+    });
+    expect(result.status).toBe("safe");
+    expect(result.conflicts.length).toBe(0);
+  });
+
+  // Case 4: tow wins over cleaning — both overlap query
+  it("GIVEN segment has tow sign active during query AND cleaning interval overlapping query, THEN status=tow and primaryConflict.status=tow", () => {
+    // Query window: 13:59 UTC – 14:01 UTC on 2026-06-08 (overlaps cleaning 10am-12pm)
+    const queryStart = new Date(PREV_MONDAY_14UTC.getTime() - 1 * 60 * 1000);
+    const queryEnd   = new Date(PREV_MONDAY_14UTC.getTime() + 1 * 60 * 1000);
+
+    // Tow sign active during query
+    const towSign = makeSign({
+      id: "tow-1",
+      start_iso: new Date(PREV_MONDAY_14UTC.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      end_iso:   new Date(PREV_MONDAY_14UTC.getTime() + 2 * 60 * 60 * 1000).toISOString(),
+    });
+
+    const seg = makeSegment({
+      cleaningEntries: [makeCleaningEntry("Monday   10 am – 12 pm")],
+      towSigns: [towSign],
+    });
+    const result = evaluateParkingWindow(seg, {
+      startTime: queryStart,
+      endTime: queryEnd,
+      label: "2m",
+      source: "duration",
+    });
+    expect(result.status).toBe("tow");
+    expect(result.primaryConflict).not.toBeUndefined();
+    expect(result.primaryConflict?.status).toBe("tow");
+  });
+
+  // Case 5: snow wins over cleaning (no tow sign)
+  it("GIVEN segment has snow route AND cleaning interval both overlapping query (no tow sign), THEN status=snow and primaryConflict.status=snow", () => {
+    const queryStart = new Date(PREV_MONDAY_14UTC.getTime() - 1 * 60 * 1000);
+    const queryEnd   = new Date(PREV_MONDAY_14UTC.getTime() + 1 * 60 * 1000);
+
+    const seg = makeSegment({
+      cleaningEntries: [makeCleaningEntry("Monday   10 am – 12 pm")],
+      snowRoutes: [makeSnowRoute()],
+    });
+    const result = evaluateParkingWindow(seg, {
+      startTime: queryStart,
+      endTime: queryEnd,
+      label: "2m",
+      source: "duration",
+    });
+    expect(result.status).toBe("snow");
+    expect(result.primaryConflict).not.toBeUndefined();
+    expect(result.primaryConflict?.status).toBe("snow");
+  });
+
+  // Case 6: safe — segment with no restrictions at all
+  it("GIVEN segment with no cleaningEntries, no towSigns, no snowRoutes, THEN status=safe, conflicts=[], primaryConflict=undefined", () => {
+    const seg = makeSegment({});
+    const result = evaluateParkingWindow(seg, {
+      startTime: PREV_MONDAY_14UTC,
+      endTime: new Date(PREV_MONDAY_14UTC.getTime() + 60 * 60 * 1000),
+      label: "1h",
+      source: "duration",
+    });
+    expect(result.status).toBe("safe");
+    expect(result.conflicts.length).toBe(0);
+    expect(result.primaryConflict).toBeUndefined();
+  });
+
+  // Case 7: unknown — unparseable schedule string
+  it("GIVEN segment with cleaningEntries with an unparseable schedule string, THEN status=unknown, conflicts.length=1, conflicts[0].status=unknown", () => {
+    const seg = makeSegment({
+      cleaningEntries: [makeCleaningEntry("INVALID SCHEDULE !!!")],
+    });
+    const result = evaluateParkingWindow(seg, {
+      startTime: PREV_MONDAY_14UTC,
+      endTime: new Date(PREV_MONDAY_14UTC.getTime() + 60 * 60 * 1000),
+      label: "1h",
+      source: "duration",
+    });
+    expect(result.status).toBe("unknown");
+    expect(result.conflicts.length).toBe(1);
+    expect(result.conflicts[0].status).toBe("unknown");
+  });
+
+  // Verify result shape has required fields
+  it("GIVEN a safe segment, THEN result has id, street, location, side, geometry from segment", () => {
+    const seg = makeSegment({ id: "seg-id-1", street: "Main St", location: "A to B", side: "West" });
+    const result = evaluateParkingWindow(seg, {
+      startTime: PREV_MONDAY_14UTC,
+      endTime: new Date(PREV_MONDAY_14UTC.getTime() + 60 * 60 * 1000),
+      label: "1h",
+      source: "duration",
+    });
+    expect(result.id).toBe("seg-id-1");
+    expect(result.street).toBe("Main St");
+    expect(result.location).toBe("A to B");
+    expect(result.side).toBe("West");
+  });
+});
+
+// ─── F-48 getPrimaryConflict ─────────────────────────────────────────────────
+
+describe("F-48 getPrimaryConflict", () => {
+  function makeConflict(status: ParkingWindowConflict["status"]): ParkingWindowConflict {
+    return { status, reason: "test", label: "test label" };
+  }
+
+  it("GIVEN empty array, THEN returns undefined", () => {
+    expect(getPrimaryConflict([])).toBeUndefined();
+  });
+
+  it("GIVEN conflicts of status ['ticket', 'tow', 'limited'], THEN returns the tow conflict", () => {
+    const conflicts = [
+      makeConflict("ticket"),
+      makeConflict("tow"),
+      makeConflict("limited"),
+    ];
+    const result = getPrimaryConflict(conflicts);
+    expect(result).not.toBeUndefined();
+    expect(result?.status).toBe("tow");
+  });
+
+  it("GIVEN conflicts of status ['snow', 'limited'], THEN returns the snow conflict", () => {
+    const conflicts = [
+      makeConflict("snow"),
+      makeConflict("limited"),
+    ];
+    const result = getPrimaryConflict(conflicts);
+    expect(result).not.toBeUndefined();
+    expect(result?.status).toBe("snow");
+  });
+
+  it("GIVEN single conflict of status 'ticket', THEN returns that conflict", () => {
+    const conflicts = [makeConflict("ticket")];
+    const result = getPrimaryConflict(conflicts);
+    expect(result?.status).toBe("ticket");
+  });
+
+  it("GIVEN all statuses, THEN tow wins", () => {
+    const conflicts = [
+      makeConflict("safe"),
+      makeConflict("unknown"),
+      makeConflict("limited"),
+      makeConflict("ticket"),
+      makeConflict("snow"),
+      makeConflict("tow"),
+    ];
+    const result = getPrimaryConflict(conflicts);
+    expect(result?.status).toBe("tow");
+  });
+});
+
+// ─── F-48 getNextRestriction ─────────────────────────────────────────────────
+//
+// Tests use NOW_STABLE as `after`. Tow sign start_iso/end_iso use UTC Z-suffix
+// strings derived from NOW_STABLE.getTime() offsets.
+
+describe("F-48 getNextRestriction", () => {
+  // Case 1: tow sign whose start_iso is strictly after NOW_STABLE
+  it("GIVEN segment with tow sign starting after NOW_STABLE, WHEN getNextRestriction(after=NOW_STABLE), THEN result.startsAt equals the tow start and result.status=tow", () => {
+    // Start 1 hour after NOW_STABLE
+    const startMs = NOW_STABLE.getTime() + 60 * 60 * 1000;
+    const endMs   = startMs + 2 * 60 * 60 * 1000;
+    const towSign = makeSign({
+      id: "future-tow",
+      start_iso: new Date(startMs).toISOString(),
+      end_iso:   new Date(endMs).toISOString(),
+    });
+    const seg = makeSegment({ towSigns: [towSign] });
+    const result = getNextRestriction(seg, NOW_STABLE);
+    expect(result).not.toBeUndefined();
+    expect(result?.startsAt.getTime()).toBe(startMs);
+    expect(result?.status).toBe("tow");
+  });
+
+  // Case 2: tow sign start_iso equals NOW_STABLE — not strictly after, returns undefined
+  it("GIVEN tow sign start_iso equals NOW_STABLE, WHEN getNextRestriction(after=NOW_STABLE), THEN returns undefined (after is exclusive)", () => {
+    const startMs = NOW_STABLE.getTime(); // exactly equals after
+    const endMs   = startMs + 2 * 60 * 60 * 1000;
+    const towSign = makeSign({
+      id: "same-time-tow",
+      start_iso: new Date(startMs).toISOString(),
+      end_iso:   new Date(endMs).toISOString(),
+    });
+    const seg = makeSegment({ towSigns: [towSign] });
+    const result = getNextRestriction(seg, NOW_STABLE);
+    expect(result).toBeUndefined();
+  });
+
+  // Case 3: no tow signs, no cleaning, no snow routes
+  it("GIVEN segment with no tow signs, no cleaning entries, no snow routes, THEN returns undefined", () => {
+    const seg = makeSegment({});
+    const result = getNextRestriction(seg, NOW_STABLE);
+    expect(result).toBeUndefined();
+  });
+
+  // Case 4: multiple future tow signs — return the earliest
+  it("GIVEN two future tow signs, WHEN getNextRestriction called, THEN returns the one with smaller startsAt", () => {
+    const startMs1 = NOW_STABLE.getTime() + 2 * 60 * 60 * 1000; // 2h from now
+    const startMs2 = NOW_STABLE.getTime() + 1 * 60 * 60 * 1000; // 1h from now (earlier)
+
+    const tow1 = makeSign({
+      id: "tow-later",
+      start_iso: new Date(startMs1).toISOString(),
+      end_iso:   new Date(startMs1 + 60 * 60 * 1000).toISOString(),
+    });
+    const tow2 = makeSign({
+      id: "tow-sooner",
+      start_iso: new Date(startMs2).toISOString(),
+      end_iso:   new Date(startMs2 + 60 * 60 * 1000).toISOString(),
+    });
+
+    const seg = makeSegment({ towSigns: [tow1, tow2] });
+    const result = getNextRestriction(seg, NOW_STABLE);
+    expect(result).not.toBeUndefined();
+    expect(result?.startsAt.getTime()).toBe(startMs2);
+  });
+
+  // Case 5: tow sign that already started before NOW_STABLE but ends after — not returned (already active, not future)
+  it("GIVEN tow sign already started (start_iso before NOW_STABLE), WHEN getNextRestriction(after=NOW_STABLE), THEN returns undefined", () => {
+    const startMs = NOW_STABLE.getTime() - 60 * 60 * 1000; // started 1h ago
+    const endMs   = NOW_STABLE.getTime() + 60 * 60 * 1000; // ends 1h from now
+    const towSign = makeSign({
+      id: "already-active",
+      start_iso: new Date(startMs).toISOString(),
+      end_iso:   new Date(endMs).toISOString(),
+    });
+    const seg = makeSegment({ towSigns: [towSign] });
+    const result = getNextRestriction(seg, NOW_STABLE);
+    expect(result).toBeUndefined();
   });
 });

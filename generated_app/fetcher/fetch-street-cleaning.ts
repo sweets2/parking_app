@@ -1,47 +1,72 @@
-import * as fs from "fs/promises";
-import * as path from "path";
+import * as nodePath from "path";
+import * as nodeFs from "fs";
 import { parse } from "node-html-parser";
 import type { StreetCleaningEntry, StreetCleaningData } from "../shared/types";
+import type { FsBackend } from "./fetch";
 
 const SOURCE_URL =
   "https://www.hobokennj.gov/resources/street-cleaning-schedule";
 
-/**
- * Normalizes raw scraped schedule text into the canonical display format:
- * "Monday through Friday  8 am – 9 am"
- *
- * Handles inconsistencies from the city website:
- *   - "Monday-Friday"  → "Monday through Friday"
- *   - " - " separator → two spaces
- *   - "X am to Y am"  → "X am – Y am"
- *   - "12 noon"       → "12 pm"
- *   - "2pm"           → "2 pm"
- */
-export function normalizeSchedule(raw: string): string {
-  let s = raw.replace(/\bMonday\s*-\s*Friday\b/gi, "Monday through Friday");
-  const timeStart = s.search(/\d/);
-  if (timeStart === -1) return s;
-  const daysPart = s.slice(0, timeStart).replace(/[\s\-–—]+$/, "");
-  let timePart = s.slice(timeStart).trim();
-  timePart = timePart.replace(/(\d)(am|pm)\b/gi, "$1 $2");
-  timePart = timePart.replace(/\b12\s*noon\b/gi, "12 pm");
-  timePart = timePart.replace(/\s+to\s+/gi, " – ");
-  return `${daysPart}   ${timePart}`;
-}
-
 // Resolve data directory relative to this file at runtime
-const DATA_DIR = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
+const DATA_DIR = nodePath.resolve(
+  nodePath.dirname(new URL(import.meta.url).pathname),
   "../data"
 );
 
 /**
+ * Normalizes raw scraped schedule text into the canonical display format:
+ * "Monday through Friday   8 am – 9 am"
+ *
+ * Rules:
+ * - Replaces dash-separated day ranges with "through" (e.g. "Monday-Friday" → "Monday through Friday")
+ * - Strips trailing dash/separator between day part and time part (e.g. "Monday - 11 am" → "Monday   11 am")
+ * - Inserts a triple-space separator between the day/range part and the time part
+ * - Normalizes "AM"/"PM" to lowercase "am"/"pm"
+ * - Replaces "X to Y" with "X – Y" (en dash) in time ranges
+ * - Normalizes "12 noon" to "12 pm"
+ * - Ensures space between digit and am/pm (e.g. "8am" → "8 am")
+ */
+export function normalizeSchedule(raw: string): string {
+  // Replace dash-separated day ranges (e.g. "Monday-Friday") with "through"
+  let s = raw.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*-\s*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/gi, "$1 through $2");
+
+  // Find where the time part starts (first digit)
+  const timeStart = s.search(/\d/);
+  if (timeStart === -1) {
+    return s;
+  }
+
+  // Day part: everything before the first digit, strip trailing dashes/spaces/separators
+  const daysPart = s.slice(0, timeStart).replace(/[\s\-–—]+$/, "").trimEnd();
+  let timePart = s.slice(timeStart).trim();
+
+  // Ensure space between digit and am/pm (e.g. "8am" → "8 am")
+  timePart = timePart.replace(/(\d)(am|pm)\b/gi, "$1 $2");
+
+  // Normalize "12 noon" to "12 pm"
+  timePart = timePart.replace(/\b12\s*noon\b/gi, "12 pm");
+
+  // Replace "X to Y" with "X – Y" (en dash) in time ranges
+  timePart = timePart.replace(/\s+to\s+/gi, " – ");
+
+  // Normalize AM/PM to lowercase
+  timePart = timePart.replace(/\bAM\b/g, "am").replace(/\bPM\b/g, "pm");
+
+  return `${daysPart}   ${timePart}`;
+}
+
+/**
  * Parses the raw HTML of the Hoboken street cleaning schedule page and returns
- * an array of StreetCleaningEntry objects. Filters out the header row
- * (where street === "Street"). Skips any div.table_wrapper with class
- * w-condition-invisible (hidden mobile duplicate).
+ * an array of StreetCleaningEntry objects.
+ *
+ * Uses div.w-dyn-item selector. Filters out the header row (street === "Street").
+ * Skips any div.table_wrapper with class w-condition-invisible (hidden mobile duplicate).
  */
 export function parseCleaningHtml(html: string): StreetCleaningEntry[] {
+  if (html.trim() === "") {
+    return [];
+  }
+
   const root = parse(html);
   const items = root.querySelectorAll("div.w-dyn-item");
   const entries: StreetCleaningEntry[] = [];
@@ -51,12 +76,30 @@ export function parseCleaningHtml(html: string): StreetCleaningEntry[] {
     const wrappers = item.querySelectorAll("div.table_wrapper");
     let visibleWrapper = null;
 
-    for (const wrapper of wrappers) {
-      const classes = wrapper.classNames;
-      if (!classes.includes("w-condition-invisible")) {
-        visibleWrapper = wrapper;
-        break;
+    if (wrappers.length === 0) {
+      // No table_wrapper — try to get cells directly from item
+      const cells = item.querySelectorAll("div.table-content");
+      if (cells.length >= 4) {
+        const street = (cells[0]?.innerText ?? "").trim();
+        if (street === "Street") continue;
+        const side = (cells[1]?.innerText ?? "").trim();
+        const rawSchedule = (cells[2]?.innerText ?? "").trim();
+        const schedule = normalizeSchedule(rawSchedule);
+        const location = (cells[3]?.innerText ?? "").trim();
+        if (street === "" || side === "" || location === "") continue;
+        entries.push({ street, side, schedule, location });
       }
+      continue;
+    }
+
+    for (const wrapper of wrappers) {
+      const classAttr = wrapper.getAttribute("class") ?? "";
+      const classes = classAttr.split(/\s+/);
+      if (classes.includes("w-condition-invisible")) {
+        continue;
+      }
+      visibleWrapper = wrapper;
+      break;
     }
 
     if (visibleWrapper === null) {
@@ -69,17 +112,19 @@ export function parseCleaningHtml(html: string): StreetCleaningEntry[] {
     }
 
     const street = (cells[0]?.innerText ?? "").trim();
-    const side = (cells[1]?.innerText ?? "").trim();
-    const schedule = normalizeSchedule((cells[2]?.innerText ?? "").trim());
-    const location = (cells[3]?.innerText ?? "").trim();
 
     // Filter out the header row
     if (street === "Street") {
       continue;
     }
 
+    const side = (cells[1]?.innerText ?? "").trim();
+    const rawSchedule = (cells[2]?.innerText ?? "").trim();
+    const schedule = normalizeSchedule(rawSchedule);
+    const location = (cells[3]?.innerText ?? "").trim();
+
     // Only include rows where all fields are non-empty
-    if (street === "" || side === "" || schedule === "" || location === "") {
+    if (street === "" || side === "" || location === "") {
       continue;
     }
 
@@ -89,20 +134,26 @@ export function parseCleaningHtml(html: string): StreetCleaningEntry[] {
   return entries;
 }
 
-/** Main entry point — fetches the page and writes data/street-cleaning.json. */
-export async function runScraper(): Promise<void> {
-  let html: string;
-  try {
-    const response = await fetch(SOURCE_URL);
-    if (!response.ok) {
-      console.error(`Fatal: HTTP ${response.status} fetching ${SOURCE_URL}`);
-      process.exit(1);
-    }
-    html = await response.text();
-  } catch (err) {
-    console.error(`Fatal: Network error fetching ${SOURCE_URL}: ${String(err)}`);
-    process.exit(1);
+const realFs: FsBackend = {
+  writeFileSync: (p, data) => nodeFs.writeFileSync(p, data, "utf8"),
+  existsSync: (p) => nodeFs.existsSync(p),
+  readFileSync: (p, encoding) => nodeFs.readFileSync(p, encoding),
+  mkdirSync: (p, options) => { nodeFs.mkdirSync(p, options); },
+};
+
+/**
+ * Fetches https://www.hobokennj.gov/resources/street-cleaning-schedule,
+ * calls parseCleaningHtml on the response text,
+ * and writes the resulting array to data/street-cleaning.json as JSON.
+ *
+ * Accepts an optional FsBackend for testability (defaults to real fs).
+ */
+export async function runScraper(fs: FsBackend = realFs): Promise<void> {
+  const response = await fetch(SOURCE_URL);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} fetching ${SOURCE_URL}`);
   }
+  const html = await response.text();
 
   const entries = parseCleaningHtml(html);
 
@@ -114,10 +165,10 @@ export async function runScraper(): Promise<void> {
   const json = JSON.stringify(output, null, 2);
 
   // Ensure data directory exists
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 
-  const outPath = path.join(DATA_DIR, "street-cleaning.json");
-  await fs.writeFile(outPath, json, "utf-8");
+  const outPath = nodePath.join(DATA_DIR, "street-cleaning.json");
+  fs.writeFileSync(outPath, json);
 
   console.log(`Wrote ${entries.length} entries to ${outPath}`);
 }

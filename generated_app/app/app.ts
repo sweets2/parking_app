@@ -1,27 +1,45 @@
-import type { Sign } from "../shared/types";
-import type { SpotStorage, SavedSpot } from "../shared/storage";
+import type {
+  Sign,
+  AppMode,
+  CheckQuery,
+  CheckResultSegment,
+  RulesTimeSelection,
+  RulesInspectionSection,
+  ParkingSegment,
+} from "../shared/types";
 import {
   filterLoadTimeNoise,
   filterActive,
-  filterNearby,
 } from "../shared/parking-logic";
+import {
+  clearCheckResults,
+  clearRulesInspection,
+} from "./map";
 
 // ─── Exported types ───────────────────────────────────────────────────────────
 
 export type AppState =
   | { mode: "loading" }
   | { mode: "error"; message: string }
-  | { mode: "browsing"; userLat: number | null; userLng: number | null; allSigns: Sign[]; activeSigns: Sign[] }
-  | { mode: "parked"; spot: SavedSpot; allSigns: Sign[]; nearbySigns: Sign[] };
+  | {
+      mode: "ready";
+      activeMode: AppMode;
+      checkQuery: CheckQuery;
+      checkResults: CheckResultSegment[];
+      selectedCheckSegment: CheckResultSegment | null;
+      rulesTime: RulesTimeSelection;
+      selectedRulesLocation: { lat: number; lng: number; street?: string } | null;
+      rulesInspectionSections: RulesInspectionSection[];
+      allSigns: Sign[];
+      activeSigns: Sign[];
+      parkingSegments: ParkingSegment[];
+    };
 
 export type App = {
   getState(): AppState;
-  /** Update the tapped position while in browsing mode. No-op in other modes. */
-  setUserPosition(lat: number, lng: number): void;
-  onSaveSpot(spot: SavedSpot): void;
-  onClearSpot(): void;
-  onHereNow(): void;
-  /** Called by main.ts via setInterval every 60 s. No setInterval inside app.ts. */
+  setActiveMode(mode: AppMode): void;
+  setRulesLocation(lat: number, lng: number): void;
+  setRulesInspectionSections(sections: RulesInspectionSection[]): void;
   tick(now: Date): void;
 };
 
@@ -31,39 +49,43 @@ export type App = {
  * Creates the app state machine. main.ts calls this after initMap(), then
  * calls setInterval(() => app.tick(new Date()), 60_000) — the interval lives
  * in main.ts, not here, so app.ts has no side effects.
+ *
+ * @param deps       - renderState callback only (storage removed)
+ * @param initialData - signs, the time they were fetched, and pre-built parkingSegments
+ * @param now        - current time, used to set initial rulesTime.selectedTime
  */
 export function createApp(
-  deps: { storage: SpotStorage; renderState: (state: AppState) => void },
-  initialData: { signs: Sign[]; fetchTime: Date }
+  deps: { renderState: (state: AppState) => void },
+  initialData: { signs: Sign[]; fetchTime: Date; parkingSegments: ParkingSegment[] },
+  now: Date
 ): App {
-  const { storage, renderState } = deps;
+  const { renderState } = deps;
 
   // Filter noise from the raw sign data at startup
   const allSigns = filterLoadTimeNoise(initialData.signs, initialData.fetchTime);
+  const activeSigns = filterActive(allSigns, initialData.fetchTime);
 
-  // Determine initial state based on stored spot
-  const savedSpot = storage.load();
+  // Default checkQuery — a "now" query using the provided time
+  const defaultCheckQuery: CheckQuery = {
+    startTime: now,
+    endTime: new Date(now.getTime() + 2 * 60 * 60 * 1000), // 2 hours ahead
+    label: "Now",
+    source: "duration",
+  };
 
-  let currentState: AppState;
-
-  if (savedSpot !== null) {
-    const nearbySigns = filterNearby(allSigns, savedSpot.lat, savedSpot.lng, 150, initialData.fetchTime);
-    currentState = {
-      mode: "parked",
-      spot: savedSpot,
-      allSigns,
-      nearbySigns,
-    };
-  } else {
-    const activeSigns = filterActive(allSigns, initialData.fetchTime);
-    currentState = {
-      mode: "browsing",
-      userLat: null,
-      userLng: null,
-      allSigns,
-      activeSigns,
-    };
-  }
+  let currentState: AppState = {
+    mode: "ready",
+    activeMode: "check",
+    checkQuery: defaultCheckQuery,
+    checkResults: [],
+    selectedCheckSegment: null,
+    rulesTime: { mode: "now", selectedTime: now },
+    selectedRulesLocation: null,
+    rulesInspectionSections: [],
+    allSigns,
+    activeSigns,
+    parkingSegments: initialData.parkingSegments,
+  };
 
   // Emit initial state
   renderState(currentState);
@@ -78,82 +100,49 @@ export function createApp(
       return currentState;
     },
 
-    setUserPosition(lat: number, lng: number): void {
-      if (currentState.mode !== "browsing") return;
-      const next: AppState = {
-        mode: "browsing",
-        userLat: lat,
-        userLng: lng,
-        allSigns: currentState.allSigns,
-        activeSigns: currentState.activeSigns,
-      };
-      setState(next);
-    },
+    setActiveMode(mode: AppMode): void {
+      if (currentState.mode !== "ready") return;
+      if (currentState.activeMode === mode) return;
 
-    onSaveSpot(spot: SavedSpot): void {
-      storage.save(spot);
-      const signs = currentState.mode === "browsing" || currentState.mode === "parked"
-        ? currentState.allSigns
-        : [];
-      // Use fetchTime as the reference for initial nearby computation;
-      // tick() will refresh with the live clock
-      const nearbySigns = filterNearby(signs, spot.lat, spot.lng, 150, initialData.fetchTime);
-      setState({
-        mode: "parked",
-        spot,
-        allSigns: signs,
-        nearbySigns,
-      });
-    },
-
-    onClearSpot(): void {
-      storage.clear();
-      const signs = currentState.mode === "parked" ? currentState.allSigns : [];
-      const activeSigns = filterActive(signs, initialData.fetchTime);
-      setState({
-        mode: "browsing",
-        userLat: null,
-        userLng: null,
-        allSigns: signs,
-        activeSigns,
-      });
-    },
-
-    onHereNow(): void {
-      // Not a state change — triggers a map center operation in main.ts.
-      // State remains parked; nothing to do here.
-    },
-
-    tick(now: Date): void {
-      if (currentState.mode === "browsing") {
-        const activeSigns = filterActive(currentState.allSigns, now);
-        const next: AppState = {
-          mode: "browsing",
-          userLat: currentState.userLat,
-          userLng: currentState.userLng,
-          allSigns: currentState.allSigns,
-          activeSigns,
-        };
-        currentState = next;
-        renderState(currentState);
-      } else if (currentState.mode === "parked") {
-        const nearbySigns = filterNearby(
-          currentState.allSigns,
-          currentState.spot.lat,
-          currentState.spot.lng,
-          150,
-          now
-        );
-        const next: AppState = {
-          mode: "parked",
-          spot: currentState.spot,
-          allSigns: currentState.allSigns,
-          nearbySigns,
-        };
-        currentState = next;
-        renderState(currentState);
+      if (mode === "rules") {
+        // Switching to rules: clear check result layers
+        clearCheckResults();
+      } else {
+        // Switching to check: clear rules inspection layers
+        clearRulesInspection();
       }
-      // In "loading" or "error" mode, tick is a no-op
+
+      setState({
+        ...currentState,
+        activeMode: mode,
+      });
+    },
+
+    setRulesLocation(lat: number, lng: number): void {
+      if (currentState.mode !== "ready") return;
+      setState({
+        ...currentState,
+        selectedRulesLocation: { lat, lng },
+      });
+    },
+
+    setRulesInspectionSections(sections: RulesInspectionSection[]): void {
+      if (currentState.mode !== "ready") return;
+      setState({
+        ...currentState,
+        rulesInspectionSections: sections,
+      });
+    },
+
+    tick(tickNow: Date): void {
+      if (currentState.mode !== "ready") return;
+
+      const updatedActiveSigns = filterActive(currentState.allSigns, tickNow);
+      currentState = {
+        ...currentState,
+        activeSigns: updatedActiveSigns,
+      };
+      renderState(currentState);
     },
   };
 }

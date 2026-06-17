@@ -6,530 +6,432 @@ import {
   validateSign,
   checkCountDrop,
   runFetcher,
-  runFetcherWithFs,
   runFutureFetcherWithFs,
+  runFetcherWithFs,
 } from "../../fetcher/fetch";
+import {
+  normalizeSchedule,
+  parseCleaningHtml,
+  runScraper,
+} from "../../fetcher/fetch-street-cleaning";
+import { FETCH_TIME } from "../fixtures/signs";
 
 // ---------------------------------------------------------------------------
-// F-01.7 — Date parsing
+// Test 1 — toIsoDatetime
 // ---------------------------------------------------------------------------
 
 describe("toIsoDatetime", () => {
-  it("converts 5/8/2026 + 08:00:00 to 2026-05-08T08:00:00", () => {
-    expect(toIsoDatetime("5/8/2026", "08:00:00")).toBe("2026-05-08T08:00:00");
-  });
-
-  it("converts 12/31/2030 + 07:00:00 to 2030-12-31T07:00:00", () => {
-    expect(toIsoDatetime("12/31/2030", "07:00:00")).toBe("2030-12-31T07:00:00");
-  });
-
-  it("zero-pads single-digit month and day (1/1/2026)", () => {
-    expect(toIsoDatetime("1/1/2026", "00:00:00")).toMatch(/^2026-01-01T/);
-  });
-});
-
-describe("computeActiveAtFetch", () => {
-  it("returns true when fetchTime is within the window", () => {
-    const fetchTime = new Date("2026-05-28T06:00:00Z");
-    expect(
-      computeActiveAtFetch("2026-05-26T08:00:00", "2026-05-29T16:00:00", fetchTime)
-    ).toBe(true);
-  });
-
-  it("returns false when fetchTime is after the window", () => {
-    const fetchTime = new Date("2026-05-30T06:00:00Z");
-    expect(
-      computeActiveAtFetch("2026-05-26T08:00:00", "2026-05-29T16:00:00", fetchTime)
-    ).toBe(false);
+  it("converts 6/9/2026 + 08:00:00 to 2026-06-09T08:00:00", () => {
+    expect(toIsoDatetime("6/9/2026", "08:00:00")).toBe("2026-06-09T08:00:00");
   });
 });
 
 // ---------------------------------------------------------------------------
-// F-01.2 — Response shape validation
+// Test 2 — validateResponseShape
 // ---------------------------------------------------------------------------
 
 describe("validateResponseShape", () => {
-  it("returns the body when status is success and data is an array", () => {
-    const body = { status: "success", data: [] };
-    const result = validateResponseShape(body);
-    expect(result).toEqual({ status: "success", data: [] });
+  it("returns false for null (non-object)", () => {
+    expect(validateResponseShape(null)).toBe(false);
   });
 
-  it("calls process.exit(1) when status is not success", () => {
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-    expect(() => validateResponseShape({ status: "error", data: [] })).toThrow();
-    exitSpy.mockRestore();
+  it("returns true for valid shape { data: [] }", () => {
+    expect(validateResponseShape({ data: [] })).toBe(true);
   });
 
-  it("calls process.exit(1) when there is no data key", () => {
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-    expect(() => validateResponseShape({ status: "success" })).toThrow();
-    exitSpy.mockRestore();
+  it("returns false for non-object (number)", () => {
+    expect(validateResponseShape(42)).toBe(false);
   });
 
-  it("calls process.exit(1) when data is not an array", () => {
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-    expect(() => validateResponseShape({ status: "success", data: "nope" })).toThrow();
-    exitSpy.mockRestore();
+  it("returns false for object without data property", () => {
+    expect(validateResponseShape({ status: "ok" })).toBe(false);
+  });
+
+  it("returns false when data is not an array", () => {
+    expect(validateResponseShape({ data: "not-array" })).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// F-01.3 — Individual sign field validation
+// Test 3 — validateSign
 // ---------------------------------------------------------------------------
 
-const validRawSign = {
-  id: "200471",
-  address: "257-257 11TH ST",
-  reason: "CONSTRUCTION",
-  permit_number: "510881",
-  latitude: 40.7503072,
-  longitude: -74.0303045,
-  start_date: "5/11/2023",
-  start_time: "07:00:00",
-  stop_date: "12/31/2030",
-  end_time: "07:00:00",
-};
+describe("validateSign", () => {
+  const validSign = {
+    id: "216439",
+    address: "361-365 1ST ST",
+    reason: "CONSTRUCTION",
+    permit_number: "640946",
+    lat: 40.738214,
+    lng: -74.0360203,
+    start_date: "6/12/2026",
+    start_time: "08:00:00",
+    stop_date: "6/12/2026",
+    end_time: "16:00:00",
+  };
 
-describe("validateSign — field validation", () => {
-  it("returns a warning with 'id' when id field is absent", () => {
-    const sign = { ...validRawSign } as Record<string, unknown>;
-    delete sign["id"];
-    const warnings = validateSign(sign, 0);
-    expect(warnings.length).toBeGreaterThan(0);
-    expect(warnings[0]).toMatch(/id/i);
-    expect(warnings[0]).toMatch(/0/);
+  it("returns false for missing required fields ({})", () => {
+    expect(validateSign({})).toBe(false);
   });
 
-  it("returns a warning when latitude is a string instead of a number", () => {
-    const sign = { ...validRawSign, latitude: "40.75" };
-    const warnings = validateSign(sign, 3);
-    expect(warnings.some((w) => /latitude/i.test(w))).toBe(true);
+  it("returns true for a valid sign object with all required string fields", () => {
+    expect(validateSign(validSign)).toBe(true);
   });
 
-  it("returns no warnings for a fully valid sign", () => {
-    const warnings = validateSign(validRawSign, 0);
-    expect(warnings).toHaveLength(0);
+  it("returns false for null", () => {
+    expect(validateSign(null)).toBe(false);
   });
 
-  it("returns exactly one warning when one sign among ten is invalid", () => {
-    const signs: unknown[] = Array(9).fill(validRawSign);
-    const badSign = { ...validRawSign, latitude: "bad" };
-    const allSigns = [...signs, badSign];
-    const allWarnings = allSigns.flatMap((s, i) => validateSign(s, i));
-    expect(allWarnings).toHaveLength(1);
+  it("returns false when id is missing", () => {
+    const { id: _id, ...rest } = validSign;
+    expect(validateSign(rest)).toBe(false);
+  });
+
+  it("returns false when address is missing", () => {
+    const { address: _address, ...rest } = validSign;
+    expect(validateSign(rest)).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// F-01.4 — Sign reason validation
-// ---------------------------------------------------------------------------
-
-describe("validateSign — reason validation", () => {
-  it("returns a warning containing 'FILM' for an unknown reason", () => {
-    const sign = { ...validRawSign, reason: "FILM" };
-    const warnings = validateSign(sign, 0);
-    expect(warnings.some((w) => w.includes("FILM"))).toBe(true);
-  });
-
-  it("returns no warning for a known reason CONSTRUCTION", () => {
-    const sign = { ...validRawSign, reason: "CONSTRUCTION" };
-    const warnings = validateSign(sign, 0);
-    expect(warnings.every((w) => !/reason/i.test(w))).toBe(true);
-  });
-
-  it("returns a warning for an empty string reason", () => {
-    const sign = { ...validRawSign, reason: "" };
-    const warnings = validateSign(sign, 0);
-    expect(warnings.length).toBeGreaterThan(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// F-01.6 — Count-change warning
+// Test 4 — checkCountDrop
 // ---------------------------------------------------------------------------
 
 describe("checkCountDrop", () => {
-  it("returns a warning when new count is less than 50% of previous count", () => {
-    const warning = checkCountDrop(10, 30);
-    expect(warning).not.toBeNull();
-    expect(warning).toMatch(/10/);
-    expect(warning).toMatch(/30/);
+  it("does not throw when counts are similar (100 vs 100), returns undefined", () => {
+    expect(checkCountDrop(100, 100)).toBeUndefined();
   });
 
-  it("returns null when new count is more than 50% of previous count", () => {
-    const warning = checkCountDrop(20, 30);
-    expect(warning).toBeNull();
+  it("does not throw when new count is lower but not below 50%", () => {
+    expect(checkCountDrop(60, 100)).toBeUndefined();
   });
 
-  it("returns null when there is no previous count (first run)", () => {
-    const warning = checkCountDrop(100, null);
-    expect(warning).toBeNull();
+  it("does not throw when new count is below 50% (just logs warning)", () => {
+    expect(checkCountDrop(10, 100)).toBeUndefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// F-01.1 & F-01.5 — HTTP request and guard-before-write tests
+// Test 5 — normalizeSchedule: dash-separated day ranges replaced with "through"
 // ---------------------------------------------------------------------------
 
-describe("runFetcher — HTTP and guard tests", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
+describe("normalizeSchedule - dash replacement", () => {
+  it("replaces Monday-Friday with Monday through Friday", () => {
+    const result = normalizeSchedule("Monday-Friday 8 AM – 9 AM");
+    expect(result).toContain("Monday through Friday");
   });
+});
 
+// ---------------------------------------------------------------------------
+// Test 6 — normalizeSchedule: triple-space separator inserted
+// ---------------------------------------------------------------------------
+
+describe("normalizeSchedule - triple-space separator", () => {
+  it("inserts triple-space between day part and time part", () => {
+    const result = normalizeSchedule("Monday through Friday 8 AM – 9 AM");
+    expect(result).toContain("   ");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 7 — normalizeSchedule: AM/PM lowercased
+// ---------------------------------------------------------------------------
+
+describe("normalizeSchedule - AM/PM lowercasing", () => {
+  it("lowercases AM to am", () => {
+    const result = normalizeSchedule("Monday-Friday 8 AM – 9 AM");
+    expect(result).toContain("am");
+    expect(result).not.toContain("AM");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 8 — parseCleaningHtml: empty HTML returns []
+// ---------------------------------------------------------------------------
+
+describe("parseCleaningHtml - empty HTML", () => {
+  it("returns [] for empty HTML", () => {
+    const result = parseCleaningHtml("");
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 9 — parseCleaningHtml: skips header row where street === "Street"
+// ---------------------------------------------------------------------------
+
+describe("parseCleaningHtml - header row filtering", () => {
+  it("skips a w-dyn-item where the first table-content text is 'Street'", () => {
+    const html = `
+      <div class="w-dyn-item">
+        <div class="table_wrapper">
+          <div class="table-content">Street</div>
+          <div class="table-content">Side</div>
+          <div class="table-content">Monday-Friday 8 AM – 9 AM</div>
+          <div class="table-content">Location</div>
+        </div>
+      </div>
+    `;
+    const result = parseCleaningHtml(html);
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 10 — parseCleaningHtml: correctly parses a well-formed Webflow item div
+// ---------------------------------------------------------------------------
+
+describe("parseCleaningHtml - valid item", () => {
+  it("parses a well-formed div.w-dyn-item with four div.table-content children", () => {
+    const html = `
+      <div class="w-dyn-item">
+        <div class="table_wrapper">
+          <div class="table-content">Adams St</div>
+          <div class="table-content">North</div>
+          <div class="table-content">Monday-Friday 8 AM – 9 AM</div>
+          <div class="table-content">Full Block</div>
+        </div>
+      </div>
+    `;
+    const result = parseCleaningHtml(html);
+    expect(result).toHaveLength(1);
+    const entry = result[0];
+    if (entry !== undefined) {
+      expect(entry.street).toBe("Adams St");
+      expect(entry.side).toBe("North");
+      expect(entry.location).toBe("Full Block");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 11 — computeActiveAtFetch: returns true when fetchedAt is within interval
+// ---------------------------------------------------------------------------
+
+describe("computeActiveAtFetch - within interval", () => {
+  it("returns true when fetchedAt is within sign interval", () => {
+    const sign = {
+      id: "1",
+      address: "test",
+      reason: "CONSTRUCTION",
+      permit_number: "1",
+      lat: 40.75,
+      lng: -74.03,
+      start_date: "6/9/2026",
+      start_time: "13:52:50",
+      stop_date: "11/30/2026",
+      end_time: "23:59:59",
+      start_iso: "2026-06-09T13:52:50",
+      end_iso: "2026-11-30T23:59:59",
+    };
+    const result = computeActiveAtFetch(sign, FETCH_TIME.toISOString());
+    expect(result).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 12 — computeActiveAtFetch: returns false when fetchedAt is outside interval
+// ---------------------------------------------------------------------------
+
+describe("computeActiveAtFetch - outside interval", () => {
+  it("returns false when fetchedAt is after end_iso", () => {
+    const sign = {
+      id: "2",
+      address: "test",
+      reason: "CONSTRUCTION",
+      permit_number: "2",
+      lat: 40.75,
+      lng: -74.03,
+      start_date: "6/1/2026",
+      start_time: "00:00:00",
+      stop_date: "6/8/2026",
+      end_time: "23:59:59",
+      start_iso: "2026-06-01T00:00:00",
+      end_iso: "2026-06-08T23:59:59",
+    };
+    // FETCH_TIME is "2026-06-09T13:52:50.509Z" which is after end_iso
+    const result = computeActiveAtFetch(sign, FETCH_TIME.toISOString());
+    expect(result).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 13 — runFetcher writes data/latest.json via FsBackend
+// ---------------------------------------------------------------------------
+
+describe("runFetcher - writes latest.json", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("calls process.exit non-zero when API returns HTTP 403", async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: false,
-      status: 403,
-    } as unknown as Response);
-
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-
-    await expect(runFetcher(new Date("2026-06-09T13:00:00Z"))).rejects.toThrow(
-      "process.exit called"
-    );
-    exitSpy.mockRestore();
-  });
-
-  it("calls process.exit non-zero when API returns HTTP 500", async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: false,
-      status: 500,
-    } as unknown as Response);
-
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-
-    await expect(runFetcher(new Date("2026-06-09T13:00:00Z"))).rejects.toThrow(
-      "process.exit called"
-    );
-    exitSpy.mockRestore();
-  });
-
-  it("calls process.exit non-zero when network is unreachable", async () => {
-    vi.mocked(fetch).mockRejectedValue(new Error("ECONNREFUSED"));
-
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-
-    await expect(runFetcher(new Date("2026-06-09T13:00:00Z"))).rejects.toThrow(
-      "process.exit called"
-    );
-    exitSpy.mockRestore();
-  });
-
-  it("calls process.exit non-zero when raw.data is empty (guard before write)", async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ status: "success", data: [] }),
-    } as unknown as Response);
-
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-
-    await expect(runFetcher(new Date("2026-06-09T13:00:00Z"))).rejects.toThrow(
-      "process.exit called"
-    );
-    exitSpy.mockRestore();
-  });
-
-  it("validateResponseShape runs without error for valid 200 response (empty data still triggers exit)", async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ status: "success", data: [] }),
-    } as unknown as Response);
-
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-
-    // Empty data guard causes exit after validateResponseShape succeeds
-    await expect(runFetcher(new Date("2026-06-09T13:00:00Z"))).rejects.toThrow(
-      "process.exit called"
-    );
-    exitSpy.mockRestore();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// F-01.8 — Output file format (injectable fs backend)
-// ---------------------------------------------------------------------------
-
-describe("runFetcher — output file format", () => {
-  const rawSign = {
-    id: "1",
-    address: "123 Main St",
-    reason: "CONSTRUCTION",
-    permit_number: "999",
-    latitude: 40.75,
-    longitude: -74.03,
-    start_date: "1/1/2020",
-    start_time: "08:00:00",
-    stop_date: "12/31/2030",
-    end_time: "17:00:00",
-  };
-
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ status: "success", data: [rawSign] }),
-    } as unknown as Response));
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  function makeMockFs() {
-    const writes: Array<[string, string]> = [];
-    const mockFs = {
-      readFile: async (_p: string): Promise<string> => {
-        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-      },
-      writeFile: async (p: string, data: string): Promise<void> => {
-        writes.push([p, data]);
-      },
-      writes,
-    };
-    return mockFs;
-  }
-
-  it("writes latest.json with correct count and signs length", async () => {
-    const mockFs = makeMockFs();
-    await runFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs);
-
-    const latestCall = mockFs.writes.find(([p]) => p.endsWith("latest.json"));
-    expect(latestCall).toBeDefined();
-    if (latestCall) {
-      const written = JSON.parse(latestCall[1]) as { count: number; signs: unknown[] };
-      expect(written.count).toBe(1);
-      expect(written.signs).toHaveLength(1);
-    }
-  });
-
-  it("names the archive file parking_YYYY-MM-DD.json based on run date", async () => {
-    const mockFs = makeMockFs();
-    await runFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs);
-
-    const archiveCall = mockFs.writes.find(([p]) => p.includes("parking_2026-06-09"));
-    expect(archiveCall).toBeDefined();
-  });
-
-  it("fetched_at matches UTC ISO 8601 pattern", async () => {
-    const mockFs = makeMockFs();
-    await runFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs);
-
-    const latestCall = mockFs.writes.find(([p]) => p.endsWith("latest.json"));
-    expect(latestCall).toBeDefined();
-    if (latestCall) {
-      const written = JSON.parse(latestCall[1]) as { fetched_at: string };
-      expect(written.fetched_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z$/);
-    }
-  });
-
-  it("signs in output have expected transformed fields", async () => {
-    const mockFs = makeMockFs();
-    await runFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs);
-
-    const latestCall = mockFs.writes.find(([p]) => p.endsWith("latest.json"));
-    expect(latestCall).toBeDefined();
-    if (latestCall) {
-      const written = JSON.parse(latestCall[1]) as { signs: Record<string, unknown>[] };
-      const sign = written.signs[0];
-      expect(sign).toHaveProperty("start_iso");
-      expect(sign).toHaveProperty("end_iso");
-      expect(sign).toHaveProperty("active_at_fetch");
-      expect(sign).toHaveProperty("lat");
-      expect(sign).toHaveProperty("lng");
-      expect(sign).toHaveProperty("start_date");
-      expect(sign).toHaveProperty("start_time");
-      expect(sign).toHaveProperty("stop_date");
-      expect(sign).toHaveProperty("end_time");
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// F-35 — runFutureFetcherWithFs
-// ---------------------------------------------------------------------------
-
-describe("runFutureFetcherWithFs", () => {
-  function makeRawSign(overrides: Record<string, unknown> = {}) {
-    return {
+  it("calls writeFileSync with path containing latest.json and JSON with fetched_at", async () => {
+    const validRawSign = {
       id: "1",
       address: "123 Main St",
       reason: "CONSTRUCTION",
       permit_number: "999",
-      latitude: 40.75,
-      longitude: -74.03,
+      lat: 40.75,
+      lng: -74.03,
       start_date: "1/1/2020",
       start_time: "08:00:00",
       stop_date: "12/31/2030",
       end_time: "17:00:00",
-      ...overrides,
     };
-  }
 
-  function makeMockFs() {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [validRawSign] }),
+    } as unknown as Response));
+
     const writes: Array<[string, string]> = [];
-    return {
-      readFile: async (_p: string): Promise<string> => {
-        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-      },
-      writeFile: async (p: string, data: string): Promise<void> => {
-        writes.push([p, data]);
-      },
-      writes,
+    const mockFs = {
+      writeFileSync: (path: string, data: string) => { writes.push([path, data]); },
+      existsSync: (_path: string) => false,
+      readFileSync: (_path: string, _encoding: "utf8") => { throw new Error("ENOENT"); },
+      mkdirSync: (_path: string, _options?: { recursive?: boolean }) => { /* no-op */ },
     };
-  }
 
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
+    await runFetcher(mockFs);
+
+    const latestWrite = writes.find(([p]) => p.includes("latest.json"));
+    expect(latestWrite).toBeDefined();
+    if (latestWrite !== undefined) {
+      const parsed = JSON.parse(latestWrite[1]) as { fetched_at: string };
+      expect(parsed).toHaveProperty("fetched_at");
+    }
   });
+});
 
+// ---------------------------------------------------------------------------
+// Test 14 — runFutureFetcherWithFs writes data/future.json via FsBackend
+// ---------------------------------------------------------------------------
+
+describe("runFutureFetcherWithFs - writes future.json", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("GIVEN future API returns 3 signs (1 with start_iso <= fetchTime, 2 upcoming) WHEN runFutureFetcherWithFs runs THEN future.json contains 2 signs", async () => {
-    // fetchTime is 2026-06-09T13:00:00Z → fetchLocalIso = "2026-06-09T13:00:00"
-    const fetchTime = new Date("2026-06-09T13:00:00Z");
-    // Sign 1: starts before fetchTime (not upcoming)
-    const pastSign = makeRawSign({ id: "1", start_date: "6/9/2026", start_time: "08:00:00", stop_date: "6/9/2026", end_time: "23:59:00" });
-    // Sign 2: starts after fetchTime (upcoming)
-    const upcoming1 = makeRawSign({ id: "2", start_date: "6/9/2026", start_time: "14:00:00", stop_date: "6/9/2026", end_time: "23:59:00" });
-    // Sign 3: starts after fetchTime (upcoming)
-    const upcoming2 = makeRawSign({ id: "3", start_date: "6/10/2026", start_time: "08:00:00", stop_date: "6/10/2026", end_time: "17:00:00" });
-
-    vi.mocked(fetch).mockResolvedValue({
+  it("calls writeFileSync with path containing future.json", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ status: "success", data: [pastSign, upcoming1, upcoming2] }),
-    } as unknown as Response);
+      json: async () => ({ data: [] }),
+    } as unknown as Response));
 
-    const mockFs = makeMockFs();
-    await runFutureFetcherWithFs(fetchTime, mockFs);
+    const writes: Array<[string, string]> = [];
+    const mockFs = {
+      writeFileSync: (path: string, data: string) => { writes.push([path, data]); },
+      existsSync: (_path: string) => false,
+      readFileSync: (_path: string, _encoding: "utf8") => { throw new Error("ENOENT"); },
+      mkdirSync: (_path: string, _options?: { recursive?: boolean }) => { /* no-op */ },
+    };
 
-    const futureCall = mockFs.writes.find(([p]) => p.endsWith("future.json"));
-    expect(futureCall).toBeDefined();
-    if (futureCall) {
-      const written = JSON.parse(futureCall[1]) as { count: number; signs: unknown[] };
-      expect(written.count).toBe(2);
-      expect(written.signs).toHaveLength(2);
-    }
+    await runFutureFetcherWithFs(mockFs);
+
+    const futureWrite = writes.find(([p]) => p.includes("future.json"));
+    expect(futureWrite).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 15 — runFetcherWithFs calls runFetcher before runFutureFetcherWithFs
+// ---------------------------------------------------------------------------
+
+describe("runFetcherWithFs - call order", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it("GIVEN future API returns 0 upcoming signs WHEN runFutureFetcherWithFs runs THEN future.json written with empty array and process.exit NOT called", async () => {
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
+  it("writes latest.json before future.json (main endpoint called before future endpoint)", async () => {
+    const validRawSign = {
+      id: "1",
+      address: "123 Main St",
+      reason: "CONSTRUCTION",
+      permit_number: "999",
+      lat: 40.75,
+      lng: -74.03,
+      start_date: "1/1/2020",
+      start_time: "08:00:00",
+      stop_date: "12/31/2030",
+      end_time: "17:00:00",
+    };
 
-    // All signs are in the past (start_iso <= fetchLocalIso)
-    const pastSign = makeRawSign({ id: "1", start_date: "6/9/2026", start_time: "08:00:00", stop_date: "6/9/2026", end_time: "12:00:00" });
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ status: "success", data: [pastSign] }),
-    } as unknown as Response);
-
-    const mockFs = makeMockFs();
-    await runFutureFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs);
-
-    exitSpy.mockRestore();
-
-    const futureCall = mockFs.writes.find(([p]) => p.endsWith("future.json"));
-    expect(futureCall).toBeDefined();
-    if (futureCall) {
-      const written = JSON.parse(futureCall[1]) as { count: number; signs: unknown[] };
-      expect(written.signs).toHaveLength(0);
-    }
-  });
-
-  it("GIVEN a full runFetcherWithFs run THEN both latest.json and future.json are written", async () => {
-    const rawSign = makeRawSign({ id: "1", start_date: "1/1/2020", start_time: "08:00:00", stop_date: "12/31/2030", end_time: "17:00:00" });
-    // Mock both calls: main API and future API
-    vi.mocked(fetch)
-      .mockResolvedValueOnce({
-        ok: true, status: 200,
-        json: async () => ({ status: "success", data: [rawSign] }),
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true, status: 200,
-        json: async () => ({ status: "success", data: [rawSign] }),
-      } as unknown as Response);
-
-    const mockFs = makeMockFs();
-    await runFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs);
-
-    const latestCall = mockFs.writes.find(([p]) => p.endsWith("latest.json"));
-    const futureCall = mockFs.writes.find(([p]) => p.endsWith("future.json"));
-    expect(latestCall).toBeDefined();
-    expect(futureCall).toBeDefined();
-  });
-
-  it("GIVEN future API returns HTTP 500 THEN process.exit(1) called", async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: false,
-      status: 500,
-    } as unknown as Response);
-
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
-      throw new Error("process.exit called");
-    });
-
-    const mockFs = makeMockFs();
-    await expect(runFutureFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs)).rejects.toThrow(
-      "process.exit called"
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [validRawSign] }),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [] }),
+        } as unknown as Response)
     );
-    exitSpy.mockRestore();
+
+    const writeOrder: string[] = [];
+    const mockFs = {
+      writeFileSync: (path: string, _data: string) => { writeOrder.push(path); },
+      existsSync: (_path: string) => false,
+      readFileSync: (_path: string, _encoding: "utf8") => { throw new Error("ENOENT"); },
+      mkdirSync: (_path: string, _options?: { recursive?: boolean }) => { /* no-op */ },
+    };
+
+    await runFetcherWithFs(mockFs);
+
+    const latestIdx = writeOrder.findIndex((p) => p.includes("latest.json"));
+    const futureIdx = writeOrder.findIndex((p) => p.includes("future.json"));
+    expect(latestIdx).toBeGreaterThanOrEqual(0);
+    expect(futureIdx).toBeGreaterThanOrEqual(0);
+    expect(latestIdx).toBeLessThan(futureIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 16 — runScraper writes data/street-cleaning.json
+// ---------------------------------------------------------------------------
+
+describe("runScraper - writes street-cleaning.json", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it("GIVEN a successful future fetch THEN future.json has fetched_at, count, and signs[] each with start_iso, end_iso, lat, lng", async () => {
-    const upcoming = makeRawSign({ id: "2", start_date: "6/10/2026", start_time: "08:00:00", stop_date: "6/10/2026", end_time: "17:00:00" });
-    vi.mocked(fetch).mockResolvedValue({
+  it("calls writeFileSync with path containing street-cleaning.json given mock fetch returning valid HTML", async () => {
+    const mockHtml = `
+      <div class="w-dyn-item">
+        <div class="table_wrapper">
+          <div class="table-content">Adams St</div>
+          <div class="table-content">North</div>
+          <div class="table-content">Monday-Friday 8 AM – 9 AM</div>
+          <div class="table-content">Full Block</div>
+        </div>
+      </div>
+    `;
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ status: "success", data: [upcoming] }),
-    } as unknown as Response);
+      text: async () => mockHtml,
+    } as unknown as Response));
 
-    const mockFs = makeMockFs();
-    await runFutureFetcherWithFs(new Date("2026-06-09T13:00:00Z"), mockFs);
+    const writes: Array<[string, string]> = [];
+    const mockFs = {
+      writeFileSync: (path: string, data: string) => { writes.push([path, data]); },
+      existsSync: (_path: string) => false,
+      readFileSync: (_path: string, _encoding: "utf8") => { throw new Error("ENOENT"); },
+      mkdirSync: (_path: string, _options?: { recursive?: boolean }) => { /* no-op */ },
+    };
 
-    const futureCall = mockFs.writes.find(([p]) => p.endsWith("future.json"));
-    expect(futureCall).toBeDefined();
-    if (futureCall) {
-      const written = JSON.parse(futureCall[1]) as { fetched_at: string; count: number; signs: Record<string, unknown>[] };
-      expect(written).toHaveProperty("fetched_at");
-      expect(written).toHaveProperty("count");
-      expect(written).toHaveProperty("signs");
-      expect(Array.isArray(written.signs)).toBe(true);
-      if (written.signs.length > 0) {
-        const sign = written.signs[0];
-        expect(sign).toHaveProperty("start_iso");
-        expect(sign).toHaveProperty("end_iso");
-        expect(sign).toHaveProperty("lat");
-        expect(sign).toHaveProperty("lng");
-      }
-    }
+    await runScraper(mockFs);
+
+    const cleaningWrite = writes.find(([p]) => p.includes("street-cleaning.json"));
+    expect(cleaningWrite).toBeDefined();
   });
 });

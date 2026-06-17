@@ -1,5 +1,5 @@
 /**
- * tests/unit/analytics.test.ts — F-39
+ * tests/unit/analytics.test.ts — CF-14
  *
  * Tests for the analytics track() wrapper.
  * Runs in Node (environment: "node"). Tests simulate window presence/absence
@@ -14,29 +14,22 @@ describe("analytics track()", () => {
     delete (globalThis as Record<string, unknown>)["window"];
   });
 
-  it("GIVEN the Node runtime has no window global, WHEN track() is called, THEN no exception is thrown", () => {
-    // No window set — default Node environment
-    expect(() => track("test-event")).not.toThrow();
+  it("GIVEN a Node environment where window is not defined, WHEN track('pageview') is called, THEN it does not throw", () => {
+    // Default Node environment — no window on globalThis
+    delete (globalThis as Record<string, unknown>)["window"];
+    expect(() => track("pageview")).not.toThrow();
   });
 
-  it("GIVEN window is set to an empty object (no umami property), WHEN track() is called, THEN no exception is thrown", () => {
+  it("GIVEN a global window.umami.track spy is installed, WHEN track('click', { button: 'locate' }) is called, THEN window.umami.track is called with 'click' and { button: 'locate' }", () => {
+    const spy = vi.fn();
+    (globalThis as Record<string, unknown>)["window"] = { umami: { track: spy } };
+    track("click", { button: "locate" });
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy).toHaveBeenCalledWith("click", { button: "locate" });
+  });
+
+  it("GIVEN window exists but window.umami is undefined, WHEN track('pageview') is called, THEN it does not throw", () => {
     (globalThis as Record<string, unknown>)["window"] = {};
-    expect(() => track("test-event")).not.toThrow();
-  });
-
-  it("GIVEN window.umami.track is a spy, WHEN track('map-zoomed', { zoom_level: 15 }) is called, THEN the spy is called exactly once with the event name and data", () => {
-    const spy = vi.fn();
-    (globalThis as Record<string, unknown>)["window"] = { umami: { track: spy } };
-    track("map-zoomed", { zoom_level: 15 });
-    expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith("map-zoomed", { zoom_level: 15 });
-  });
-
-  it("GIVEN window.umami.track is a spy, WHEN track('app-loaded') is called without a data argument, THEN the spy is called exactly once with event name and undefined", () => {
-    const spy = vi.fn();
-    (globalThis as Record<string, unknown>)["window"] = { umami: { track: spy } };
-    track("app-loaded");
-    expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith("app-loaded", undefined);
+    expect(() => track("pageview")).not.toThrow();
   });
 });

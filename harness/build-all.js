@@ -25,12 +25,18 @@ const FRONT_MATTER_SCHEMA = {
         type: 'object',
         required: ['id', 'status', 'order', 'depends_on', 'output_files'],
         properties: {
-          id:           { type: 'string' },
-          name:         { type: 'string' },
-          status:       { type: 'string' },
-          order:        { type: 'number' },
-          depends_on:   { type: 'array', items: { type: 'string' } },
-          output_files: { type: 'array', items: { type: 'string' } },
+          id:                 { type: 'string' },
+          name:               { type: 'string' },
+          status:             { type: 'string' },
+          order:              { type: 'number' },
+          depends_on:         { type: 'array', items: { type: 'string' } },
+          context_files:      { type: 'array', items: { type: 'string' } },
+          output_files:       { type: 'array', items: { type: 'string' } },
+          spec_file:          { type: 'string' },
+          run_tests:          { type: 'boolean' },
+          post_build_command: { type: 'string' },
+          pre_eval_command:   { type: 'string' },
+          harness_task:       { type: 'boolean' },
         },
       },
     },
@@ -95,6 +101,31 @@ function buildWave(features, maxPar) {
 }
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
+
+// Deterministic validator preflight — fail fast before building anything
+const PRE_EVAL_VALIDATION_SCHEMA = {
+  type: 'object',
+  required: ['passed', 'output'],
+  properties: {
+    passed: { type: 'boolean' },
+    output: { type: 'string' },
+  },
+}
+
+const validatorResult = await agent(
+  `Run these commands in sequence in the project root. Return passed=true only if ALL exit code 0.
+
+node harness/validate-paths.js && node harness/validate-feature-graph.js && node harness/validate-specs.js
+
+Capture combined stdout+stderr as "output". Return passed=false if any command fails or is not found.`,
+  { schema: PRE_EVAL_VALIDATION_SCHEMA, label: 'build-all-validator-preflight', phase: 'Build' }
+)
+
+if (validatorResult && !validatorResult.passed) {
+  log(`Validator preflight FAIL — aborting build-all`)
+  log(`  ${validatorResult.output.split('\n')[0]}`)
+  return { done: true, reason: 'Validator preflight failed: ' + validatorResult.output.split('\n')[0] }
+}
 
 while (true) {
   const wave = buildWave(features, maxParallel)

@@ -1,5 +1,13 @@
 [
   {
+    "name": "Southwest Garage",
+    "address": "216 14th St",
+    "capacity": 395,
+    "lat": 40.7505,
+    "lng": -74.0337,
+    "phone": "201-420-2034"
+  },
+  {
     "name": "Garage B",
     "address": "28 2nd St",
     "capacity": 829,

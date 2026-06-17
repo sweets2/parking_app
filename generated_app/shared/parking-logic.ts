@@ -1,4 +1,4 @@
-import type { Sign } from "../shared/types";
+import type { Sign, ParkingSegment, CheckQuery, CheckResultSegment, ParkingWindowConflict, NextRestriction } from "../shared/types";
 
 // ─── Street cleaning active-now / upcoming checks ────────────────────────────
 
@@ -402,6 +402,230 @@ export function detectMatchingSegment(
     const maxLng = Math.max(fromCoord.lng, toCoord.lng);
     return clickLng >= minLng && clickLng <= maxLng;
   }
+}
+
+// ─── F-48 Priority ordering ──────────────────────────────────────────────────
+
+const STATUS_PRIORITY: Record<string, number> = {
+  tow:     5,
+  snow:    4,
+  ticket:  3,
+  limited: 2,
+  unknown: 1,
+  safe:    0,
+};
+
+function statusPriority(s: string): number {
+  return STATUS_PRIORITY[s] ?? 0;
+}
+
+// ─── F-48 evaluateParkingWindow ──────────────────────────────────────────────
+
+/**
+ * Expand a cleaning schedule into an interval on a specific day and check
+ * whether it overlaps [queryStartMs, queryEndMs).
+ * Returns a ParkingWindowConflict if overlap, else null.
+ * Returns a "unknown" conflict if schedule cannot be parsed.
+ */
+function evaluateCleaningEntry(
+  schedule: string,
+  queryStartMs: number,
+  queryEndMs: number
+): ParkingWindowConflict | null {
+  const r = parseScheduleRange(schedule);
+  if (!r) {
+    // Unparseable schedule → unknown
+    return {
+      status: "unknown",
+      reason: `Could not parse schedule: "${schedule}"`,
+      label: "Unknown schedule",
+      sourceType: "unknown",
+    };
+  }
+
+  // Evaluate for each day in the query window
+  // We iterate over all calendar days that intersect the query window.
+  // For each day, if the day of week matches the schedule day range, we check
+  // if the schedule interval overlaps the query interval.
+  //
+  // Strategy: iterate from queryStartMs day to queryEndMs day (inclusive),
+  // check each day's Eastern time dayIdx against the schedule.
+  //
+  // To avoid complexity with DST, we iterate by day (86400000 ms steps)
+  // anchored at the start of each day in Eastern time.
+
+  // Walk days from the day containing queryStart to the day containing queryEnd
+  // We check up to 8 days (covers any week span in the query range).
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  // Start from the beginning of the day containing queryStart (rounded down to nearest day)
+  // We'll iterate from queryStartMs minus 1 day (to catch edge cases) to queryEndMs plus 1 day.
+  const iterStart = queryStartMs - MS_PER_DAY;
+  const iterEnd   = queryEndMs   + MS_PER_DAY;
+
+  for (let dayAnchor = iterStart; dayAnchor <= iterEnd; dayAnchor += MS_PER_DAY) {
+    const anchorDate = new Date(dayAnchor);
+    const { dayIdx } = getEasternParts(anchorDate);
+    if (dayIdx === -1) continue;
+    if (dayIdx < r.startDayIdx || dayIdx > r.endDayIdx) continue;
+
+    // Compute ET midnight for this day by measuring how many minutes of day
+    // the anchor is at in Eastern time, then subtracting that from the anchor.
+    const { minutesOfDay: anchorMinutes } = getEasternParts(anchorDate);
+    const etMidnightMs = dayAnchor - anchorMinutes * 60 * 1000;
+
+    // Schedule interval in UTC ms
+    const schedStartMs = etMidnightMs + r.startMinutes * 60 * 1000;
+    const schedEndMs   = etMidnightMs + r.endMinutes   * 60 * 1000;
+
+    // Check overlap: [queryStart, queryEnd) overlaps [schedStart, schedEnd)
+    // Overlap condition: queryStart < schedEnd AND queryEnd > schedStart
+    if (queryStartMs < schedEndMs && queryEndMs > schedStartMs) {
+      return {
+        status: "ticket",
+        reason: `Street cleaning: ${schedule}`,
+        label: `Street cleaning`,
+        startsAt: new Date(schedStartMs),
+        endsAt:   new Date(schedEndMs),
+        sourceType: "street-cleaning",
+      };
+    }
+  }
+
+  return null;
+}
+
+export function evaluateParkingWindow(
+  segment: ParkingSegment,
+  query: CheckQuery
+): CheckResultSegment {
+  const conflicts: ParkingWindowConflict[] = [];
+  const queryStartMs = query.startTime.getTime();
+  const queryEndMs   = query.endTime.getTime();
+
+  // --- Tow signs ---
+  for (const sign of segment.towSigns) {
+    const signStartMs = new Date(sign.start_iso).getTime();
+    const signEndMs   = new Date(sign.end_iso).getTime();
+    // Overlap: [queryStart, queryEnd) overlaps [signStart, signEnd)
+    if (queryStartMs < signEndMs && queryEndMs > signStartMs) {
+      conflicts.push({
+        status: "tow",
+        reason: `Tow sign: ${sign.reason} at ${sign.address}`,
+        label: `Tow zone`,
+        startsAt: new Date(signStartMs),
+        endsAt:   new Date(signEndMs),
+        sourceId:   sign.id,
+        sourceType: "tow-sign",
+      });
+    }
+  }
+
+  // --- Snow routes ---
+  for (const route of segment.snowRoutes) {
+    // Snow routes are always-active seasonal restrictions
+    conflicts.push({
+      status: "snow",
+      reason: `Snow emergency route: ${route.street} (${route.from} to ${route.to})`,
+      label: `Snow emergency route`,
+      sourceType: "snow-route",
+    });
+  }
+
+  // --- Street cleaning entries ---
+  // Track whether any entry was unparseable
+  let hasUnparseable = false;
+  for (const entry of segment.cleaningEntries) {
+    const conflict = evaluateCleaningEntry(entry.schedule, queryStartMs, queryEndMs);
+    if (conflict !== null) {
+      if (conflict.status === "unknown") {
+        hasUnparseable = true;
+      }
+      conflicts.push(conflict);
+    }
+  }
+
+  // Determine status
+  let status: CheckResultSegment["status"] = "safe";
+  if (hasUnparseable && conflicts.length === 1 && conflicts[0]?.status === "unknown") {
+    status = "unknown";
+  } else if (conflicts.length > 0) {
+    let maxPriority = -1;
+    for (const c of conflicts) {
+      const p = statusPriority(c.status);
+      if (p > maxPriority) {
+        maxPriority = p;
+        status = c.status;
+      }
+    }
+  }
+
+  const primaryConflict = getPrimaryConflict(conflicts);
+
+  return {
+    id:        segment.id,
+    street:    segment.street,
+    location:  segment.location,
+    side:      segment.side,
+    geometry:  segment.geometry,
+    status,
+    conflicts,
+    primaryConflict,
+  };
+}
+
+// ─── F-48 getPrimaryConflict ─────────────────────────────────────────────────
+
+export function getPrimaryConflict(
+  conflicts: ParkingWindowConflict[]
+): ParkingWindowConflict | undefined {
+  if (conflicts.length === 0) return undefined;
+
+  let best: ParkingWindowConflict | undefined = undefined;
+  let bestPriority = -1;
+
+  for (const c of conflicts) {
+    const p = statusPriority(c.status);
+    if (p > bestPriority) {
+      bestPriority = p;
+      best = c;
+    }
+  }
+
+  return best;
+}
+
+// ─── F-48 getNextRestriction ─────────────────────────────────────────────────
+
+export function getNextRestriction(
+  segment: ParkingSegment,
+  after: Date
+): NextRestriction | undefined {
+  const afterMs = after.getTime();
+  let best: NextRestriction | undefined = undefined;
+
+  // --- Tow signs ---
+  for (const sign of segment.towSigns) {
+    const startMs = new Date(sign.start_iso).getTime();
+    const endMs   = new Date(sign.end_iso).getTime();
+
+    // Must start strictly after `after`
+    if (startMs <= afterMs) continue;
+
+    const candidate: NextRestriction = {
+      startsAt: new Date(startMs),
+      endsAt:   new Date(endMs),
+      label:    `Tow zone: ${sign.reason} at ${sign.address}`,
+      status:   "tow",
+    };
+
+    if (best === undefined || startMs < best.startsAt.getTime()) {
+      best = candidate;
+    }
+  }
+
+  // Snow routes produce no time-bound restriction per spec.
+
+  return best;
 }
 
 export function nextViolationWindow(

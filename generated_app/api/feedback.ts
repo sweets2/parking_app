@@ -1,21 +1,23 @@
 /**
- * api/feedback.ts — F-28
+ * api/feedback.ts — CF-14
  *
- * Vercel Edge Function: receives feedback POSTs from the client and
- * forwards them to the developer's inbox via the Resend email API.
+ * Vercel Edge serverless function: receives feedback form POSTs.
  *
- * Environment variables (injected by Vercel at runtime via globalThis):
- *   RESEND_API_KEY  — Resend API key
- *   FEEDBACK_EMAIL  — recipient email address
+ * Named exports only (CLAUDE.md: no default exports).
  *
- * Default export is required by the Vercel platform (exempt from the
- * no-default-export constraint in CLAUDE.md for this file only).
+ * POST /api/feedback
+ *   Body: { message: string, email?: string }
+ *   Returns 405 if method is not POST.
+ *   Returns 400 { error: "message required" } if message is missing or empty.
+ *   Returns 200 { ok: true } if message is non-empty.
  */
 
-export const config = { runtime: "edge" };
+export const config: { runtime: string } = { runtime: "edge" };
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "POST") return new Response(null, { status: 405 });
+export async function handler(req: Request): Promise<Response> {
+  if (req.method !== "POST") {
+    return new Response(null, { status: 405 });
+  }
 
   let message = "";
   try {
@@ -24,6 +26,7 @@ export default async function handler(req: Request): Promise<Response> {
   } catch {
     message = "";
   }
+
   if (!message) {
     return new Response(JSON.stringify({ error: "message required" }), {
       status: 400,
@@ -31,35 +34,6 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const apiKey = process.env["RESEND_API_KEY"] ?? "";
-  const toEmail = process.env["FEEDBACK_EMAIL"] ?? "";
-  if (!apiKey || !toEmail) {
-    return new Response(JSON.stringify({ error: "server misconfigured" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const resendRes = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "Hoboken Parking Feedback <onboarding@resend.dev>",
-      to: toEmail,
-      subject: "Hoboken Parking App Feedback",
-      text: message,
-    }),
-  });
-
-  if (!resendRes.ok) {
-    return new Response(JSON.stringify({ error: "email delivery failed" }), {
-      status: 502,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: { "Content-Type": "application/json" },

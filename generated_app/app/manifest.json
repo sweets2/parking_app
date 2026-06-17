@@ -1,11 +1,10 @@
 {
   "name": "Hoboken Parking",
   "short_name": "HP Parking",
-  "description": "Track temporary no-parking signs in Hoboken, NJ",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "theme_color": "#ffffff",
   "icons": [
     {
       "src": "icon-192.png",

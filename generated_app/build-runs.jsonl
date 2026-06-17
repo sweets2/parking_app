@@ -6,3 +6,7 @@
 {"date":"2026-06-10T01:08:09.505Z","budgetSpent":755095,"completed":3,"blocked":["F-14","F-10"],"partial":false,"taskId":"w3up6sv0i","subagentTokens":1091630,"agentCount":44,"durationMs":2442506}
 {"date":"2026-06-10T02:26:39.016Z","budgetSpent":943939,"completed":2,"blocked":["F-15"],"partial":false,"taskId":"w4fnj24d9","subagentTokens":843271,"agentCount":29,"durationMs":2120188}
 {"date":"2026-06-10T02:56:54.047Z","budgetSpent":1063226,"completed":1,"blocked":[],"partial":false,"taskId":"wk1smfhil","subagentTokens":628187,"agentCount":18,"durationMs":1744258}
+{"date":"2026-06-17T04:28:42.565Z","budgetSpent":444366,"completed":1,"blocked":["CF-D1","CF-05","CF-09","CF-13","CF-14","CF-15","F-46A"],"partial":true}
+{"date":"2026-06-17T04:31:42.942Z","budgetSpent":456735,"completed":0,"blocked":[],"partial":true}
+{"date":"2026-06-17T11:18:26.850Z","budgetSpent":2313333,"completed":20,"blocked":[],"partial":true}
+{"date":"2026-06-17T12:17:44.590Z","budgetSpent":2558223,"completed":5,"blocked":[],"partial":true}

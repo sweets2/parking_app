@@ -4,7 +4,7 @@ import {
   formatTime,
   signSeverity,
 } from "../shared/parking-logic";
-import type { Sign } from "../shared/types";
+import type { Sign, AppMode, CheckResultSegment } from "../shared/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -66,6 +66,7 @@ export function renderSignCards(signs: Sign[], now: Date): void {
     const card = document.createElement("div");
     card.className = "sign-card";
     card.setAttribute("data-severity", signSeverity(sign));
+    card.setAttribute("data-sign-id", sign.id);
 
     const reasonBadge = document.createElement("span");
     reasonBadge.className = "sign-reason-badge";
@@ -103,10 +104,16 @@ export function renderSignCards(signs: Sign[], now: Date): void {
 export function renderBrowsingMode(activeSigns: Sign[], now: Date): void {
   // Hide parked-only buttons
   const clearBtn = getEl("clear-btn");
-  if (clearBtn) clearBtn.style.display = "none";
+  if (clearBtn) {
+    clearBtn.style.display = "none";
+    clearBtn.hidden = true;
+  }
 
   const hereBtn = getEl("here-btn");
-  if (hereBtn) hereBtn.style.display = "none";
+  if (hereBtn) {
+    hereBtn.style.display = "none";
+    hereBtn.hidden = true;
+  }
 
   // Hide the refresh button — only visible in parked mode (F-15)
   const refreshBtn = getEl("refresh-btn");
@@ -195,7 +202,7 @@ export function renderWarningBanner(nearbySigns: Sign[], now: Date): void {
   if (hereBtn) hereBtn.style.display = "";
 }
 
-export function showSpotToast(address: string | null): void {
+export function showSpotToast(address: string): void {
   // Remove any existing toast
   const existing = document.getElementById("spot-toast");
   if (existing) existing.remove();
@@ -203,7 +210,7 @@ export function showSpotToast(address: string | null): void {
   const toast = document.createElement("div");
   toast.id = "spot-toast";
   toast.className = "spot-toast";
-  toast.textContent = address !== null ? `Spot saved — ${address}.` : "Spot saved.";
+  toast.textContent = `Spot saved — ${address}.`;
 
   document.body.appendChild(toast);
 
@@ -227,4 +234,68 @@ export function showStaleBanner(hoursAgo: number): void {
 }
 
 // ─── F-15.1 Refresh Button ────────────────────────────────────────────────────
+
+// ─── F-52 Bottom Sheet Shell ──────────────────────────────────────────────────
+
+export function showBottomSheet(): void {
+  const sheet = getEl("bottom-sheet");
+  if (sheet) {
+    sheet.classList.add("bottom-sheet--open");
+  }
+}
+
+export function hideBottomSheet(): void {
+  const sheet = getEl("bottom-sheet");
+  if (sheet) {
+    sheet.classList.remove("bottom-sheet--open");
+  }
+}
+
+export function setBottomSheetContent(content: string): void {
+  const contentEl = getEl("bottom-sheet-content");
+  if (contentEl) {
+    contentEl.innerHTML = content;
+  }
+}
+
+export function setBottomSheetMode(mode: AppMode): void {
+  const sheet = getEl("bottom-sheet");
+  if (sheet) {
+    if (mode === "check") {
+      sheet.classList.add("bottom-sheet--check");
+      sheet.classList.remove("bottom-sheet--rules");
+    } else {
+      sheet.classList.add("bottom-sheet--rules");
+      sheet.classList.remove("bottom-sheet--check");
+    }
+  }
+}
+
+// ─── F-56 Check Segment Details ───────────────────────────────────────────────
+
+/**
+ * Render a Check result segment's details as an HTML string.
+ * Includes street, side, location, status class, and primary conflict info.
+ */
+export function renderCheckSegmentDetails(
+  segment: CheckResultSegment
+): string {
+  const statusClass = `status-${segment.status}`;
+
+  let conflictHtml = "";
+  if (segment.primaryConflict !== undefined) {
+    conflictHtml =
+      `<div class="check-segment-reason">${segment.primaryConflict.reason}</div>` +
+      `<div class="check-segment-window">${segment.primaryConflict.label}</div>`;
+  }
+
+  return (
+    `<div class="check-segment-details ${statusClass}">` +
+    `<div class="check-segment-street">${segment.street}</div>` +
+    `<div class="check-segment-side">${segment.side}</div>` +
+    `<div class="check-segment-location">${segment.location}</div>` +
+    conflictHtml +
+    `</div>`
+  );
+}
 

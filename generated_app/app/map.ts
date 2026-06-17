@@ -8,7 +8,7 @@
  * In Node tests the global `L` is mocked before this module is imported.
  */
 
-import type { Sign, StreetCleaningEntry, RoadGeometry, Garage, SnowRoute } from "../shared/types";
+import type { Sign, StreetCleaningEntry, RoadGeometry, Garage, SnowRoute, CheckResultSegment, RulesInspectionSection } from "../shared/types";
 import type { SavedSpot } from "../shared/storage";
 import { formatTime, isScheduleActiveNow, isScheduleUpcomingSoon, isSignActive } from "../shared/parking-logic";
 import { track } from "./analytics";
@@ -28,6 +28,10 @@ interface LeafletLayer {
   openPopup(): LeafletLayer;
   on(event: string, handler: (e: unknown) => void): LeafletLayer;
   addTo(map: LeafletMap): LeafletLayer;
+}
+
+interface LeafletPolyline extends LeafletLayer {
+  setStyle(opts: Record<string, unknown>): LeafletPolyline;
 }
 
 interface LeafletPopup {
@@ -86,8 +90,8 @@ interface LeafletStatic {
   popup(): LeafletPopup;
   polyline(
     latlngs: [number, number][],
-    options: { color: string; weight: number; opacity: number }
-  ): LeafletLayer;
+    options: { color?: string; weight?: number; opacity?: number; className?: string }
+  ): LeafletPolyline;
   createPane?(name: string): HTMLElement;
   getPane?(name: string): HTMLElement | undefined;
 }
@@ -121,6 +125,13 @@ let _lastCleaningEntries: StreetCleaningEntry[] = [];
 let _lastNowForHighlights: Date | null = null;
 let _pinchSuppressUntil: number | null = null;
 let _activeTouches = 0;
+
+// F-51 Check result layers: id → polyline
+const _checkLayers = new Map<string, LeafletPolyline>();
+
+// F-55 Rules inspection marker
+let _rulesMarker: LeafletLayer | null = null;
+
 const DEFAULT_ZOOM = 15;
 
 function dotScale(): number {
@@ -205,6 +216,7 @@ export function initMap(): LeafletMap {
   _streetParity = {};
   _lastCleaningEntries = [];
   _lastNowForHighlights = null;
+  _checkLayers.clear();
   map.createPane('towSignPane');
   const towSignPaneEl = map.getPane('towSignPane');
   if (towSignPaneEl !== undefined) towSignPaneEl.style.zIndex = '600';
@@ -1926,3 +1938,87 @@ export function showStreetPopup(
   }
 }
 
+// ─── F-51 Check Result Renderer ───────────────────────────────────────────────
+
+const STATUS_CLASS_MAP: Record<string, string> = {
+  safe:    "check-safe",
+  unknown: "check-unknown",
+  limited: "check-limited",
+  ticket:  "check-ticket",
+  tow:     "check-tow",
+  snow:    "check-snow",
+};
+
+/** Remove all Check result layers from the map and empty _checkLayers. */
+export function clearCheckResults(): void {
+  for (const polyline of _checkLayers.values()) {
+    polyline.remove();
+  }
+  _checkLayers.clear();
+}
+
+/** Render Check result segments on the map as classified polylines. */
+export function renderCheckResults(results: CheckResultSegment[]): void {
+  if (_map === null) return;
+  const L = getL();
+  for (const result of results) {
+    if (result.geometry === undefined) continue;
+    const className = STATUS_CLASS_MAP[result.status] ?? "check-unknown";
+    // Flatten all ways into a single coordinate array for the polyline
+    for (const way of result.geometry.ways) {
+      const polyline = L.polyline(way, { className });
+      polyline.addTo(_map);
+      _checkLayers.set(result.id, polyline);
+    }
+  }
+}
+
+/** Apply the "check-selected" CSS class to the polyline for the given segment id. */
+export function selectCheckSegment(id: string): void {
+  const polyline = _checkLayers.get(id);
+  if (polyline === undefined) return;
+  polyline.setStyle({ className: "check-selected" });
+}
+
+/** Remove all Rules inspection layers from the map. Stub — real rendering added later. */
+export function clearRulesInspection(): void {
+  if (_rulesMarker !== null) {
+    _rulesMarker.remove();
+    _rulesMarker = null;
+  }
+}
+
+/** Render Rules inspection sections on the map. Visual rendering handled via bottom sheet DOM. */
+export function renderRulesInspection(_sections: RulesInspectionSection[]): void {
+  // sections are rendered in the bottom sheet via ui.ts; no Leaflet overlay needed
+}
+
+/** Place a marker at the Rules inspection click location. */
+export function setRulesInspectionMarker(lat: number, lng: number): void {
+  if (_map === null) return;
+  const L = getL();
+  // Remove previous rules marker before placing a new one
+  if (_rulesMarker !== null) {
+    _rulesMarker.remove();
+    _rulesMarker = null;
+  }
+  const marker = L.circleMarker([lat, lng], {
+    radius: 8,
+    color: "#7c3aed",
+    fillColor: "#7c3aed",
+    fillOpacity: 0.5,
+    weight: 2,
+  });
+  marker.addTo(_map);
+  _rulesMarker = marker as unknown as LeafletLayer;
+}
+
+/** Show Rules-mode controls (bottom sheet / panel). Stub — real UI added later. */
+export function showRulesControls(): void {
+  // stub: no-op until Rules UI is implemented
+}
+
+/** Hide Rules-mode controls (bottom sheet / panel). Stub — real UI added later. */
+export function hideRulesControls(): void {
+  // stub: no-op until Rules UI is implemented
+}

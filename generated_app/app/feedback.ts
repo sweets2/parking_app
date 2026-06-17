@@ -1,8 +1,16 @@
 /**
- * app/feedback.ts — F-28
+ * app/feedback.ts — CF-14
  *
  * Floating feedback button and modal logic.
  * Exports initFeedback() which wires all DOM event listeners.
+ *
+ * Overlay visibility is controlled via the `hidden` HTML attribute:
+ * - removeAttribute("hidden") to show
+ * - setAttribute("hidden", "") to hide
+ *
+ * On successful form submit:
+ *   - Hides #feedback-overlay (sets hidden attribute)
+ *   - Shows #feedback-confirm (removes hidden attribute)
  */
 
 import { track } from "./analytics";
@@ -10,87 +18,96 @@ import { track } from "./analytics";
 /**
  * initFeedback(): void
  *
- * Reads the six required DOM elements. If any are missing, returns early.
- * Wires click handlers for open, close (cancel, overlay background click),
- * and submit (POST to /api/feedback).
+ * Wires the feedback button (#feedback-btn) to open/close the feedback modal
+ * (#feedback-overlay). If DOM elements are missing, returns early without throwing.
  */
 export function initFeedback(): void {
   const btn = document.getElementById("feedback-btn");
   const overlay = document.getElementById("feedback-overlay");
-  const cancelBtn = document.getElementById("feedback-cancel");
-  const submitBtn = document.getElementById("feedback-submit") as HTMLButtonElement | null;
-  const textArea = document.getElementById("feedback-text") as HTMLTextAreaElement | null;
-  const confirmEl = document.getElementById("feedback-confirm");
 
-  if (
-    btn === null ||
-    overlay === null ||
-    cancelBtn === null ||
-    submitBtn === null ||
-    textArea === null ||
-    confirmEl === null
-  ) {
+  if (btn === null || overlay === null) {
     return;
   }
 
+  function openModal(): void {
+    if (overlay === null) return;
+    overlay.removeAttribute("hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    track("feedback-opened");
+  }
+
   function closeModal(): void {
-    if (overlay === null || textArea === null || confirmEl === null || submitBtn === null) return;
-    overlay.classList.remove("open");
+    if (overlay === null) return;
+    overlay.setAttribute("hidden", "");
     overlay.setAttribute("aria-hidden", "true");
-    textArea.value = "";
-    confirmEl.textContent = "";
-    confirmEl.className = "";
-    submitBtn.disabled = false;
   }
 
   // Open modal on button click
   btn.addEventListener("click", () => {
-    overlay.classList.add("open");
-    overlay.setAttribute("aria-hidden", "false");
-    track("feedback-opened");
-    textArea.focus();
+    openModal();
   });
 
-  // Cancel closes modal
-  cancelBtn.addEventListener("click", () => {
-    closeModal();
-  });
-
-  // Overlay background click closes modal (but not clicks on inner modal)
+  // Close when clicking the overlay backdrop directly (not a child)
   overlay.addEventListener("click", (event: Event) => {
-    if ((event as Event & { target: EventTarget | null }).target === overlay) {
+    const evt = event as Event & { target: EventTarget | null };
+    if (evt.target === overlay) {
       closeModal();
     }
   });
 
-  // Submit handler
-  submitBtn.addEventListener("click", () => {
-    const trimmedValue = textArea.value.trim();
-    if (!trimmedValue) return;
+  // Wire cancel button if present
+  const cancelBtn = document.getElementById("feedback-cancel");
+  if (cancelBtn !== null) {
+    cancelBtn.addEventListener("click", () => {
+      const ta = document.getElementById("feedback-text") as HTMLTextAreaElement | null;
+      if (ta !== null) ta.value = "";
+      closeModal();
+    });
+  }
 
-    submitBtn.disabled = true;
+  // Wire alternate close button if present (id: feedback-close-btn)
+  const closeBtnEl = document.getElementById("feedback-close-btn");
+  if (closeBtnEl !== null) {
+    closeBtnEl.addEventListener("click", () => {
+      closeModal();
+    });
+  }
 
-    fetch("/api/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: trimmedValue }),
-    })
-      .then((response) => {
-        if (response.ok) {
-          confirmEl.textContent = "Thanks — feedback received!";
-          confirmEl.className = "success";
-          track("feedback-submitted");
-          setTimeout(() => closeModal(), 2200);
-        } else {
-          confirmEl.textContent = "Something went wrong. Please try again.";
-          confirmEl.className = "error";
-          submitBtn.disabled = false;
-        }
+  // Wire form submit event if all required elements are present
+  const formEl = document.getElementById("feedback-form");
+  const submitBtn = document.getElementById("feedback-submit") as HTMLButtonElement | null;
+  const textArea = document.getElementById("feedback-text") as HTMLTextAreaElement | null;
+  const confirmEl = document.getElementById("feedback-confirm");
+
+  if (formEl !== null && textArea !== null && confirmEl !== null) {
+    formEl.addEventListener("submit", (event: Event) => {
+      event.preventDefault();
+      const message = textArea.value.trim();
+      if (!message) return;
+
+      if (submitBtn !== null) submitBtn.disabled = true;
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
       })
-      .catch(() => {
-        confirmEl.textContent = "Could not send. Check your connection.";
-        confirmEl.className = "error";
-        submitBtn.disabled = false;
-      });
-  });
+        .then((response) => {
+          if (response.ok) {
+            closeModal();
+            confirmEl.removeAttribute("hidden");
+            track("feedback-submitted");
+          } else {
+            confirmEl.textContent = "Something went wrong. Please try again.";
+            confirmEl.className = "error";
+            if (submitBtn !== null) submitBtn.disabled = false;
+          }
+        })
+        .catch(() => {
+          confirmEl.textContent = "Could not send. Check your connection.";
+          confirmEl.className = "error";
+          if (submitBtn !== null) submitBtn.disabled = false;
+        });
+    });
+  }
 }

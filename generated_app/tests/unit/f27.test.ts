@@ -160,6 +160,13 @@ const mockInitRoadGeometry = vi.fn();
 const mockRenderTowSegments = vi.fn();
 const mockShowStreetPopup = vi.fn();
 
+// Extracted as module-level vi.fn() variables so their implementations survive
+// vi.resetAllMocks() calls in F-27.3 beforeEach (inline vi.fn() implementations
+// in vi.mock factories are not re-invoked on vi.resetModules(), so they get
+// cleared after resetAllMocks and cause "signs is not iterable" in main.ts).
+const mockCorrectSignPositionsF27 = vi.fn((signs: unknown[]) => signs);
+const mockBuildParkingSegmentCatalogF27 = vi.fn((): import("../../shared/types").ParkingSegment[] => []);
+
 vi.mock("../../app/map", () => ({
   initMap: mockInitMap,
   registerMapClickHandler: mockRegisterMapClickHandler,
@@ -179,6 +186,23 @@ vi.mock("../../app/map", () => ({
   renderUpcomingSignPins: vi.fn(),
   renderUpcomingTowSegments: vi.fn(),
   setUpcomingSignsVisible: vi.fn(),
+  // F-42 / F-46D additions required by initBrowserApp
+  renderGarageMarkers: vi.fn(),
+  setGarageMarkersVisible: vi.fn(),
+  renderSnowEmergencyRoutes: vi.fn(),
+  setSnowRoutesVisible: vi.fn(),
+  initStreetParity: vi.fn(),
+  correctSignPositions: mockCorrectSignPositionsF27,
+  getRoadGeometry: vi.fn(() => ({})),
+  // F-46D layer lifecycle stubs
+  clearCheckResults: vi.fn(),
+  renderCheckResults: vi.fn(),
+  selectCheckSegment: vi.fn(),
+  clearRulesInspection: vi.fn(),
+  renderRulesInspection: vi.fn(),
+  setRulesInspectionMarker: vi.fn(),
+  showRulesControls: vi.fn(),
+  hideRulesControls: vi.fn(),
 }));
 
 vi.mock("../../app/ui", () => ({
@@ -204,29 +228,31 @@ vi.mock("../../shared/storage", () => ({
   createSpotStorage: mockCreateSpotStorage,
 }));
 
+const _NOW = new Date("2026-06-09T16:00:00.000Z");
+
 let mockAppState: AppState = {
-  mode: "browsing",
-  userLat: 40.744,
-  userLng: -74.032,
+  mode: "ready",
+  activeMode: "check",
   allSigns: [],
   activeSigns: [],
+  parkingSegments: [],
+  checkQuery: { startTime: _NOW, endTime: _NOW, label: "Now", source: "duration" },
+  checkResults: [],
+  selectedCheckSegment: null,
+  rulesTime: { mode: "now", selectedTime: _NOW },
+  selectedRulesLocation: null,
+  rulesInspectionSections: [],
 };
 const mockAppGetState = vi.fn<[], AppState>(() => mockAppState);
-const mockAppOnSaveSpot = vi.fn<[SavedSpot], void>();
-const mockAppOnClearSpot = vi.fn<[], void>();
-const mockAppSetUserPosition = vi.fn<[number, number], void>();
+const mockAppSetActiveMode = vi.fn<[string], void>();
 const mockAppTick = vi.fn<[Date], void>();
-const mockAppOnHereNow = vi.fn<[], void>();
 
 const mockCreateApp = vi.fn(
-  (deps: { storage: unknown; renderState: (state: AppState) => void }) => {
+  (deps: { renderState: (state: AppState) => void }, _initialData?: unknown, _now?: Date) => {
     return {
       getState: mockAppGetState,
-      onSaveSpot: mockAppOnSaveSpot,
-      onClearSpot: mockAppOnClearSpot,
-      setUserPosition: mockAppSetUserPosition,
+      setActiveMode: mockAppSetActiveMode,
       tick: mockAppTick,
-      onHereNow: mockAppOnHereNow,
     };
   }
 );
@@ -239,6 +265,12 @@ vi.mock("../../app/geo", () => ({
   getStreetName: vi.fn().mockResolvedValue(null),
   geocodeCrossStreet: vi.fn().mockResolvedValue(null),
   seedGeocodeCache: vi.fn(),
+}));
+
+vi.mock("../../shared/segment-catalog", () => ({
+  buildParkingSegmentCatalog: mockBuildParkingSegmentCatalogF27,
+  makeParkingSegmentId: vi.fn(() => "mock-id"),
+  normalizeSegmentToken: vi.fn((v: string) => v),
 }));
 
 let mockFetchImpl: (() => Promise<Response>) | null = null;
@@ -339,30 +371,34 @@ describe("F-27.3 locate button wiring in initBrowserApp", () => {
     mockFetchImpl = null;
     vi.resetModules();
 
+    // vi.resetAllMocks() clears the implementations of module-level vi.fn() variables
+    // (including those referenced by vi.mock factories). Restore them here so that
+    // initBrowserApp does not receive undefined from correctSignPositions or
+    // buildParkingSegmentCatalog, which would cause "signs is not iterable".
+    mockCorrectSignPositionsF27.mockImplementation((signs: unknown[]) => signs);
+    mockBuildParkingSegmentCatalogF27.mockImplementation((): import("../../shared/types").ParkingSegment[] => []);
+
     mockAppState = {
-      mode: "browsing",
-      userLat: null,
-      userLng: null,
+      mode: "ready",
+      activeMode: "check",
       allSigns: [],
       activeSigns: [],
+      parkingSegments: [],
+      checkQuery: { startTime: _NOW, endTime: _NOW, label: "Now", source: "duration" },
+      checkResults: [],
+      selectedCheckSegment: null,
+      rulesTime: { mode: "now", selectedTime: _NOW },
+      selectedRulesLocation: null,
+      rulesInspectionSections: [],
     };
     mockAppGetState.mockImplementation(() => mockAppState);
     mockCreateApp.mockImplementation(
-      (deps: { storage: unknown; renderState: (state: AppState) => void }) => ({
+      (deps: { renderState: (state: AppState) => void }, _initialData?: unknown, _now?: Date) => ({
         getState: mockAppGetState,
-        onSaveSpot: mockAppOnSaveSpot,
-        onClearSpot: mockAppOnClearSpot,
-        setUserPosition: mockAppSetUserPosition,
+        setActiveMode: mockAppSetActiveMode,
         tick: mockAppTick,
-        onHereNow: mockAppOnHereNow,
       })
     );
-    mockCreateSpotStorage.mockImplementation(() => ({
-      load: mockStorageLoad,
-      save: mockStorageSave,
-      clear: mockStorageClear,
-    }));
-    mockStorageLoad.mockImplementation(() => null);
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
       if (mockFetchImpl) return mockFetchImpl();
@@ -384,9 +420,11 @@ describe("F-27.3 locate button wiring in initBrowserApp", () => {
 
     // Install navigator.geolocation that never calls back (simulates pending)
     const getCurrentPositionMock = vi.fn();
-    (globalThis as Record<string, unknown>)["navigator"] = {
-      geolocation: { getCurrentPosition: getCurrentPositionMock },
-    };
+    Object.defineProperty(globalThis, "navigator", {
+      value: { geolocation: { getCurrentPosition: getCurrentPositionMock } },
+      writable: true,
+      configurable: true,
+    });
 
     const { locateBtn } = installDocumentMock();
     await initBrowserApp();

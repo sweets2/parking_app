@@ -1,117 +1,76 @@
 /**
- * Unit tests for F-12 PWA Shell
+ * Unit tests for CF-13 PWA Shell
  *
- * F-12.1 — manifest.json validity and required fields
- * F-12.2 — main.ts contains SW registration
- * F-12.3 — sw.ts app shell cache
- * F-12.4 — sw.ts network-first strategy for latest.json
- *
- * All tests are file-content assertions (read source as text or parse JSON).
+ * Tests verify static file contents (string/JSON checks via fs.readFileSync).
+ * The service worker is not imported or executed in Node.
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
-const ROOT = resolve(__dirname, "../../app");
+const APP_DIR = resolve(__dirname, "../../app");
 
-// ─── F-12.1 manifest.json ─────────────────────────────────────────────────────
+// ─── manifest.json contents ───────────────────────────────────────────────────
 
-describe("F-12.1 manifest.json", () => {
-  it("GIVEN the manifest is fetched, THEN it is valid JSON", () => {
-    const raw = readFileSync(resolve(ROOT, "manifest.json"), "utf-8");
-    expect(() => {
-      JSON.parse(raw);
-    }).not.toThrow();
+describe("manifest.json contents", () => {
+  const manifest = JSON.parse(
+    readFileSync(resolve(APP_DIR, "manifest.json"), "utf-8")
+  ) as Record<string, unknown>;
+
+  it("GIVEN manifest.json is read as JSON, WHEN the name field is accessed, THEN it equals Hoboken Parking", () => {
+    expect(manifest["name"]).toBe("Hoboken Parking");
   });
 
-  it("GIVEN the manifest, THEN display is 'standalone'", () => {
-    const raw = readFileSync(resolve(ROOT, "manifest.json"), "utf-8");
-    const m = JSON.parse(raw) as Record<string, unknown>;
-    expect(m["display"]).toBe("standalone");
+  it("GIVEN manifest.json is read as JSON, WHEN the short_name field is accessed, THEN it equals HP Parking", () => {
+    expect(manifest["short_name"]).toBe("HP Parking");
   });
 
-  it("GIVEN the manifest, THEN one icon entry has sizes containing '192x192'", () => {
-    const raw = readFileSync(resolve(ROOT, "manifest.json"), "utf-8");
-    const m = JSON.parse(raw) as Record<string, unknown>;
-    const icons = m["icons"] as Array<{ sizes: string }>;
-    const has192 = icons.some((icon) => icon.sizes.includes("192x192"));
-    expect(has192).toBe(true);
+  it("GIVEN manifest.json is read as JSON, WHEN the display field is accessed, THEN it equals standalone", () => {
+    expect(manifest["display"]).toBe("standalone");
   });
 
-  it("GIVEN the manifest, THEN one icon entry has sizes containing '512x512'", () => {
-    const raw = readFileSync(resolve(ROOT, "manifest.json"), "utf-8");
-    const m = JSON.parse(raw) as Record<string, unknown>;
-    const icons = m["icons"] as Array<{ sizes: string }>;
-    const has512 = icons.some((icon) => icon.sizes.includes("512x512"));
-    expect(has512).toBe(true);
-  });
-});
-
-// ─── F-12.2 main.ts SW registration ──────────────────────────────────────────
-
-describe("F-12.2 main.ts service worker registration", () => {
-  let mainSource: string;
-
-  beforeAll(() => {
-    mainSource = readFileSync(resolve(ROOT, "main.ts"), "utf-8");
-  });
-
-  it("GIVEN app/main.ts source, THEN it contains serviceWorker.register and sw.js", () => {
-    expect(mainSource).toContain("serviceWorker.register");
-    expect(mainSource).toContain("sw.js");
-  });
-
-  it("GIVEN app/main.ts source, THEN the registration call is wrapped in a try/catch or .catch( error handler", () => {
-    const hasTryCatch = /try\s*\{[\s\S]*?serviceWorker\.register[\s\S]*?\}\s*catch/.test(mainSource);
-    const hasDotCatch = /serviceWorker\.register[\s\S]{0,200}\.catch\(/.test(mainSource);
-    expect(hasTryCatch || hasDotCatch).toBe(true);
-  });
-});
-
-// ─── F-12.3 sw.ts app shell cache ────────────────────────────────────────────
-
-describe("F-12.3 sw.ts app shell offline cache", () => {
-  let swSource: string;
-
-  beforeAll(() => {
-    swSource = readFileSync(resolve(ROOT, "sw.ts"), "utf-8");
-  });
-
-  it("GIVEN app/sw.ts source, THEN it contains all of: 'index.html', 'app.js', 'style.css', 'manifest.json'", () => {
-    expect(swSource).toContain("'index.html'");
-    expect(swSource).toContain("'app.js'");
-    expect(swSource).toContain("'style.css'");
-    expect(swSource).toContain("'manifest.json'");
-  });
-
-  it("GIVEN app/sw.ts source, THEN it defines a CACHE_NAME constant whose value includes a version identifier (matches /v\\d/)", () => {
-    expect(/CACHE_NAME\s*=\s*['"`][^'"`]*v\d[^'"`]*['"`]/.test(swSource)).toBe(true);
-  });
-
-  it("GIVEN app/sw.ts source, THEN it contains an activate handler that deletes caches not matching CACHE_NAME", () => {
-    expect(swSource).toContain("activate");
-    expect(swSource).toMatch(/caches\.delete/);
-  });
-});
-
-// ─── F-12.4 latest.json network-first strategy ───────────────────────────────
-
-describe("F-12.4 sw.ts latest.json network-first strategy", () => {
-  let swSource: string;
-
-  beforeAll(() => {
-    swSource = readFileSync(resolve(ROOT, "sw.ts"), "utf-8");
-  });
-
-  it("GIVEN app/sw.ts source, THEN it contains 'latest.json' inside a fetch handler (network-first logic for that path)", () => {
-    expect(swSource).toContain("latest.json");
-    expect(swSource).toContain("fetch");
-  });
-
-  it("GIVEN app/sw.ts source, THEN it contains the exact string 'No data available — go online to load parking signs' as the offline fallback message", () => {
-    expect(swSource).toContain(
-      "No data available — go online to load parking signs"
+  it("GIVEN manifest.json is read as JSON, WHEN the icons array is accessed, THEN it contains an entry with src icon-192.png and sizes 192x192", () => {
+    const icons = manifest["icons"] as Array<{ src: string; sizes: string; type: string }>;
+    const icon192 = icons.find(
+      (i) => i.src === "icon-192.png" && i.sizes === "192x192"
     );
+    expect(icon192).toBeDefined();
+  });
+
+  it("GIVEN manifest.json is read as JSON, WHEN the icons array is accessed, THEN it contains an entry with src icon-512.png and sizes 512x512", () => {
+    const icons = manifest["icons"] as Array<{ src: string; sizes: string; type: string }>;
+    const icon512 = icons.find(
+      (i) => i.src === "icon-512.png" && i.sizes === "512x512"
+    );
+    expect(icon512).toBeDefined();
+  });
+
+  it("GIVEN manifest.json is read as JSON, WHEN the start_url field is accessed, THEN it equals /", () => {
+    expect(manifest["start_url"]).toBe("/");
+  });
+});
+
+// ─── sw.ts static content ─────────────────────────────────────────────────────
+
+describe("sw.ts static content", () => {
+  const swSource = readFileSync(resolve(APP_DIR, "sw.ts"), "utf-8");
+
+  it("GIVEN app/sw.ts is read as a string, WHEN searched for the cache name constant, THEN it contains the literal string hoboken-parking-v2", () => {
+    expect(swSource).toContain('"hoboken-parking-v2"');
+  });
+
+  it("GIVEN app/sw.ts is read as a string, WHEN searched for skipWaiting, THEN it contains skipWaiting()", () => {
+    expect(swSource).toContain("skipWaiting()");
+  });
+
+  it("GIVEN app/sw.ts is read as a string, WHEN searched for the network-first data URL, THEN it contains data/latest.json", () => {
+    expect(swSource).toContain('"data/latest.json"');
+  });
+
+  it("GIVEN app/sw.ts is read as a string, WHEN the APP_SHELL_URLS list is examined, THEN it contains /index.html and /app.js and /style.css", () => {
+    expect(swSource).toContain('"/index.html"');
+    expect(swSource).toContain('"/app.js"');
+    expect(swSource).toContain('"/style.css"');
   });
 });

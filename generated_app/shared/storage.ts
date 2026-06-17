@@ -7,7 +7,7 @@ export interface StorageBackend {
 export interface SavedSpot {
   lat: number;
   lng: number;
-  side?: "N" | "S" | "E" | "W";
+  side?: string;
   savedAt: string;
   address: string | null;
 }
@@ -19,6 +19,19 @@ export interface SpotStorage {
 }
 
 const STORAGE_KEY = "hoboken_parking_spot";
+
+function isValidSpot(value: unknown): value is SavedSpot {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj["lat"] === "number" &&
+    typeof obj["lng"] === "number" &&
+    typeof obj["savedAt"] === "string" &&
+    (typeof obj["address"] === "string" || obj["address"] === null)
+  );
+}
 
 export function createSpotStorage(backend: StorageBackend): SpotStorage {
   return {
@@ -32,7 +45,11 @@ export function createSpotStorage(backend: StorageBackend): SpotStorage {
         return null;
       }
       try {
-        return JSON.parse(raw) as SavedSpot;
+        const parsed: unknown = JSON.parse(raw);
+        if (!isValidSpot(parsed)) {
+          return null;
+        }
+        return parsed;
       } catch {
         return null;
       }

@@ -24,13 +24,13 @@ const sw = self as unknown as {
 const CACHE_NAME = "hoboken-parking-v2";
 
 const APP_SHELL_URLS: string[] = [
-  '/',
-  'index.html',
-  'app.js',
-  'style.css',
-  'manifest.json',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  "/",
+  "/index.html",
+  "/app.js",
+  "/style.css",
+  "/manifest.json",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -82,8 +82,8 @@ sw.addEventListener("fetch", (event) => {
   const fetchEvent = asFetchEvent(event);
   const url = new URL(fetchEvent.request.url);
 
-  // Network-first for latest.json
-  if (url.pathname.endsWith("latest.json")) {
+  // Network-first for data/latest.json
+  if (url.pathname.endsWith("data/latest.json")) {
     fetchEvent.respondWith(networkFirstLatestJson(fetchEvent.request));
     return;
   }

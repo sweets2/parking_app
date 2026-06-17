@@ -2,8 +2,9 @@
   {
     "id": "CF-D1",
     "name": "API Discovery",
-    "status": "TODO",
+    "status": "DONE",
     "order": 1,
+    "spec_file": "specs/v2/CF-D1.md",
     "depends_on": [],
     "context_files": [],
     "output_files": [
@@ -14,8 +15,9 @@
   {
     "id": "CF-D2",
     "name": "Data Schema Analysis",
-    "status": "TODO",
+    "status": "DONE",
     "order": 2,
+    "spec_file": "specs/v2/CF-D2.md",
     "depends_on": [
       "CF-D1"
     ],
@@ -31,8 +33,9 @@
   {
     "id": "CF-00",
     "name": "Project Bootstrap",
-    "status": "TODO",
+    "status": "DONE",
     "order": 3,
+    "spec_file": "specs/v2/CF-00.md",
     "depends_on": [
       "CF-D2"
     ],
@@ -42,26 +45,30 @@
       "tsconfig.json",
       "vitest.config.ts"
     ],
+    "run_tests": false,
     "post_build_command": "npm install"
   },
   {
     "id": "CF-01",
     "name": "CI/CD and GitHub Actions",
-    "status": "TODO",
+    "status": "DONE",
     "order": 4,
+    "spec_file": "specs/v2/CF-01.md",
     "depends_on": [
       "CF-00"
     ],
     "context_files": [],
     "output_files": [
       ".github/workflows/fetch_daily.yml"
-    ]
+    ],
+    "run_tests": false
   },
   {
     "id": "CF-02",
     "name": "Shared Types",
-    "status": "TODO",
+    "status": "DONE",
     "order": 5,
+    "spec_file": "specs/v2/CF-02.md",
     "depends_on": [
       "CF-D2"
     ],
@@ -75,8 +82,9 @@
   {
     "id": "CF-03",
     "name": "Test Fixtures",
-    "status": "TODO",
+    "status": "DONE",
     "order": 6,
+    "spec_file": "specs/v2/CF-03.md",
     "depends_on": [
       "CF-00",
       "CF-02"
@@ -87,13 +95,15 @@
     ],
     "output_files": [
       "tests/fixtures/signs.ts"
-    ]
+    ],
+    "run_tests": false
   },
   {
     "id": "CF-04",
     "name": "Core Parking Logic",
-    "status": "TODO",
+    "status": "DONE",
     "order": 7,
+    "spec_file": "specs/v2/CF-04.md",
     "depends_on": [
       "CF-02",
       "CF-03"
@@ -110,8 +120,9 @@
   {
     "id": "CF-05",
     "name": "Storage Module",
-    "status": "TODO",
+    "status": "DONE",
     "order": 8,
+    "spec_file": "specs/v2/CF-05.md",
     "depends_on": [
       "CF-02"
     ],
@@ -126,8 +137,9 @@
   {
     "id": "CF-06",
     "name": "Data Fetchers",
-    "status": "TODO",
+    "status": "DONE",
     "order": 9,
+    "spec_file": "specs/v2/CF-06.md",
     "depends_on": [
       "CF-02",
       "CF-03"
@@ -148,8 +160,9 @@
   {
     "id": "CF-07",
     "name": "Build-Time Geocoding and Road Geometry",
-    "status": "TODO",
+    "status": "DONE",
     "order": 10,
+    "spec_file": "specs/v2/CF-07.md",
     "depends_on": [
       "CF-02",
       "CF-00"
@@ -170,8 +183,9 @@
   {
     "id": "CF-08",
     "name": "App State Machine",
-    "status": "TODO",
+    "status": "DONE",
     "order": 11,
+    "spec_file": "specs/v2/CF-08.md",
     "depends_on": [
       "CF-02",
       "CF-04",
@@ -190,8 +204,9 @@
   {
     "id": "CF-09",
     "name": "UI Rendering Module",
-    "status": "TODO",
+    "status": "DONE",
     "order": 12,
+    "spec_file": "specs/v2/CF-09.md",
     "depends_on": [
       "CF-02",
       "CF-04"
@@ -208,8 +223,9 @@
   {
     "id": "CF-12",
     "name": "HTML and CSS",
-    "status": "TODO",
+    "status": "DONE",
     "order": 13,
+    "spec_file": "specs/v2/CF-12.md",
     "depends_on": [
       "CF-00"
     ],
@@ -217,13 +233,15 @@
     "output_files": [
       "app/index.html",
       "app/style.css"
-    ]
+    ],
+    "run_tests": false
   },
   {
     "id": "CF-10",
     "name": "Map Module",
-    "status": "TODO",
+    "status": "DONE",
     "order": 14,
+    "spec_file": "specs/v2/CF-10.md",
     "depends_on": [
       "CF-02",
       "CF-04",
@@ -242,8 +260,9 @@
   {
     "id": "CF-11",
     "name": "App Entry Point",
-    "status": "TODO",
+    "status": "DONE",
     "order": 15,
+    "spec_file": "specs/v2/CF-11.md",
     "depends_on": [
       "CF-08",
       "CF-09",
@@ -269,8 +288,9 @@
   {
     "id": "CF-13",
     "name": "PWA Shell",
-    "status": "TODO",
+    "status": "DONE",
     "order": 16,
+    "spec_file": "specs/v2/CF-13.md",
     "depends_on": [
       "CF-11"
     ],
@@ -280,14 +300,16 @@
     ],
     "output_files": [
       "app/manifest.json",
-      "app/sw.ts"
+      "app/sw.ts",
+      "tests/unit/pwa.test.ts"
     ]
   },
   {
     "id": "CF-14",
     "name": "Analytics and Feedback",
-    "status": "TODO",
+    "status": "DONE",
     "order": 17,
+    "spec_file": "specs/v2/CF-14.md",
     "depends_on": [
       "CF-11"
     ],
@@ -300,14 +322,16 @@
       "app/feedback.ts",
       "api/feedback.ts",
       "tests/unit/analytics.test.ts",
-      "tests/unit/feedback.test.ts"
+      "tests/unit/feedback.test.ts",
+      "tests/unit/api-feedback.test.ts"
     ]
   },
   {
     "id": "CF-15",
     "name": "Static Data Files",
-    "status": "TODO",
+    "status": "DONE",
     "order": 18,
+    "spec_file": "specs/v2/CF-15.md",
     "depends_on": [
       "CF-07"
     ],
@@ -316,34 +340,16 @@
     ],
     "output_files": [
       "data/garages.json",
-      "data/snow-emergency-routes.json"
+      "data/snow-emergency-routes.json",
+      "tests/unit/static-data.test.ts"
     ]
   },
   {
-    "id": "F-46",
-    "name": "Query Input Bar",
-    "status": "TODO",
+    "id": "F-46A",
+    "name": "Shared Check/Rules Types",
+    "status": "DONE",
     "order": 19,
-    "depends_on": [
-      "CF-11"
-    ],
-    "context_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/main.ts"
-    ],
-    "output_files": [
-      "app/index.html",
-      "app/style.css",
-      "app/main.ts"
-    ],
-    "run_tests": true
-  },
-  {
-    "id": "F-47",
-    "name": "Natural Language Time Parser",
-    "status": "TODO",
-    "order": 20,
+    "spec_file": "specs/F-46A.md",
     "depends_on": [
       "CF-02"
     ],
@@ -351,56 +357,335 @@
       "shared/types.ts"
     ],
     "output_files": [
-      "shared/query-parser.ts",
-      "tests/unit/query-parser.test.ts"
+      "shared/types.ts"
     ],
-    "run_tests": true
+    "run_tests": false
+  },
+  {
+    "id": "F-46B",
+    "name": "Remove Dev Time Override / Production Safety Cleanup",
+    "status": "DONE",
+    "order": 20,
+    "spec_file": "specs/F-46B.md",
+    "depends_on": [
+      "CF-08"
+    ],
+    "context_files": [
+      "app/main.ts",
+      "tests/unit/main.test.ts",
+      "tests/integration/pipeline.test.ts"
+    ],
+    "output_files": [
+      "app/main.ts",
+      "tests/unit/main.test.ts"
+    ]
+  },
+  {
+    "id": "F-46C",
+    "name": "Mode Shell + Responsive Navigation",
+    "status": "DONE",
+    "order": 21,
+    "spec_file": "specs/F-46C.md",
+    "depends_on": [
+      "F-46A"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "app/index.html",
+      "app/style.css",
+      "app/app.ts",
+      "app/main.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css"
+    ],
+    "run_tests": false
+  },
+  {
+    "id": "F-46D",
+    "name": "AppState Migration + Mode Switching + Layer Lifecycle Stubs",
+    "status": "DONE",
+    "order": 22,
+    "spec_file": "specs/F-46D.md",
+    "depends_on": [
+      "F-46A",
+      "F-46B",
+      "F-46C"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "shared/types.ts",
+      "app/app.ts",
+      "app/main.ts",
+      "app/map.ts",
+      "app/index.html",
+      "app/style.css",
+      "tests/unit/app.test.ts",
+      "tests/unit/main.test.ts",
+      "tests/unit/map.test.ts"
+    ],
+    "output_files": [
+      "app/app.ts",
+      "app/main.ts",
+      "app/map.ts",
+      "tests/unit/app.test.ts",
+      "tests/unit/main.test.ts",
+      "tests/unit/map.test.ts"
+    ]
+  },
+  {
+    "id": "F-47",
+    "name": "Check Duration Bar + Simple Query Parser",
+    "status": "DONE",
+    "order": 23,
+    "spec_file": "specs/F-47.md",
+    "depends_on": [
+      "F-46D"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "shared/types.ts",
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts",
+      "tests/unit/main.test.ts"
+    ],
+    "output_files": [
+      "shared/query-parser.ts",
+      "tests/unit/query-parser.test.ts",
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts",
+      "tests/unit/main.test.ts"
+    ]
   },
   {
     "id": "F-48",
-    "name": "Window-Based Schedule Evaluator",
-    "status": "TODO",
-    "order": 21,
+    "name": "Exact Window Conflict Evaluator + Next Restriction",
+    "status": "DONE",
+    "order": 24,
+    "spec_file": "specs/F-48.md",
     "depends_on": [
-      "F-47",
+      "F-46A",
       "CF-04"
     ],
     "context_files": [
-      "shared/parking-logic.ts",
-      "shared/query-parser.ts",
-      "tests/unit/parking-logic.test.ts",
-      "tests/fixtures/signs.ts"
-    ],
-    "output_files": [
+      "shared/types.ts",
       "shared/parking-logic.ts",
       "tests/unit/parking-logic.test.ts"
     ],
-    "run_tests": true
+    "output_files": [
+      "shared/parking-logic.ts",
+      "tests/unit/parking-logic-window.test.ts"
+    ]
   },
   {
     "id": "F-49",
-    "name": "Choropleth Map Sweep Renderer",
-    "status": "TODO",
-    "order": 22,
+    "name": "Segment Catalog + Geometry Utils",
+    "status": "DONE",
+    "order": 25,
+    "spec_file": "specs/F-49.md",
     "depends_on": [
-      "CF-10",
-      "CF-11",
-      "F-46",
-      "F-47",
-      "F-48"
+      "F-48",
+      "CF-07"
     ],
     "context_files": [
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "app/geo.ts"
+    ],
+    "output_files": [
+      "shared/segment-catalog.ts",
+      "tests/unit/segment-catalog.test.ts"
+    ]
+  },
+  {
+    "id": "F-50",
+    "name": "Required Parking Data Loader",
+    "status": "DONE",
+    "order": 26,
+    "spec_file": "specs/F-50.md",
+    "depends_on": [
+      "F-49",
+      "CF-08"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/segment-catalog.ts",
+      "shared/parking-logic.ts",
+      "app/app.ts",
+      "app/main.ts",
+      "tests/unit/main.test.ts",
+      "tests/unit/f27.test.ts"
+    ],
+    "output_files": [
+      "app/app.ts",
+      "app/main.ts",
+      "tests/unit/main.test.ts",
+      "tests/unit/f27.test.ts"
+    ]
+  },
+  {
+    "id": "F-51",
+    "name": "Check Result Renderer",
+    "status": "DONE",
+    "order": 27,
+    "spec_file": "specs/F-51.md",
+    "depends_on": [
+      "F-46D",
+      "F-49",
+      "F-50"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "shared/types.ts",
+      "shared/segment-catalog.ts",
       "app/map.ts",
       "app/main.ts",
-      "shared/query-parser.ts",
-      "shared/parking-logic.ts",
-      "tests/unit/map.test.ts"
+      "tests/unit/map.test.ts",
+      "tests/unit/main.test.ts"
     ],
     "output_files": [
       "app/map.ts",
       "app/main.ts",
-      "tests/unit/map.test.ts"
+      "tests/unit/map.test.ts",
+      "tests/unit/main.test.ts"
+    ]
+  },
+  {
+    "id": "F-52",
+    "name": "Common Bottom Sheet Shell",
+    "status": "DONE",
+    "order": 28,
+    "spec_file": "specs/F-52.md",
+    "depends_on": [
+      "F-51"
     ],
-    "run_tests": true
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "shared/types.ts",
+      "app/index.html",
+      "app/style.css",
+      "app/ui.ts",
+      "app/main.ts",
+      "tests/unit/main.test.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/ui.ts",
+      "app/main.ts",
+      "tests/unit/main.test.ts"
+    ]
+  },
+  {
+    "id": "F-53",
+    "name": "Rules Mode Time Selector + Layer Panel",
+    "status": "DONE",
+    "order": 29,
+    "spec_file": "specs/F-53.md",
+    "depends_on": [
+      "F-52"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "shared/types.ts",
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts",
+      "app/map.ts",
+      "app/ui.ts",
+      "tests/unit/main.test.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts",
+      "app/ui.ts",
+      "tests/unit/main.test.ts"
+    ]
+  },
+  {
+    "id": "F-54",
+    "name": "Rules Inspection Engine",
+    "status": "DONE",
+    "order": 30,
+    "spec_file": "specs/F-54.md",
+    "depends_on": [
+      "F-49",
+      "F-53"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "shared/segment-catalog.ts",
+      "app/main.ts",
+      "tests/fixtures/signs.ts"
+    ],
+    "output_files": [
+      "shared/rules-inspector.ts",
+      "tests/unit/rules-inspector.test.ts"
+    ]
+  },
+  {
+    "id": "F-55",
+    "name": "Rules Inspection UI / Bottom Sheet",
+    "status": "DONE",
+    "order": 31,
+    "spec_file": "specs/F-55.md",
+    "depends_on": [
+      "F-54"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "shared/types.ts",
+      "shared/rules-inspector.ts",
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts",
+      "app/ui.ts",
+      "app/map.ts",
+      "tests/unit/map.test.ts",
+      "tests/unit/main.test.ts",
+      "tests/fixtures/signs.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/main.ts",
+      "app/ui.ts",
+      "app/map.ts",
+      "tests/unit/main.test.ts",
+      "tests/unit/map.test.ts"
+    ]
+  },
+  {
+    "id": "F-56",
+    "name": "Check Bottom Sheet + Desktop Responsive Polish",
+    "status": "DONE",
+    "order": 32,
+    "spec_file": "specs/F-56.md",
+    "depends_on": [
+      "F-52",
+      "F-55"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "shared/types.ts",
+      "shared/segment-catalog.ts",
+      "app/index.html",
+      "app/style.css",
+      "app/ui.ts",
+      "app/main.ts",
+      "tests/unit/main.test.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css",
+      "app/ui.ts",
+      "app/main.ts",
+      "tests/unit/main.test.ts"
+    ]
   }
 ]
