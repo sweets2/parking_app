@@ -57,7 +57,7 @@ export function wireCheckControls(app: App): void {
 
   checkRunBtn?.addEventListener("click", () => {
     const state = app.getState();
-    if (state.mode !== "ready") return;
+    if (state.mode !== "ready" || state.activeMode !== "check") return;
 
     let query: CheckQuery | null = activeCheckQuery;
 
@@ -85,7 +85,7 @@ export function wireCheckControls(app: App): void {
 
   function runQueryBarCheck(text: string): void {
     const state = app.getState();
-    if (state.mode !== "ready") return;
+    if (state.mode !== "ready" || state.activeMode !== "check") return;
     const parsed = parseCheckQuery(text, new Date()) ?? createDurationCheckQuery(120, new Date());
     track("check-query-run", { label: parsed.label });
     checkResults = state.parkingSegments.map((seg) => evaluateParkingWindow(seg, parsed));

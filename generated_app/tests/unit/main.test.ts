@@ -30,6 +30,8 @@ const mockInitMap = vi.fn();
 const mockRenderSignPins = vi.fn();
 const mockRenderSpotMarker = vi.fn();
 const mockRenderViolationHighlights = vi.fn();
+const mockForgetViolationHighlights = vi.fn();
+const mockRenderCheckResults = vi.fn();
 const mockClearCheckResults = vi.fn();
 const mockClearRulesInspection = vi.fn();
 const mockSetRulesInspectionMarker = vi.fn();
@@ -55,6 +57,7 @@ vi.mock("../../app/map", () => ({
   setTowSignsVisible: vi.fn(),
   clearViolationHighlights: vi.fn(),
   renderViolationHighlights: mockRenderViolationHighlights,
+  forgetViolationHighlights: mockForgetViolationHighlights,
   setViolationHighlightsVisible: vi.fn(),
   renderUpcomingSignPins: vi.fn(),
   renderUpcomingTowSegments: vi.fn(),
@@ -67,7 +70,7 @@ vi.mock("../../app/map", () => ({
   correctSignPositions: mockCorrectSignPositions,
   getRoadGeometry: mockGetRoadGeometry,
   clearCheckResults: mockClearCheckResults,
-  renderCheckResults: vi.fn(),
+  renderCheckResults: mockRenderCheckResults,
   selectCheckSegment: vi.fn(),
   clearRulesInspection: mockClearRulesInspection,
   renderRulesInspection: mockRenderRulesInspection,
@@ -1785,9 +1788,10 @@ describe("F-46B dev override removal", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Now manually fire capturedRenderState so renderViolationHighlights is called
-    // after cleaningEntries is populated
+    // after cleaningEntries is populated. Must use rules mode — violation highlights
+    // are suppressed in check mode by design.
     if (capturedRenderState !== null) {
-      const readyState = makeReadyState();
+      const readyState = makeReadyState({ activeMode: "rules" });
       capturedRenderState(readyState);
     }
 
@@ -1827,6 +1831,10 @@ describe("F-46B dev override removal", () => {
       entries: [washingtonEntry, observerEntry],
     };
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+
+    // Must use rules mode — scheduleViolationRefresh skips the call in check mode.
+    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppGetState.mockImplementation(() => mockAppState);
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url === "data/street-cleaning.json") {
@@ -2428,6 +2436,217 @@ describe("F-51 mode switch clears check results", () => {
     }
 
     expect(mockClearCheckResults).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Violation highlights / Check mode conflict fix ──────────────────────────
+
+describe("violation highlights vs check mode conflict (bug fix)", () => {
+  function makeMockButton(id: string) {
+    return {
+      id,
+      style: { display: "" as string },
+      disabled: false as boolean,
+      addEventListener: vi.fn(),
+      getAttribute: vi.fn(() => null),
+      setAttribute: vi.fn(),
+      classList: { contains: vi.fn(() => false), toggle: vi.fn(), add: vi.fn() },
+    };
+  }
+
+  function installDocumentMock(): void {
+    const elements: Record<string, unknown> = {
+      "clear-btn": makeMockButton("clear-btn"),
+      "here-btn": makeMockButton("here-btn"),
+      "banner": { style: { display: "none" }, textContent: "" },
+      "check-controls": { style: { display: "" } },
+      "check-duration-30": makeMockButton("check-duration-30"),
+      "check-duration-60": makeMockButton("check-duration-60"),
+      "check-duration-120": makeMockButton("check-duration-120"),
+      "check-query-input": { value: "", addEventListener: vi.fn() },
+      "check-run-button": makeMockButton("check-run-button"),
+    };
+    (globalThis as Record<string, unknown>)["document"] = {
+      getElementById: (id: string) => elements[id] ?? null,
+      addEventListener: vi.fn(),
+    };
+    const store = new Map<string, string>();
+    (globalThis as Record<string, unknown>)["localStorage"] = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+      clear: () => { store.clear(); },
+    };
+  }
+
+  function removeDocumentMock(): void {
+    delete (globalThis as Record<string, unknown>)["document"];
+    delete (globalThis as Record<string, unknown>)["localStorage"];
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetAllMocks();
+    mockFetchImpl = null;
+    vi.resetModules();
+
+    mockBuildParkingSegmentCatalog.mockImplementation(() => []);
+    mockCorrectSignPositions.mockImplementation((signs: unknown[]) => signs);
+    mockGetRoadGeometry.mockImplementation(() => ({}));
+
+    capturedRenderState = null;
+    mockCreateApp.mockImplementation((deps: { renderState: (state: AppState) => void }) => {
+      capturedRenderState = deps.renderState;
+      return {
+        getState: mockAppGetState,
+        setActiveMode: mockAppSetActiveMode,
+        setRulesLocation: mockAppSetRulesLocation,
+        setRulesInspectionSections: mockAppSetRulesInspectionSections,
+        setRulesTimeNow: mockAppSetRulesTimeNow,
+        setRulesTimeCustom: mockAppSetRulesTimeCustom,
+        replaceParkingData: mockAppReplaceParkingData,
+        tick: mockAppTick,
+      } as App;
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      if (mockFetchImpl) return mockFetchImpl();
+      return Promise.reject(new Error("fetch not configured"));
+    });
+  });
+
+  afterEach(() => {
+    removeDocumentMock();
+    vi.useRealTimers();
+  });
+
+  it("state subscriber in Check mode: renderViolationHighlights NOT called; forgetViolationHighlights IS called; renderCheckResults IS called", async () => {
+    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+    mockFetchImpl = () =>
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
+
+    mockAppState = makeReadyState({ activeMode: "check" });
+    mockAppGetState.mockImplementation(() => mockAppState);
+
+    const { initBrowserApp } = await import("../../app/main");
+    installDocumentMock();
+    await initBrowserApp();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(capturedRenderState).not.toBeNull();
+
+    mockRenderViolationHighlights.mockClear();
+    mockForgetViolationHighlights.mockClear();
+    mockRenderCheckResults.mockClear();
+
+    if (capturedRenderState !== null) {
+      capturedRenderState(makeReadyState({ activeMode: "check" }));
+    }
+
+    expect(mockRenderViolationHighlights).not.toHaveBeenCalled();
+    expect(mockForgetViolationHighlights).toHaveBeenCalled();
+    expect(mockRenderCheckResults).toHaveBeenCalled();
+  });
+
+  it("state subscriber in Rules mode: renderViolationHighlights IS called; renderCheckResults NOT called", async () => {
+    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+    mockFetchImpl = () =>
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
+
+    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppGetState.mockImplementation(() => mockAppState);
+
+    const { initBrowserApp } = await import("../../app/main");
+    installDocumentMock();
+    await initBrowserApp();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(capturedRenderState).not.toBeNull();
+
+    mockRenderViolationHighlights.mockClear();
+    mockForgetViolationHighlights.mockClear();
+    mockRenderCheckResults.mockClear();
+
+    if (capturedRenderState !== null) {
+      capturedRenderState(makeReadyState({ activeMode: "rules" }));
+    }
+
+    expect(mockRenderViolationHighlights).toHaveBeenCalled();
+    expect(mockRenderCheckResults).not.toHaveBeenCalled();
+  });
+
+  it("scheduleViolationRefresh fires when activeMode is 'check': renderViolationHighlights NOT called", async () => {
+    vi.useFakeTimers();
+
+    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response)
+    );
+
+    mockAppState = makeReadyState({ activeMode: "check" });
+    mockAppGetState.mockImplementation(() => mockAppState);
+
+    const { initBrowserApp } = await import("../../app/main");
+    installDocumentMock();
+
+    const initPromise = initBrowserApp();
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+    await initPromise;
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+
+    mockRenderViolationHighlights.mockClear();
+
+    await vi.advanceTimersByTimeAsync(3_601_000);
+
+    expect(mockRenderViolationHighlights).not.toHaveBeenCalled();
+  });
+
+  it("scheduleViolationRefresh fires when activeMode is 'rules': renderViolationHighlights IS called", async () => {
+    vi.useFakeTimers();
+
+    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response)
+    );
+
+    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppGetState.mockImplementation(() => mockAppState);
+
+    const { initBrowserApp } = await import("../../app/main");
+    installDocumentMock();
+
+    const initPromise = initBrowserApp();
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+    await initPromise;
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+
+    mockRenderViolationHighlights.mockClear();
+
+    await vi.advanceTimersByTimeAsync(3_601_000);
+
+    expect(mockRenderViolationHighlights).toHaveBeenCalled();
+  });
+
+  it("initial F-34 render with activeMode='check' (default): renderViolationHighlights NOT called on startup", async () => {
+    const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
+    mockFetchImpl = () =>
+      Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
+
+    // App defaults to activeMode: "check"
+    mockAppState = makeReadyState({ activeMode: "check" });
+    mockAppGetState.mockImplementation(() => mockAppState);
+
+    const { initBrowserApp } = await import("../../app/main");
+    installDocumentMock();
+
+    mockRenderViolationHighlights.mockClear();
+    await initBrowserApp();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockRenderViolationHighlights).not.toHaveBeenCalled();
   });
 });
 

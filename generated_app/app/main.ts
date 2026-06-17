@@ -23,6 +23,7 @@ import {
   showStreetPopup,
   initRoadGeometry,
   renderViolationHighlights,
+  forgetViolationHighlights,
   renderUpcomingSignPins,
   renderUpcomingTowSegments,
   renderGarageMarkers,
@@ -231,13 +232,18 @@ function renderState(state: AppState): void {
     renderBrowsingMode(state.activeSigns, now);
     renderSignPins(state.activeSigns, now);
     renderTowSegments(state.activeSigns);
-    renderViolationHighlights(cleaningEntries, now);
+    if (state.activeMode === "check") {
+      forgetViolationHighlights();
+      renderCheckResults(getCheckResults());
+    } else {
+      renderViolationHighlights(cleaningEntries, now);
+    }
     renderUpcomingSignPins(upcomingSignsData, now);
     renderUpcomingTowSegments(upcomingSignsData);
 
-    // F-51: render check results when in check mode
-    if (state.activeMode === "check") {
-      renderCheckResults(getCheckResults());
+    const queryBar = document.getElementById("query-bar");
+    if (queryBar !== null) {
+      queryBar.style.display = state.activeMode === "rules" ? "none" : "";
     }
 
     const checkLegend = document.getElementById("check-legend");
@@ -287,7 +293,7 @@ function scheduleViolationRefresh(getState: () => AppState): void {
   const msUntilNextHour = (3600 - secIntoHour) * 1000 - now.getMilliseconds();
   setTimeout(() => {
     const st = getState();
-    if (st.mode === "ready") {
+    if (st.mode === "ready" && st.activeMode !== "check") {
       renderViolationHighlights(cleaningEntries, new Date());
     }
     scheduleViolationRefresh(getState);
@@ -420,7 +426,7 @@ export async function initBrowserApp(): Promise<void> {
 
   // F-34: initial violation highlight render + hourly schedule
   const initialState = app.getState();
-  if (initialState.mode === "ready") {
+  if (initialState.mode === "ready" && initialState.activeMode !== "check") {
     renderViolationHighlights(cleaningEntries, now);
   }
   scheduleViolationRefresh(app.getState.bind(app));

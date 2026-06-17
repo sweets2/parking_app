@@ -1371,6 +1371,12 @@ export function clearViolationHighlights(): void {
   _violationLayers = [];
 }
 
+export function forgetViolationHighlights(): void {
+  _lastNowForHighlights = null;
+  _lastCleaningEntries = [];
+  clearViolationHighlights();
+}
+
 export function renderViolationHighlights(
   cleaningEntries: StreetCleaningEntry[],
   now: Date,
