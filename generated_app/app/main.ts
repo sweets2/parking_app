@@ -51,14 +51,16 @@ import {
   extractCrossStreets,
   detectMatchingSegment,
   isSignActive,
+  evaluateParkingWindow,
 } from "../shared/parking-logic";
-import type { Sign, StreetCleaningEntry, StreetCleaningData, RoadGeometry, Garage, SnowRoute, ParkingSegment, RulesInspectionSection } from "../shared/types";
+import type { Sign, StreetCleaningEntry, StreetCleaningData, RoadGeometry, Garage, SnowRoute, ParkingSegment, RulesInspectionSection, AppMode, CheckQuery, CheckResultSegment } from "../shared/types";
 import { buildParkingSegmentCatalog } from "../shared/segment-catalog";
 import { inspectRulesAtLocation } from "../shared/rules-inspector";
 import {
   renderLoading,
   hideLoading,
   renderBrowsingMode,
+  hideBottomSheet,
   showBottomSheet,
   setBottomSheetContent,
   setBottomSheetMode,
@@ -68,6 +70,9 @@ import {
 
 let cleaningEntries: StreetCleaningEntry[] = [];
 let upcomingSignsData: Sign[] = [];
+
+/** Last evaluated Check results — persists across renders so renderState can reuse them. */
+let _checkResults: CheckResultSegment[] = [];
 
 /** F-53: Rules time selection state — local to main.ts, not yet in app state machine. */
 const rulesState: { mode: "now" | "custom"; selectedTime: Date } = {
@@ -239,6 +244,13 @@ function renderState(state: AppState): void {
   }
 
   if (state.mode === "ready") {
+    // Sync mode nav active class
+    if (typeof document.querySelectorAll === "function") {
+      document.querySelectorAll<HTMLButtonElement>(".mode-nav-btn").forEach((btn) => {
+        btn.classList.toggle("mode-nav-btn--active", btn.dataset.mode === state.activeMode);
+      });
+    }
+
     // Update check-controls visibility based on activeMode
     const checkControls = document.getElementById("check-controls");
     if (checkControls !== null) {
@@ -270,7 +282,7 @@ function renderState(state: AppState): void {
 
     // F-51: render check results when in check mode
     if (state.activeMode === "check") {
-      renderCheckResults(state.checkResults);
+      renderCheckResults(_checkResults);
     }
 
     return;
@@ -465,6 +477,23 @@ export async function initBrowserApp(): Promise<void> {
   );
   track("app-loaded");
 
+  // Wire Check/Rules mode nav buttons
+  if (typeof document.querySelectorAll === "function") {
+    document.querySelectorAll<HTMLButtonElement>(".mode-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.mode as AppMode | undefined;
+        if (mode === "check" || mode === "rules") {
+          app.setActiveMode(mode);
+        }
+      });
+    });
+  }
+
+  // Wire bottom sheet close button
+  document.getElementById("bottom-sheet-close")?.addEventListener("click", () => {
+    hideBottomSheet();
+  });
+
   // F-34: initial violation highlight render + hourly schedule
   const initialState = app.getState();
   if (initialState.mode === "ready") {
@@ -574,29 +603,86 @@ export async function initBrowserApp(): Promise<void> {
   const checkQueryInput = document.getElementById("check-query-input") as HTMLInputElement | null;
   const checkRunBtn = document.getElementById("check-run-button");
 
+  let _activeCheckQuery: CheckQuery | null = null;
+
+  function setDurationPressedState(activeBtn: HTMLElement | null): void {
+    [dur30Btn, dur60Btn, dur120Btn].forEach((btn) => {
+      btn?.setAttribute("aria-pressed", String(btn === activeBtn));
+    });
+  }
+
+  function selectDuration(btn: HTMLElement | null, minutes: number): void {
+    _activeCheckQuery = createDurationCheckQuery(minutes, new Date());
+    setDurationPressedState(btn);
+    if (checkQueryInput !== null) checkQueryInput.value = "";
+  }
+
   dur30Btn?.addEventListener("click", () => {
-    createDurationCheckQuery(30, new Date());
+    selectDuration(dur30Btn, 30);
     track("check-duration-selected", { minutes: 30 });
   });
 
   dur60Btn?.addEventListener("click", () => {
-    createDurationCheckQuery(60, new Date());
+    selectDuration(dur60Btn, 60);
     track("check-duration-selected", { minutes: 60 });
   });
 
   dur120Btn?.addEventListener("click", () => {
-    createDurationCheckQuery(120, new Date());
+    selectDuration(dur120Btn, 120);
     track("check-duration-selected", { minutes: 120 });
   });
 
+  checkQueryInput?.addEventListener("input", () => {
+    _activeCheckQuery = null;
+    setDurationPressedState(null);
+  });
+
   checkRunBtn?.addEventListener("click", () => {
-    const rawText = checkQueryInput !== null ? checkQueryInput.value : "";
-    if (rawText.trim().length > 0) {
-      const parsed = parseCheckQuery(rawText, new Date());
-      if (parsed !== null) {
-        track("check-query-parsed", { label: parsed.label });
+    const state = app.getState();
+    if (state.mode !== "ready") return;
+
+    let query: CheckQuery | null = _activeCheckQuery;
+
+    if (query === null) {
+      const rawText = checkQueryInput?.value.trim() ?? "";
+      if (rawText.length > 0) {
+        query = parseCheckQuery(rawText, new Date());
       }
     }
+
+    const resolvedQuery: CheckQuery = query ?? createDurationCheckQuery(120, new Date());
+
+    track("check-query-run", { label: resolvedQuery.label });
+
+    _checkResults = state.parkingSegments.map((seg) =>
+      evaluateParkingWindow(seg, resolvedQuery)
+    );
+
+    clearCheckResults();
+    renderCheckResults(_checkResults);
+  });
+
+  // ─── Wire top query bar to Check evaluation ──────────────────────────────
+
+  const queryInput = document.getElementById("query-input") as HTMLInputElement | null;
+  const querySubmitBtn = document.getElementById("query-submit-btn");
+
+  function runQueryBarCheck(text: string): void {
+    const st = app.getState();
+    if (st.mode !== "ready") return;
+    const parsed = parseCheckQuery(text, new Date()) ?? createDurationCheckQuery(120, new Date());
+    track("check-query-run", { label: parsed.label });
+    _checkResults = st.parkingSegments.map((seg) => evaluateParkingWindow(seg, parsed));
+    clearCheckResults();
+    renderCheckResults(_checkResults);
+  }
+
+  querySubmitBtn?.addEventListener("click", () => {
+    runQueryBarCheck(queryInput?.value.trim() ?? "");
+  });
+
+  queryInput?.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key === "Enter") runQueryBarCheck(queryInput.value.trim());
   });
 
   // ─── Wire rules controls (F-53) ───────────────────────────────────────────

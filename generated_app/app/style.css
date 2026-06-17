@@ -1315,3 +1315,106 @@ html, body {
   font-size: 13px;
   color: #4b5563;
 }
+
+/* ─── Left panel base (mobile: invisible wrapper) ──────────── */
+#left-panel {
+  /* No styles on mobile — children flow as fixed overlays per their own rules */
+}
+
+/* ─── Desktop left sidebar (≥ 1024px) ─────────────────────── */
+@media (min-width: 1024px) {
+  /* Left sidebar */
+  #left-panel {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 360px;
+    z-index: 1100;
+    background: #fff;
+    border-right: 1px solid #e5e7eb;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* Map occupies the right portion */
+  #map {
+    margin-left: 360px;
+    width: calc(100% - 360px);
+  }
+
+  /* Mode nav: static, full-width, no centering */
+  #mode-nav {
+    position: static;
+    width: 100%;
+    border-radius: 0;
+    transform: none;
+    left: auto;
+    right: auto;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    flex-shrink: 0;
+  }
+
+  /* Check controls: static, full-width, no centering */
+  #check-controls {
+    position: static;
+    width: 100%;
+    border-radius: 0;
+    transform: none;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    border-left: none;
+    border-right: none;
+    flex-shrink: 0;
+  }
+
+  /* Rules controls: static, full-width, no centering */
+  #rules-controls {
+    position: static;
+    width: 100%;
+    border-radius: 0;
+    transform: none;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    border-left: none;
+    border-right: none;
+    flex-shrink: 0;
+  }
+
+  /* Bottom sheet: static in panel, no slide animation */
+  .bottom-sheet {
+    position: static;
+    transform: none;
+    flex: 1;
+    overflow-y: auto;
+    border-radius: 0;
+    box-shadow: none;
+    max-height: none;
+    border-top: 1px solid #e5e7eb;
+    left: auto;
+    right: auto;
+    width: auto;
+    /* Hidden by default — shown only when open */
+    display: none;
+  }
+
+  .bottom-sheet--open {
+    display: flex;
+    transform: none;
+  }
+
+  /* Map overlay buttons: shift right to clear sidebar */
+  #locate-control {
+    left: 370px;
+  }
+
+  #legend-stack {
+    left: 370px;
+  }
+}

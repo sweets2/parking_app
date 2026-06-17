@@ -687,5 +687,58 @@
       "app/main.ts",
       "tests/unit/main.test.ts"
     ]
+  },
+  {
+    "id": "F-57",
+    "name": "v2 UI Wiring: Mode Nav, Check Evaluation, Bottom Sheet",
+    "status": "DONE",
+    "order": 33,
+    "spec_file": "specs/F-57.md",
+    "depends_on": [
+      "F-46D",
+      "F-47",
+      "F-48",
+      "F-51",
+      "F-52",
+      "F-53",
+      "F-56"
+    ],
+    "context_files": [
+      "app/index.html",
+      "app/main.ts",
+      "app/app.ts",
+      "shared/types.ts",
+      "shared/parking-logic.ts",
+      "shared/query-parser.ts",
+      "shared/segment-catalog.ts",
+      "tests/unit/main.test.ts"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/main.ts"
+    ]
+  },
+  {
+    "id": "F-58",
+    "name": "Desktop Left-Panel Layout",
+    "status": "DONE",
+    "order": 34,
+    "spec_file": "specs/F-58.md",
+    "depends_on": [
+      "F-57"
+    ],
+    "context_files": [
+      "docs/prototypes/PROTOTYPE_NOTES.md",
+      "specs/prototypes/README.md",
+      "specs/prototypes/54067683-9579-45c2-9a43-3c2e51fb5dae.png",
+      "specs/prototypes/ea36cecd-2d50-463b-a6a6-fe4dd6e03502.png",
+      "app/index.html",
+      "app/style.css"
+    ],
+    "output_files": [
+      "app/index.html",
+      "app/style.css"
+    ],
+    "run_tests": false
   }
 ]

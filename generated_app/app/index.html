@@ -100,54 +100,57 @@
     </div>
   </div>
 
-  <!-- Mode navigation -->
-  <nav id="mode-nav" aria-label="App mode">
-    <button type="button" class="mode-nav-btn mode-nav-btn--active" data-mode="check">Check</button>
-    <button type="button" class="mode-nav-btn" data-mode="rules">Rules</button>
-  </nav>
+  <!-- Left panel: mode nav + controls + bottom sheet (desktop sidebar) -->
+  <div id="left-panel">
+    <!-- Mode navigation -->
+    <nav id="mode-nav" aria-label="App mode">
+      <button type="button" class="mode-nav-btn mode-nav-btn--active" data-mode="check">Check</button>
+      <button type="button" class="mode-nav-btn" data-mode="rules">Rules</button>
+    </nav>
 
-  <!-- Check controls panel -->
-  <div id="check-controls" aria-label="Check parking controls">
-    <input
-      id="check-query-input"
-      type="text"
-      placeholder="e.g. 30 min, 1 hour, until 6pm"
-      autocomplete="off"
-    />
-    <div id="check-duration-buttons">
-      <button id="check-duration-30" type="button">30 min</button>
-      <button id="check-duration-60" type="button">1 hour</button>
-      <button id="check-duration-120" type="button">2 hours</button>
+    <!-- Check controls panel -->
+    <div id="check-controls" aria-label="Check parking controls">
+      <input
+        id="check-query-input"
+        type="text"
+        placeholder="e.g. 30 min, 1 hour, until 6pm"
+        autocomplete="off"
+      />
+      <div id="check-duration-buttons">
+        <button id="check-duration-30" type="button">30 min</button>
+        <button id="check-duration-60" type="button">1 hour</button>
+        <button id="check-duration-120" type="button">2 hours</button>
+      </div>
+      <div id="check-until-row">
+        <label for="check-until-input">Until</label>
+        <input id="check-until-input" type="time" />
+      </div>
+      <button id="check-run-button" type="button">Check parking</button>
     </div>
-    <div id="check-until-row">
-      <label for="check-until-input">Until</label>
-      <input id="check-until-input" type="time" />
-    </div>
-    <button id="check-run-button" type="button">Check parking</button>
-  </div>
 
-  <!-- Rules controls panel -->
-  <div id="rules-controls" aria-label="Rules inspection controls" style="display:none">
-    <div id="rules-time-row">
-      <button id="rules-time-now" type="button" aria-pressed="true">Now</button>
-      <button id="rules-time-custom" type="button" aria-pressed="false">Custom time</button>
-      <input id="rules-time-input" type="time" aria-label="Custom inspection time" />
+    <!-- Rules controls panel -->
+    <div id="rules-controls" aria-label="Rules inspection controls" style="display:none">
+      <div id="rules-time-row">
+        <button id="rules-time-now" type="button" aria-pressed="true">Now</button>
+        <button id="rules-time-custom" type="button" aria-pressed="false">Custom time</button>
+        <input id="rules-time-input" type="time" aria-label="Custom inspection time" />
+      </div>
+      <div id="rules-layer-panel" aria-label="Rules layer options"></div>
     </div>
-    <div id="rules-layer-panel" aria-label="Rules layer options"></div>
+
+    <!-- Bottom sheet shell -->
+    <div id="bottom-sheet" class="bottom-sheet" role="dialog" aria-modal="false" aria-label="Details">
+      <div id="bottom-sheet-header">
+        <button id="bottom-sheet-close" type="button" aria-label="Close details">&#x2715;</button>
+      </div>
+      <div id="bottom-sheet-content"></div>
+    </div>
   </div>
 
   <!-- Bottom controls bar -->
   <div id="controls">
     <button id="here-btn" type="button" style="display:none">I Parked Here</button>
     <button id="clear-btn" type="button" style="display:none">Clear Spot</button>
-  </div>
-
-  <!-- Bottom sheet shell -->
-  <div id="bottom-sheet" class="bottom-sheet" role="dialog" aria-modal="false" aria-label="Details">
-    <div id="bottom-sheet-header">
-      <button id="bottom-sheet-close" type="button" aria-label="Close details">&#x2715;</button>
-    </div>
-    <div id="bottom-sheet-content"></div>
   </div>
 
   <!-- Coffee button -->
