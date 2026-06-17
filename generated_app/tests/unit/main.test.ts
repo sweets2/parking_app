@@ -2393,7 +2393,7 @@ describe("F-51 mode switch clears check results", () => {
     removeDocumentMock();
   });
 
-  it("F-51: Given activeMode switches to 'rules', When renderState fires with rules mode, Then clearCheckResults is called", async () => {
+  it("F-51: Given activeMode switches to 'rules', When renderState fires with rules mode, Then renderCheckResults is called (check results persist as reference overlay)", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
@@ -2407,13 +2407,14 @@ describe("F-51 mode switch clears check results", () => {
 
     // Clear mock calls from setup
     mockClearCheckResults.mockClear();
+    mockRenderCheckResults.mockClear();
 
     // Simulate renderState being called with rules mode (activeMode switch to "rules")
     if (capturedRenderState !== null) {
       capturedRenderState(makeReadyState({ activeMode: "rules" }));
     }
 
-    expect(mockClearCheckResults).toHaveBeenCalledOnce();
+    expect(mockRenderCheckResults).toHaveBeenCalledOnce();
   });
 
   it("F-51: Given activeMode is 'check', When renderState fires with check mode, Then clearCheckResults is NOT called during render", async () => {
@@ -2547,7 +2548,7 @@ describe("violation highlights vs check mode conflict (bug fix)", () => {
     expect(mockRenderCheckResults).toHaveBeenCalled();
   });
 
-  it("state subscriber in Rules mode: renderViolationHighlights IS called; renderCheckResults NOT called", async () => {
+  it("state subscriber in Rules mode: renderViolationHighlights IS called; renderCheckResults IS called (persists as reference overlay)", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
@@ -2571,7 +2572,7 @@ describe("violation highlights vs check mode conflict (bug fix)", () => {
     }
 
     expect(mockRenderViolationHighlights).toHaveBeenCalled();
-    expect(mockRenderCheckResults).not.toHaveBeenCalled();
+    expect(mockRenderCheckResults).toHaveBeenCalled();
   });
 
   it("scheduleViolationRefresh fires when activeMode is 'check': renderViolationHighlights NOT called", async () => {

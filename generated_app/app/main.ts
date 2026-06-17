@@ -219,11 +219,6 @@ function renderState(state: AppState): void {
       rulesControls.style.display = state.activeMode === "rules" ? "" : "none";
     }
 
-    // F-51: when switching to rules mode, clear Check result layers
-    if (state.activeMode === "rules") {
-      clearCheckResults();
-    }
-
     // F-55: when switching to check mode, clear Rules inspection layers
     if (state.activeMode === "check") {
       clearRulesInspection();
@@ -234,10 +229,10 @@ function renderState(state: AppState): void {
     renderTowSegments(state.activeSigns);
     if (state.activeMode === "check") {
       forgetViolationHighlights();
-      renderCheckResults(getCheckResults());
     } else {
       renderViolationHighlights(cleaningEntries, now);
     }
+    renderCheckResults(getCheckResults());
     renderUpcomingSignPins(upcomingSignsData, now);
     renderUpcomingTowSegments(upcomingSignsData);
 
@@ -439,7 +434,7 @@ export async function initBrowserApp(): Promise<void> {
 
   // Render snow emergency routes now that we have the data (already awaited above)
   if (snowRoutesData.length > 0) {
-    renderSnowEmergencyRoutes(snowRoutesData, true);
+    renderSnowEmergencyRoutes(snowRoutesData, false);
   }
 
   wireLayerToggles();

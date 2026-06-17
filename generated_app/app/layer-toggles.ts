@@ -63,4 +63,6 @@ export function wireLayerToggles(): void {
     snowToggle.setAttribute("aria-pressed", String(next));
     document.getElementById("snow-legend")?.classList.toggle("snow-off", !next);
   });
+  snowToggle?.setAttribute("aria-pressed", "false");
+  document.getElementById("snow-legend")?.classList.add("snow-off");
 }
