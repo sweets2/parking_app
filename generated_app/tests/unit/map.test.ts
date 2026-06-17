@@ -2577,18 +2577,16 @@ describe("F-51 renderCheckResults", () => {
     vi.resetModules();
   });
 
-  it("Given renderCheckResults is called with a 'safe' segment, When it runs, Then a polyline is stored in _checkLayers under 'seg-safe' with className 'check-safe'", async () => {
+  it("Given renderCheckResults is called with a 'safe' segment, When it runs, Then no polyline is drawn (safe segments are skipped)", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const segment = makeCheckSegment("seg-safe", "safe");
     renderCheckResults([segment]);
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
-    expect(L.polyline.mock.calls.length).toBe(1);
-    const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-    expect(callArgs[1]["className"]).toBe("check-safe");
+    expect(L.polyline.mock.calls.length).toBe(0);
   });
 
-  it("Given renderCheckResults is called with a 'ticket' segment, When it runs, Then a polyline is stored in _checkLayers under 'seg-ticket' with className 'check-ticket'", async () => {
+  it("Given renderCheckResults is called with a 'ticket' segment, When it runs, Then a polyline is drawn with color '#ef4444'", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const segment = makeCheckSegment("seg-ticket", "ticket");
@@ -2598,10 +2596,10 @@ describe("F-51 renderCheckResults", () => {
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
     expect(L.polyline.mock.calls.length).toBe(1);
     const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-    expect(callArgs[1]["className"]).toBe("check-ticket");
+    expect(callArgs[1]["color"]).toBe("#ef4444");
   });
 
-  it("Given renderCheckResults is called with an 'unknown' segment, When it runs, Then a polyline is stored in _checkLayers under 'seg-unknown' with className 'check-unknown'", async () => {
+  it("Given renderCheckResults is called with an 'unknown' segment, When it runs, Then a polyline is drawn with color '#94a3b8'", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const segment = makeCheckSegment("seg-unknown", "unknown");
@@ -2610,10 +2608,10 @@ describe("F-51 renderCheckResults", () => {
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
     expect(L.polyline.mock.calls.length).toBe(1);
     const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-    expect(callArgs[1]["className"]).toBe("check-unknown");
+    expect(callArgs[1]["color"]).toBe("#94a3b8");
   });
 
-  it("Given renderCheckResults is called with a 'limited' segment, When it runs, Then a polyline is stored in _checkLayers under 'seg-limited' with className 'check-limited'", async () => {
+  it("Given renderCheckResults is called with a 'limited' segment, When it runs, Then a polyline is drawn with color '#f97316'", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const segment = makeCheckSegment("seg-limited", "limited");
@@ -2623,10 +2621,10 @@ describe("F-51 renderCheckResults", () => {
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
     expect(L.polyline.mock.calls.length).toBe(1);
     const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-    expect(callArgs[1]["className"]).toBe("check-limited");
+    expect(callArgs[1]["color"]).toBe("#f97316");
   });
 
-  it("Given renderCheckResults is called with a 'tow' segment, When it runs, Then a polyline is stored in _checkLayers under 'seg-tow' with className 'check-tow'", async () => {
+  it("Given renderCheckResults is called with a 'tow' segment, When it runs, Then a polyline is drawn with color '#dc2626'", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const segment = makeCheckSegment("seg-tow", "tow");
@@ -2635,10 +2633,10 @@ describe("F-51 renderCheckResults", () => {
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
     expect(L.polyline.mock.calls.length).toBe(1);
     const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-    expect(callArgs[1]["className"]).toBe("check-tow");
+    expect(callArgs[1]["color"]).toBe("#dc2626");
   });
 
-  it("Given renderCheckResults is called with a 'snow' segment, When it runs, Then a polyline is stored in _checkLayers under 'seg-snow' with className 'check-snow'", async () => {
+  it("Given renderCheckResults is called with a 'snow' segment, When it runs, Then a polyline is drawn with color '#3b82f6'", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const segment = makeCheckSegment("seg-snow", "snow");
@@ -2648,25 +2646,22 @@ describe("F-51 renderCheckResults", () => {
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
     expect(L.polyline.mock.calls.length).toBe(1);
     const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
-    expect(callArgs[1]["className"]).toBe("check-snow");
+    expect(callArgs[1]["color"]).toBe("#3b82f6");
   });
 
-  it("Given renderCheckResults with two segments, When it runs, Then _checkLayers has size 2 (polylines for both segments)", async () => {
+  it("Given renderCheckResults with a safe and a ticket segment, When it runs, Then only the ticket polyline is drawn (safe is skipped)", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const safeSegment = makeCheckSegment("seg-safe", "safe");
     const ticketSegment = makeCheckSegment("seg-ticket", "ticket");
     renderCheckResults([safeSegment, ticketSegment]);
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
-    expect(L.polyline.mock.calls.length).toBe(2);
-    const classNames = (L.polyline.mock.calls as [[number, number][], Record<string, unknown>][]).map(
-      ([, opts]) => opts["className"]
-    );
-    expect(classNames).toContain("check-safe");
-    expect(classNames).toContain("check-ticket");
+    expect(L.polyline.mock.calls.length).toBe(1);
+    const callArgs = L.polyline.mock.calls[0] as [[number, number][], Record<string, unknown>];
+    expect(callArgs[1]["color"]).toBe("#ef4444");
   });
 
-  it("Given renderCheckResults with two segments, When both polylines are added to map, Then mockMapInstance._layers has 2 check polylines", async () => {
+  it("Given renderCheckResults with a safe and a ticket segment, When added to map, Then mockMapInstance._layers has 1 check polyline (safe skipped)", async () => {
     const { initMap, renderCheckResults } = await import("../../app/map");
     initMap();
     const safeSegment = makeCheckSegment("seg-safe", "safe");
@@ -2675,7 +2670,7 @@ describe("F-51 renderCheckResults", () => {
     const polylines = mockMapInstance._layers.filter(
       (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
     );
-    expect(polylines.length).toBe(2);
+    expect(polylines.length).toBe(1);
   });
 
   it("Given a segment without geometry, When renderCheckResults is called, Then the segment is skipped (no polyline created)", async () => {
@@ -2702,13 +2697,12 @@ describe("F-51 selectCheckSegment", () => {
     vi.resetModules();
   });
 
-  it("Given renderCheckResults has been called with a 'safe' segment, When selectCheckSegment('seg-safe') runs, Then setStyle is called on the polyline for 'seg-safe' with { className: 'check-selected' }", async () => {
+  it("Given renderCheckResults has been called with a 'ticket' segment, When selectCheckSegment('seg-ticket') runs, Then setStyle is called on the polyline with { className: 'check-selected' }", async () => {
     const { initMap, renderCheckResults, selectCheckSegment } = await import("../../app/map");
     initMap();
-    const segment = makeCheckSegment("seg-safe", "safe");
+    const segment = makeCheckSegment("seg-ticket", "ticket");
     renderCheckResults([segment]);
 
-    // The polyline is in mockMapInstance._layers
     const checkPolylines = mockMapInstance._layers.filter(
       (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
     );
@@ -2716,7 +2710,7 @@ describe("F-51 selectCheckSegment", () => {
     const polyline = checkPolylines[0];
     expect(polyline).toBeDefined();
 
-    selectCheckSegment("seg-safe");
+    selectCheckSegment("seg-ticket");
 
     if (polyline !== undefined) {
       expect(polyline._setStyleCalls.length).toBeGreaterThan(0);
@@ -2725,37 +2719,33 @@ describe("F-51 selectCheckSegment", () => {
     }
   });
 
-  it("Given renderCheckResults has been called with two segments, When selectCheckSegment('seg-safe') runs, Then only the 'seg-safe' polyline gets setStyle called (not 'seg-ticket')", async () => {
+  it("Given renderCheckResults has been called with ticket and tow segments, When selectCheckSegment('seg-ticket') runs, Then only the ticket polyline gets setStyle called (not tow)", async () => {
     const { initMap, renderCheckResults, selectCheckSegment } = await import("../../app/map");
     initMap();
-    const safeSegment = makeCheckSegment("seg-safe", "safe");
     const ticketSegment = makeCheckSegment("seg-ticket", "ticket");
-    renderCheckResults([safeSegment, ticketSegment]);
+    const towSegment = makeCheckSegment("seg-tow", "tow");
+    towSegment.location = "5th–6th";
+    renderCheckResults([ticketSegment, towSegment]);
 
     const checkPolylines = mockMapInstance._layers.filter(
       (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
     );
     expect(checkPolylines.length).toBe(2);
 
-    selectCheckSegment("seg-safe");
+    selectCheckSegment("seg-ticket");
 
-    // Find the safe polyline (className "check-safe" before selection) and ticket polyline
-    // After selection, safe should have been updated to "check-selected"
-    // Ticket polyline should have no setStyle calls
+    // Tow polyline should have no setStyle calls
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
     const calls = L.polyline.mock.calls as [[number, number][], Record<string, unknown>][];
-    // First polyline rendered = safe (check-safe className), second = ticket (check-ticket className)
-    // After selectCheckSegment("seg-safe"), safe polyline gets setStyle({ className: "check-selected" })
-    // Ticket polyline should NOT get setStyle
-    const ticketPolylineIdx = calls.findIndex(([, opts]) => opts["className"] === "check-ticket");
-    expect(ticketPolylineIdx).toBe(1); // second call
+    const towPolylineIdx = calls.findIndex(([, opts]) => opts["color"] === "#dc2626");
+    expect(towPolylineIdx).toBe(1); // second call
 
-    const ticketPolyline = checkPolylines.find(
-      (l) => (l._options as Record<string, unknown>)["className"] === "check-ticket"
+    const towPolyline = checkPolylines.find(
+      (l) => (l._options as Record<string, unknown>)["color"] === "#dc2626"
     );
-    expect(ticketPolyline).toBeDefined();
-    if (ticketPolyline !== undefined) {
-      expect(ticketPolyline._setStyleCalls.length).toBe(0);
+    expect(towPolyline).toBeDefined();
+    if (towPolyline !== undefined) {
+      expect(towPolyline._setStyleCalls.length).toBe(0);
     }
   });
 
@@ -2772,7 +2762,7 @@ describe("F-51 clearCheckResults", () => {
     vi.resetModules();
   });
 
-  it("Given renderCheckResults has been called with two segments, When clearCheckResults runs, Then _checkLayers has size 0 and both polylines have been removed from the map", async () => {
+  it("Given renderCheckResults has been called with a safe and ticket segment, When clearCheckResults runs, Then the ticket polyline is removed from the map (safe was never drawn)", async () => {
     const { initMap, renderCheckResults, clearCheckResults } = await import("../../app/map");
     initMap();
     const safeSegment = makeCheckSegment("seg-safe", "safe");
@@ -2781,7 +2771,7 @@ describe("F-51 clearCheckResults", () => {
 
     expect(mockMapInstance._layers.filter(
       (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
-    ).length).toBe(2);
+    ).length).toBe(1);
 
     clearCheckResults();
 
@@ -2802,8 +2792,8 @@ describe("F-51 clearCheckResults", () => {
   it("Given clearCheckResults is called after renderCheckResults, When clearCheckResults runs, Then subsequent renderCheckResults still works correctly", async () => {
     const { initMap, renderCheckResults, clearCheckResults } = await import("../../app/map");
     initMap();
-    const safeSegment = makeCheckSegment("seg-safe", "safe");
-    renderCheckResults([safeSegment]);
+    const ticketSegment = makeCheckSegment("seg-ticket", "ticket");
+    renderCheckResults([ticketSegment]);
     clearCheckResults();
 
     expect(mockMapInstance._layers.filter(
@@ -2811,7 +2801,7 @@ describe("F-51 clearCheckResults", () => {
     ).length).toBe(0);
 
     // Re-render should work
-    renderCheckResults([safeSegment]);
+    renderCheckResults([ticketSegment]);
     expect(mockMapInstance._layers.filter(
       (l) => (l._options as Record<string, unknown>)["_isPolyline"] === true
     ).length).toBe(1);

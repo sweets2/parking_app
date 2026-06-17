@@ -1940,15 +1940,6 @@ export function showStreetPopup(
 
 // ─── F-51 Check Result Renderer ───────────────────────────────────────────────
 
-const STATUS_CLASS_MAP: Record<string, string> = {
-  safe:    "check-safe",
-  unknown: "check-unknown",
-  limited: "check-limited",
-  ticket:  "check-ticket",
-  tow:     "check-tow",
-  snow:    "check-snow",
-};
-
 /** Remove all Check result layers from the map and empty _checkLayers. */
 export function clearCheckResults(): void {
   for (const polyline of _checkLayers.values()) {
@@ -1957,16 +1948,34 @@ export function clearCheckResults(): void {
   _checkLayers.clear();
 }
 
+const STATUS_COLOR_MAP: Record<string, { color: string; opacity: number }> = {
+  ticket:  { color: "#ef4444", opacity: 0.6 },
+  tow:     { color: "#dc2626", opacity: 0.7 },
+  snow:    { color: "#3b82f6", opacity: 0.55 },
+  limited: { color: "#f97316", opacity: 0.55 },
+  unknown: { color: "#94a3b8", opacity: 0.45 },
+};
+
 /** Render Check result segments on the map as classified polylines. */
 export function renderCheckResults(results: CheckResultSegment[]): void {
+  clearCheckResults();
+
   if (_map === null) return;
+
   const L = getL();
+
   for (const result of results) {
-    if (result.geometry === undefined) continue;
-    const className = STATUS_CLASS_MAP[result.status] ?? "check-unknown";
-    // Flatten all ways into a single coordinate array for the polyline
+    if (result.status === "safe" || result.geometry === undefined) continue;
+
+    const style = STATUS_COLOR_MAP[result.status] ?? STATUS_COLOR_MAP["unknown"];
+
     for (const way of result.geometry.ways) {
-      const polyline = L.polyline(way, { className });
+      const polyline = L.polyline(way, {
+        color:   style.color,
+        weight:  6,
+        opacity: style.opacity,
+      });
+
       polyline.addTo(_map);
       _checkLayers.set(result.id, polyline);
     }
