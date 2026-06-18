@@ -1,0 +1,247 @@
+Plan: Systemic Street-Cleaning Geometry Fix via Per-Street Centroid Filter
+
+=== CONTEXT ===
+
+road-geometry.json was built from an OSM bbox larger than Hoboken. Numbered streets
+contain both Hoboken ways and Jersey City ways. Two contamination clusters exist:
+
+- South JC cluster: 9TH-13TH ST have ways at lat 40.728-40.731, INSIDE the Hoboken
+  lat window (40.728-40.760). A rectangular mask cannot catch these.
+- North JC cluster (JC Heights): 3RD-6TH ST have ways at lat 40.753-40.759, above
+  the Hoboken expected lat for those streets.
+
+Per-way avg-lat centroid data (seeds, Step 0 calibration is authoritative):
+
+  2ND ST : Hoboken ~40.739 / north JC ~40.753
+  3RD ST : Hoboken ~40.740 / north JC 40.753-40.755
+  4TH ST : Hoboken ~40.741 / north JC 40.754-40.756
+  5TH ST : Hoboken ~40.742 / north JC 40.756-40.758
+  6TH ST : Hoboken ~40.744 / north JC ~40.757
+  8TH ST : Hoboken ~40.747 / north JC ~40.758
+  9TH ST : Hoboken ~40.748 / south JC 40.728-40.729
+ 10TH ST : Hoboken ~40.749 / south JC 40.728-40.729
+ 11TH ST : Hoboken ~40.750 / south JC 40.729-40.730
+ 12TH ST : Hoboken ~40.752 / south JC 40.730-40.731
+ 13TH ST : Hoboken ~40.753 / south JC 40.730-40.731, north JC 40.761
+ 14TH ST : Hoboken ~40.754 / southwest JC ~40.732
+ 15TH ST : Hoboken ~40.756 / southwest JC ~40.733
+ 16TH ST : Hoboken ~40.757 / southwest JC ~40.733
+
+All centroid calculations use AVERAGE latitude (sum of pt.lat / count). Not min/max
+midpoint. Consistent with existing snow-route filter.
+
+The existing HOBOKEN_STREET_LAT / HOBOKEN_STREET_LAT_TOLERANCE = 0.008 pattern in
+app/map.ts (snow routes, lines ~1665-1669) is the correct template. This plan
+generalizes it to street-cleaning highlights.
+
+Scope limitation: this fix covers numbered E-W streets only. Non-numbered streets
+(GROVE ST, HENDERSON ST, NEWARK ST, etc.) may still have contamination. The audit
+must enumerate remaining failures after this patch.
+
+=== TWO BUGS ===
+
+Bug 1: getBoundaryCoord uses raw unmasked geometry.
+Inside parseLocationBounds, lats/lngs are computed from ALL ways including JC.
+So "west boundary" returns the westernmost lon of every OSM way with that name.
+Also latSpread/lngSpread (E-W vs N-S orientation detection) can be inflated.
+
+Bug 2: renderViolationHighlights fallback is 1D (lat only).
+When parseLocationBounds returns null, fallback clips by HOBOKEN_LAT_MIN/MAX (lat
+axis only), leaving south JC ways at valid latitudes and west contamination.
+
+=== IMPLEMENTATION ===
+
+All changes in generated_app/app/map.ts plus tests in tests/unit/map.test.ts.
+
+--- Step 0: Calibrate ---
+
+Run before touching any code:
+
+  node -e "
+  const d = require('./data/road-geometry.json');
+  ['1ST ST','2ND ST','3RD ST','4TH ST','5TH ST','6TH ST','7TH ST','8TH ST',
+   '9TH ST','10TH ST','11TH ST','12TH ST','13TH ST','14TH ST','15TH ST','16TH ST']
+  .forEach(k => {
+    const ways = d[k]; if (!ways) { console.log(k+': MISSING'); return; }
+    ways.forEach((way, i) => {
+      const lats = way.map(p=>p[0]);
+      const c = lats.reduce((a,b)=>a+b,0)/lats.length;
+      console.log(k+' way'+i+' centLat='+c.toFixed(5));
+    });
+  });"
+
+Use output to confirm Hoboken avg-lat cluster per street.
+Seeds from existing snow-route code: 3RD=40.740, 4TH=40.741, 5TH=40.742,
+9TH=40.748, 13TH=40.753. Fill in remaining 11 from this run.
+
+GAP VALIDATION -- required before finalizing the table:
+  gap = |nearest-bad-cluster avgCentLat - Hoboken-cluster avgCentLat|
+
+If gap <= 0.008 for any street: use a per-street tolerance map or tighten the
+global tolerance. Do not assume 0.008 is safe without checking the numbers.
+
+--- Step 1: Expand HOBOKEN_STREET_LAT to all 16 numbered streets ---
+
+Existing constant (lines ~1665-1669) only has 5 entries. Expand to all 16 with
+calibrated values. Example shape (replace with Step 0 output):
+
+  const HOBOKEN_STREET_LAT: Record<string, number> = {
+    "1ST ST": 40.737, "2ND ST": 40.739, "3RD ST": 40.740,
+    "4TH ST": 40.741, "5TH ST": 40.742, "6TH ST": 40.744,
+    "7TH ST": 40.745, "8TH ST": 40.747, "9TH ST": 40.748,
+    "10TH ST": 40.749, "11TH ST": 40.751, "12TH ST": 40.752,
+    "13TH ST": 40.753, "14TH ST": 40.754, "15TH ST": 40.756,
+    "16TH ST": 40.757,
+  };
+
+Also update CLAUDE.md calibration notes for the new entries.
+
+--- Step 2: Add filterWaysByStreetLat helper ---
+
+Place immediately before parseLocationBounds:
+
+  function filterWaysByStreetLat(
+    ways: [number, number][][],
+    streetKey: string,
+  ): [number, number][][] {
+    const expected = HOBOKEN_STREET_LAT[streetKey];
+    if (expected === undefined) return ways; // non-numbered: pass through
+    return ways.filter(way => {
+      if (way.length === 0) return false;  // guard: empty way has no centroid
+      const centLat = way.reduce((sum, pt) => sum + pt[0], 0) / way.length;
+      return Math.abs(centLat - expected) <= HOBOKEN_STREET_LAT_TOLERANCE;
+    });
+  }
+
+Drops whole contaminated ways (no interpolation). Correct for cross-borough
+contamination -- we don't want partial JC way segments.
+
+--- Step 3: Apply inside parseLocationBounds ---
+
+Before computing lats/lngs (currently lines ~1162-1170):
+
+  // Before:
+  const ways = _roadGeometry[streetKey];
+  if (ways === undefined || ways.length === 0) return null;
+  const allPts = ways.flat();
+
+  // After:
+  const rawWays = _roadGeometry[streetKey];
+  if (rawWays === undefined || rawWays.length === 0) return null;
+  const ways = filterWaysByStreetLat(rawWays, streetKey);
+  if (ways.length === 0) return null;
+  const allPts = ways.flat();
+
+Fixes: getBoundaryCoord (boundary terms from clean geometry), latSpread/lngSpread
+(orientation detection), RANGE_PAD / validRange computations.
+getCrossStreetCoord's own validRange filtering is unchanged.
+
+--- Step 4: Apply in renderViolationHighlights as final guard ---
+
+After existing clipWaysToBounds call (lines ~1450-1453):
+
+  // Before:
+  const ways = bounds !== null
+    ? clipWaysToBounds(allWays, bounds.min, bounds.max, bounds.axis)
+    : clipWaysToBounds(allWays, HOBOKEN_LAT_MIN, HOBOKEN_LAT_MAX, "lat");
+  if (ways.length === 0) continue;
+
+  // After:
+  const clipped = bounds !== null
+    ? clipWaysToBounds(allWays, bounds.min, bounds.max, bounds.axis)
+    : clipWaysToBounds(allWays, HOBOKEN_LAT_MIN, HOBOKEN_LAT_MAX, "lat");
+  const ways = filterWaysByStreetLat(clipped, street);
+  if (ways.length === 0) continue;
+
+--- Step 4b: Also check resolveCheckCurbWays ---
+
+Check-mode stripes use the same geometry path. If resolveCheckCurbWays delegates
+to parseLocationBounds directly, Step 3 already covers it -- verify this first.
+If it builds its own ways array independently, apply filterWaysByStreetLat in the
+same positions as Steps 3 and 4.
+
+--- Step 5: Real-data audit (NOT optional) ---
+
+data/road-geometry.json and data/street-cleaning.json are present in this repo.
+Add describe("street cleaning geometry audit") in tests/unit/map.test.ts:
+
+1. Load real data/road-geometry.json and data/street-cleaning.json via fs.readFileSync
+2. initRoadGeometry(realGeometry), run renderViolationHighlights(allEntries, now)
+   with a fixed now
+3. Capture all rendered polyline points from mockMapInstance._layers
+4. For each numbered street: assert no rendered segment has avg centLat deviating
+   more than HOBOKEN_STREET_LAT_TOLERANCE from HOBOKEN_STREET_LAT[street]
+5. Report ALL offending entries -- numbered AND non-numbered -- labeled clearly
+
+The audit reports two categories separately:
+- FAIL (blocks): numbered streets with rendered points outside their expected lat band
+- WARN (non-blocking follow-up list): non-numbered streets (GROVE ST, NEWARK ST,
+  HENDERSON ST, etc.) with rendered points outside the Hoboken lat window
+
+Non-numbered WARN entries must not cause the test suite to fail. They are printed
+clearly at the end so the next fix has an exact list. The numbered-street fix ships
+independently of non-numbered contamination.
+
+--- Step 6: Unit tests with actual JC cluster coordinates ---
+
+New describe("CF-19 street-cleaning geometry contamination") after CF-18 suite.
+Use actual offending centroids, not loose rectangles:
+
+Test 1 -- 9TH ST south JC (centLat 40.729 inside lat bbox -- the hardest case):
+  GIVEN 9TH ST ways: Hoboken way [avgCentLat 40.748] + south JC way [avgCentLat 40.729]
+  AND location "Willow Ave. to River St."
+  THEN no rendered point has lat < 40.740
+  AND the Hoboken way still renders
+
+Test 2 -- 12TH ST south JC:
+  GIVEN 12TH ST ways: Hoboken [avgCentLat 40.752] + south JC [avgCentLat 40.730]
+  AND location "West boundary to Willow Ave."
+  THEN no rendered point has avgCentLat below 40.740
+
+Test 3 -- 5TH ST north JC (JC Heights):
+  GIVEN 5TH ST ways: Hoboken [avgCentLat 40.742] + JC Heights [avgCentLat 40.758]
+  AND location "Willow Ave. to west boundary"
+  THEN no rendered point has lat > 40.750
+  AND Hoboken way still renders
+
+Test 4 -- 13TH ST dual contamination:
+  GIVEN 13TH ST ways: Hoboken [40.753] + south JC [40.730] + north JC [40.761]
+  AND location "West boundary to Willow Ave."
+  THEN both contaminated ways dropped, Hoboken way renders
+
+Test 5 -- parseLocationBounds boundary uses masked geometry:
+  GIVEN 12TH ST raw ways include south JC way at avgCentLat 40.730
+  WHEN location = "West boundary to Willow Ave."
+  THEN "WEST BOUNDARY" lng is derived from masked ways, not raw min
+
+Existing tests must still pass: CF-17, CF-18, F-34.
+
+=== FILES MODIFIED ===
+
+- generated_app/app/map.ts
+    expand HOBOKEN_STREET_LAT (16 entries)
+    add filterWaysByStreetLat helper
+    patch parseLocationBounds (Step 3)
+    patch renderViolationHighlights (Step 4)
+    check resolveCheckCurbWays (Step 4b)
+
+- generated_app/tests/unit/map.test.ts
+    5 new CF-19 regression tests (Step 6)
+    real-data audit block (Step 5)
+
+=== VERIFICATION ===
+
+  cd /home/vboxuser/Documents/parking_app/generated_app
+  npx vitest run tests/unit/map.test.ts
+  npm test
+  npm run typecheck
+
+Manual browser check:
+1. Current mode -- Hoboken grid shows green/orange/red highlights
+2. No highlights north of ~40.760 (JC Heights)
+3. No highlights south of ~40.735 outside legitimate south-Hoboken streets
+4. Spot-check: 5th, 9th, 10th, 11th, 12th, 13th, 16th, Grove, Jackson, Madison, Monroe
+5. West-boundary entries (6th/12th/16th) don't paint lines into JC
+
+  The only thing I'd stress again: the audit should report remaining non-numbered failures separately. If after this patch GROVE ST or NEWARK ST still leaks, that should
+  not block the numbered-street fix, but it should produce a clear follow-up list.

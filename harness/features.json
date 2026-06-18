@@ -809,5 +809,24 @@
       "tests/unit/map.test.ts"
     ],
     "run_tests": true
+  },
+  {
+    "id": "CF-19",
+    "name": "Systemic Street-Cleaning Geometry Fix: Per-Street Centroid Filter",
+    "status": "DONE",
+    "order": 38,
+    "spec_file": "specs/v2/CF-19.md",
+    "depends_on": [
+      "CF-18"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ],
+    "output_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ],
+    "run_tests": true
   }
 ]

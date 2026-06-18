@@ -1147,6 +1147,23 @@ function getCrossStreetCoord(
   return best;
 }
 
+// Drops ways whose average centroid latitude deviates from the expected Hoboken
+// latitude by more than the per-street or global tolerance.
+// Non-numbered streets (no entry in HOBOKEN_STREET_LAT) are returned unchanged.
+function filterWaysByStreetLat(
+  ways: [number, number][][],
+  streetKey: string,
+): [number, number][][] {
+  const expected = HOBOKEN_STREET_LAT[streetKey];
+  if (expected === undefined) return ways;
+  const tol = HOBOKEN_STREET_LAT_PER_STREET_TOL[streetKey] ?? HOBOKEN_STREET_LAT_TOLERANCE;
+  return ways.filter(way => {
+    if (way.length === 0) return false;
+    const centLat = way.reduce((sum, pt) => sum + pt[0], 0) / way.length;
+    return Math.abs(centLat - expected) <= tol;
+  });
+}
+
 // Returns { axis, min, max } where axis tells renderViolationHighlights which
 // dimension to filter ways by. E-W streets (lng spread > lat spread) are clipped
 // by longitude; N-S streets are clipped by latitude.
@@ -1161,8 +1178,10 @@ function parseLocationBounds(
   const fromKey = normalizeToGeometryKey(match[1] ?? "");
   const toKey   = normalizeToGeometryKey(match[2] ?? "");
 
-  const ways = _roadGeometry[streetKey];
-  if (ways === undefined || ways.length === 0) return null;
+  const rawWays = _roadGeometry[streetKey];
+  if (rawWays === undefined || rawWays.length === 0) return null;
+  const ways = filterWaysByStreetLat(rawWays, streetKey);
+  if (ways.length === 0) return null;
   const allPts = ways.flat();
   const lats = allPts.map(pt => pt[0]);
   const lngs = allPts.map(pt => pt[1]);
@@ -1212,8 +1231,10 @@ function parseLocationBounds(
 
 function resolveCheckCurbWays(street: string, location: string): [number, number][][] | null {
   const streetKey = normalizeToGeometryKey(street);
-  const allWays = _roadGeometry[streetKey];
-  if (allWays === undefined || allWays.length === 0) return null;
+  const rawWays = _roadGeometry[streetKey];
+  if (rawWays === undefined || rawWays.length === 0) return null;
+  const allWays = filterWaysByStreetLat(rawWays, streetKey);
+  if (allWays.length === 0) return null;
   const bounds = parseLocationBounds(location, streetKey);
   if (bounds === null) return null;
   const clipped = clipWaysToBounds(allWays, bounds.min, bounds.max, bounds.axis);
@@ -1446,9 +1467,10 @@ export function renderViolationHighlights(
     if (allWays === undefined || allWays.length === 0) continue;
 
     const bounds = parseLocationBounds(location, street);
-    const ways = bounds !== null
+    const clipped = bounds !== null
       ? clipWaysToBounds(allWays, bounds.min, bounds.max, bounds.axis)
       : clipWaysToBounds(allWays, HOBOKEN_LAT_MIN, HOBOKEN_LAT_MAX, "lat");
+    const ways = filterWaysByStreetLat(clipped, street);
     if (ways.length === 0) continue;
 
     const color   = status === "active" ? "#ef4444" : status === "upcoming" ? "#f97316" : "#22c55e";
@@ -1660,13 +1682,28 @@ export function setGarageMarkersVisible(visible: boolean): void {
 // rejecting every JC bleed-through observed in the data.
 // Expected centroid latitudes for Hoboken numbered streets, used to reject
 // OSM ways that share the street name but belong to Jersey City.
+// Calibrated from road-geometry.json centroid audit (CF-19).
 // 9TH ST uses 40.748 (not 40.750) to exclude a JC Heights stub at centLat 40.757.
 // 13TH ST uses 40.753 (not 40.756) to exclude a JC segment at centLat 40.761.
+// 11TH and 12TH ST require per-street tolerances (see HOBOKEN_STREET_LAT_PER_STREET_TOL).
 const HOBOKEN_STREET_LAT: Record<string, number> = {
-  "3RD ST": 40.740, "4TH ST": 40.741, "5TH ST": 40.742,
-  "9TH ST": 40.748, "13TH ST": 40.753,
+  "1ST ST": 40.738, "2ND ST": 40.739, "3RD ST": 40.740,
+  "4TH ST": 40.741, "5TH ST": 40.742, "6TH ST": 40.744,
+  "7TH ST": 40.746, "8TH ST": 40.747, "9TH ST": 40.748,
+  "10TH ST": 40.749, "11TH ST": 40.750, "12TH ST": 40.752,
+  "13TH ST": 40.753, "14TH ST": 40.754, "15TH ST": 40.755,
+  "16TH ST": 40.757,
 };
 const HOBOKEN_STREET_LAT_TOLERANCE = 0.008;
+// Per-street tighter tolerances for streets where the JC centroid gap is ≤ 0.008°.
+// 11TH ST: JC Heights way at centLat 40.758 → gap 0.008 from expected 40.750.
+// 12TH ST: JC Heights ways at centLat 40.759 → gap 0.007 from expected 40.752.
+// 13TH ST: north JC way at centLat 40.761 → gap 0.008 from expected 40.753.
+const HOBOKEN_STREET_LAT_PER_STREET_TOL: Partial<Record<string, number>> = {
+  "11TH ST": 0.007,
+  "12TH ST": 0.006,
+  "13TH ST": 0.007,
+};
 
 function clipWaysByBounds(
   ways: [number, number][][],

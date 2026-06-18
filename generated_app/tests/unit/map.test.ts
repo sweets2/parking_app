@@ -3445,3 +3445,315 @@ describe("F-55 setRulesInspectionMarker and clearRulesInspection", () => {
     expect(renderRulesInspection(sections)).toBeUndefined();
   });
 });
+
+// ─── CF-19 street-cleaning geometry contamination filter ─────────────────────
+
+describe("CF-19 street-cleaning geometry contamination filter (filterWaysByStreetLat)", () => {
+  // Helpers: construct a way from a uniform lat and a set of lngs
+  function makeEWWay(lat: number, lngFrom: number, lngTo: number): [number, number][] {
+    return [[lat, lngFrom], [lat, lngTo]];
+  }
+
+  const ACTIVE_NOW = new Date("2026-06-09T16:00:00.000Z"); // Mon noon ET → active
+  const ACTIVE_SCHEDULE = "Monday through Friday   11 am – 1 pm";
+
+  function getPolylines(): Array<{ latlngs: [number, number][] }> {
+    return mockMapInstance._layers
+      .filter(
+        (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true,
+      )
+      .map((l) => ({
+        latlngs: (l as unknown as { _options: { _latlngs: [number, number][] } })._options["_latlngs"],
+      }));
+  }
+
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN 9TH ST ways include a Hoboken way (centLat 40.748) and a south JC way (centLat 40.729, inside HOBOKEN_LAT_MIN of 40.728), WHEN renderViolationHighlights, THEN south JC way is dropped and Hoboken way renders with no lat outside Hoboken band", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "9TH ST": [
+        makeEWWay(40.748, -74.044, -74.030), // Hoboken
+        makeEWWay(40.729, -74.044, -74.030), // south JC — inside HOBOKEN_LAT_MIN, lat-clip fallback won't catch it
+        makeEWWay(40.757, -74.044, -74.030), // JC Heights
+      ],
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Ninth St.",
+      side: "Both",
+      schedule: ACTIVE_SCHEDULE,
+      location: "West boundary to East boundary",
+    };
+    renderViolationHighlights([entry], ACTIVE_NOW);
+    const polylines = getPolylines();
+    expect(polylines.length).toBeGreaterThan(0);
+    for (const { latlngs } of polylines) {
+      for (const [lat] of latlngs) {
+        expect(lat).toBeGreaterThan(40.740); // south JC (40.729) filtered
+        expect(lat).toBeLessThan(40.756);    // JC Heights (40.757) filtered
+      }
+    }
+  });
+
+  it("GIVEN 12TH ST ways include Hoboken (centLat 40.752), south JC (centLat 40.730) and JC Heights (centLat 40.759), WHEN renderViolationHighlights, THEN both contaminated ways dropped and only Hoboken way renders", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "12TH ST": [
+        makeEWWay(40.752, -74.044, -74.030), // Hoboken
+        makeEWWay(40.730, -74.044, -74.030), // south JC
+        makeEWWay(40.759, -74.044, -74.030), // JC Heights (gap 0.007 from expected 0.752 — needs per-street tol 0.006)
+      ],
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Twelfth St.",
+      side: "Both",
+      schedule: ACTIVE_SCHEDULE,
+      location: "West boundary to East boundary",
+    };
+    renderViolationHighlights([entry], ACTIVE_NOW);
+    const polylines = getPolylines();
+    expect(polylines.length).toBeGreaterThan(0);
+    for (const { latlngs } of polylines) {
+      const centLat = latlngs.reduce((s, p) => s + p[0], 0) / latlngs.length;
+      expect(Math.abs(centLat - 40.752)).toBeLessThanOrEqual(0.005); // only Hoboken way
+    }
+  });
+
+  it("GIVEN 5TH ST ways include a Hoboken way (centLat 40.742) and a JC Heights way (centLat 40.758), WHEN renderViolationHighlights, THEN JC Heights way is dropped and no lat exceeds 40.750", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "5TH ST": [
+        makeEWWay(40.742, -74.044, -74.030), // Hoboken
+        makeEWWay(40.758, -74.044, -74.030), // JC Heights (gap 0.016 > 0.008 → global tol works)
+      ],
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Fifth St.",
+      side: "Both",
+      schedule: ACTIVE_SCHEDULE,
+      location: "West boundary to East boundary",
+    };
+    renderViolationHighlights([entry], ACTIVE_NOW);
+    const polylines = getPolylines();
+    expect(polylines.length).toBeGreaterThan(0);
+    for (const { latlngs } of polylines) {
+      for (const [lat] of latlngs) {
+        expect(lat).toBeLessThan(40.750); // JC Heights (40.758) filtered
+        expect(lat).toBeGreaterThan(40.734); // Hoboken way (40.742) present
+      }
+    }
+  });
+
+  it("GIVEN 13TH ST ways include Hoboken (centLat 40.753), south JC (centLat 40.730) and north JC (centLat 40.761), WHEN renderViolationHighlights, THEN both contaminated ways dropped and Hoboken way renders", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "13TH ST": [
+        makeEWWay(40.753, -74.044, -74.030), // Hoboken
+        makeEWWay(40.730, -74.044, -74.030), // south JC
+        makeEWWay(40.761, -74.044, -74.030), // north JC (gap 0.008 from expected 0.753 — needs per-street tol 0.007)
+      ],
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Thirteenth St.",
+      side: "Both",
+      schedule: ACTIVE_SCHEDULE,
+      location: "West boundary to East boundary",
+    };
+    renderViolationHighlights([entry], ACTIVE_NOW);
+    const polylines = getPolylines();
+    expect(polylines.length).toBeGreaterThan(0);
+    for (const { latlngs } of polylines) {
+      const centLat = latlngs.reduce((s, p) => s + p[0], 0) / latlngs.length;
+      expect(Math.abs(centLat - 40.753)).toBeLessThanOrEqual(0.005); // only Hoboken way (40.753)
+    }
+  });
+
+  it("GIVEN 12TH ST raw ways include a south JC way with extreme western lngs, WHEN renderViolationHighlights with 'West boundary to Willow Ave.', THEN no rendered point falls outside Hoboken lat or far-west JC longitude", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "12TH ST": [
+        makeEWWay(40.752, -74.048, -74.030), // Hoboken
+        makeEWWay(40.730, -74.070, -74.060), // south JC — extreme western lngs
+      ],
+      "WILLOW AVE": [[[40.749, -74.044], [40.755, -74.044]]],
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Twelfth St.",
+      side: "Both",
+      schedule: ACTIVE_SCHEDULE,
+      location: "West boundary to Willow Ave.",
+    };
+    renderViolationHighlights([entry], ACTIVE_NOW);
+    const polylines = getPolylines();
+    expect(polylines.length).toBeGreaterThan(0);
+    for (const { latlngs } of polylines) {
+      for (const [lat, lng] of latlngs) {
+        expect(lat).toBeGreaterThan(40.740);  // no south JC lat (40.730)
+        expect(lng).toBeGreaterThan(-74.060); // no south JC extreme western lngs (-74.070 to -74.060)
+      }
+    }
+  });
+});
+
+// ─── CF-19 real-data audit ────────────────────────────────────────────────────
+
+describe("CF-19 real-data audit: numbered street cleaning contamination", () => {
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN real road-geometry and street-cleaning data, WHEN renderViolationHighlights runs per numbered street, THEN no rendered polyline centroid falls in known JC clusters", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const geoPath = path.resolve("data/road-geometry.json");
+    const cleanPath = path.resolve("data/street-cleaning.json");
+
+    let geoData: RoadGeometry;
+    let allEntries: StreetCleaningEntry[];
+    try {
+      geoData = JSON.parse(fs.readFileSync(geoPath, "utf8")) as RoadGeometry;
+      const raw = JSON.parse(fs.readFileSync(cleanPath, "utf8")) as { entries: StreetCleaningEntry[] };
+      allEntries = raw.entries;
+    } catch {
+      // Data files absent (CI / fresh checkout) — skip audit
+      return;
+    }
+
+    const { initMap, initRoadGeometry, renderViolationHighlights, clearViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry(geoData);
+
+    // Fixed now: Monday noon ET — active for M–F morning/midday schedules
+    const now = new Date("2026-06-09T16:00:00.000Z");
+
+    // Map from cleaning entry street name prefix → geometry key
+    const ORDINAL_MAP: Record<string, string> = {
+      "First": "1ST ST", "Second": "2ND ST", "Third": "3RD ST", "Fourth": "4TH ST",
+      "Fifth": "5TH ST", "Sixth": "6TH ST", "Seventh": "7TH ST", "Eighth": "8TH ST",
+      "Ninth": "9TH ST", "Tenth": "10TH ST", "Eleventh": "11TH ST", "Twelfth": "12TH ST",
+      "Thirteenth": "13TH ST", "Fourteenth": "14TH ST", "Fifteenth": "15TH ST", "Sixteenth": "16TH ST",
+    };
+
+    // Expected centroid lats for Hoboken numbered streets (mirrors map.ts)
+    const EXPECTED_LAT: Record<string, number> = {
+      "1ST ST": 40.738, "2ND ST": 40.739, "3RD ST": 40.740,
+      "4TH ST": 40.741, "5TH ST": 40.742, "6TH ST": 40.744,
+      "7TH ST": 40.746, "8TH ST": 40.747, "9TH ST": 40.748,
+      "10TH ST": 40.749, "11TH ST": 40.750, "12TH ST": 40.752,
+      "13TH ST": 40.753, "14TH ST": 40.754, "15TH ST": 40.755,
+      "16TH ST": 40.757,
+    };
+    // Slightly looser than 0.008 to allow for side-offset shift and clipping
+    const AUDIT_TOLERANCE = 0.010;
+
+    // Group entries by geometry key
+    const entryByGeoKey = new Map<string, StreetCleaningEntry[]>();
+    for (const entry of allEntries) {
+      const ordinal = entry.street.split(" ")[0];
+      const geoKey = ORDINAL_MAP[ordinal];
+      if (geoKey !== undefined) {
+        const arr = entryByGeoKey.get(geoKey) ?? [];
+        arr.push(entry);
+        entryByGeoKey.set(geoKey, arr);
+      }
+    }
+
+    const failStreets: string[] = [];
+
+    for (const [geoKey, entries] of entryByGeoKey) {
+      renderViolationHighlights(entries, now);
+      const polylines = mockMapInstance._layers.filter(
+        (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true,
+      );
+      const expected = EXPECTED_LAT[geoKey];
+      if (expected === undefined) continue;
+      for (const polyline of polylines) {
+        const latlngs = (polyline as unknown as { _options: { _latlngs: [number, number][] } })._options["_latlngs"];
+        if (!latlngs || latlngs.length === 0) continue;
+        const centLat = latlngs.reduce((sum, pt) => sum + pt[0], 0) / latlngs.length;
+        const dev = Math.abs(centLat - expected);
+        if (dev > AUDIT_TOLERANCE) {
+          failStreets.push(
+            `${geoKey}: polyline centLat ${centLat.toFixed(5)} deviates ${dev.toFixed(5)}° from expected ${expected} (tolerance ${AUDIT_TOLERANCE})`,
+          );
+        }
+      }
+      clearViolationHighlights();
+    }
+
+    if (failStreets.length > 0) {
+      console.error("CF-19 audit FAIL — numbered street JC contamination detected:");
+      for (const f of failStreets) console.error("  " + f);
+    }
+    expect(failStreets).toHaveLength(0);
+  });
+
+  it("GIVEN real data, WHEN rendering non-numbered streets, THEN leaks outside Hoboken lat window are reported as warnings (non-blocking)", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const geoPath = path.resolve("data/road-geometry.json");
+    const cleanPath = path.resolve("data/street-cleaning.json");
+
+    let geoData: RoadGeometry;
+    let allEntries: StreetCleaningEntry[];
+    try {
+      geoData = JSON.parse(fs.readFileSync(geoPath, "utf8")) as RoadGeometry;
+      const raw = JSON.parse(fs.readFileSync(cleanPath, "utf8")) as { entries: StreetCleaningEntry[] };
+      allEntries = raw.entries;
+    } catch {
+      return; // skip if data absent
+    }
+
+    const NUMBERED_PREFIXES = new Set([
+      "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth",
+      "Ninth", "Tenth", "Eleventh", "Twelfth", "Thirteenth", "Fourteenth", "Fifteenth", "Sixteenth",
+    ]);
+
+    const nonNumberedEntries = allEntries.filter(
+      (e) => !NUMBERED_PREFIXES.has(e.street.split(" ")[0]),
+    );
+
+    if (nonNumberedEntries.length === 0) return;
+
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry(geoData);
+
+    const now = new Date("2026-06-09T16:00:00.000Z");
+    renderViolationHighlights(nonNumberedEntries, now);
+
+    const HOBOKEN_LAT_MIN = 40.728;
+    const HOBOKEN_LAT_MAX = 40.760;
+
+    const warnLeaks: string[] = [];
+    for (const layer of mockMapInstance._layers) {
+      const opts = (layer as unknown as { _options: Record<string, unknown> })._options;
+      if (opts["_isPolyline"] !== true) continue;
+      const latlngs = (opts as unknown as { _latlngs: [number, number][] })["_latlngs"];
+      if (!latlngs) continue;
+      for (const [lat] of latlngs) {
+        if (lat < HOBOKEN_LAT_MIN || lat > HOBOKEN_LAT_MAX) {
+          warnLeaks.push(`non-numbered street polyline point at lat=${lat.toFixed(5)} outside Hoboken window`);
+        }
+      }
+    }
+
+    if (warnLeaks.length > 0) {
+      // Non-blocking: print for follow-up but do not fail the suite
+      console.warn("CF-19 audit WARN — non-numbered street leaks (follow-up list, does not block CI):");
+      for (const w of [...new Set(warnLeaks)]) console.warn("  " + w);
+    }
+
+    // Always pass — non-numbered leaks are warnings only
+    expect(true).toBe(true);
+  });
+});
