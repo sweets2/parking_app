@@ -192,6 +192,7 @@ vi.mock("../../app/map", () => ({
   renderSnowEmergencyRoutes: vi.fn(),
   setSnowRoutesVisible: vi.fn(),
   initStreetParity: vi.fn(),
+  initAddressArcIndex: vi.fn(),
   correctSignPositions: mockCorrectSignPositionsF27,
   getRoadGeometry: vi.fn(() => ({})),
   // F-46D layer lifecycle stubs

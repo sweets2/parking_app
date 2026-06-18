@@ -67,6 +67,7 @@ vi.mock("../../app/map", () => ({
   renderSnowEmergencyRoutes: vi.fn(),
   setSnowRoutesVisible: vi.fn(),
   initStreetParity: vi.fn(),
+  initAddressArcIndex: vi.fn(),
   correctSignPositions: mockCorrectSignPositions,
   getRoadGeometry: mockGetRoadGeometry,
   clearCheckResults: mockClearCheckResults,

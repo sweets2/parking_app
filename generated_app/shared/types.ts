@@ -166,3 +166,9 @@ export interface NextRestriction {
   label: string;
   status: ParkingStatus;
 }
+
+// streetKey → [[houseNum, arcM], ...] sorted by houseNum ascending
+// arcM is cumulative meters from the start of flattenWaysToArcPath(ways).
+// IMPORTANT: arcM values are computed against a specific road-geometry.json.
+// If road-geometry.json is regenerated, address-arc.json must also be regenerated.
+export type AddressArcIndex = Record<string, [number, number][]>;

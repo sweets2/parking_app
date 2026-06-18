@@ -1,4 +1,5 @@
 import type {
+  AddressArcIndex,
   Garage,
   RoadGeometry,
   Sign,
@@ -20,6 +21,7 @@ export type StartupStaticData = {
   streetParity: Record<string, 1 | -1> | undefined;
   cleaningEntries: StreetCleaningEntry[];
   snowRoutes: SnowRoute[];
+  addressArc: AddressArcIndex | undefined;
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -51,6 +53,7 @@ export async function loadStartupStaticData(): Promise<StartupStaticData> {
   let streetParity: Record<string, 1 | -1> | undefined = undefined;
   let cleaningEntries: StreetCleaningEntry[] = [];
   let snowRoutes: SnowRoute[] = [];
+  let addressArc: AddressArcIndex | undefined = undefined;
 
   await Promise.all([
     fetchJson<RoadGeometry>("data/road-geometry.json")
@@ -65,9 +68,12 @@ export async function loadStartupStaticData(): Promise<StartupStaticData> {
     fetchJson<{ routes?: SnowRoute[] }>("data/snow-emergency-routes.json")
       .then((data) => { snowRoutes = data.routes ?? []; })
       .catch(() => { /* non-fatal */ }),
+    fetchJson<AddressArcIndex>("data/address-arc.json")
+      .then((data) => { addressArc = data; })
+      .catch(() => { /* non-fatal */ }),
   ]);
 
-  return { roadGeometry, streetParity, cleaningEntries, snowRoutes };
+  return { roadGeometry, streetParity, cleaningEntries, snowRoutes, addressArc };
 }
 
 export async function loadSignData(cache?: RequestCache): Promise<SignDataLoad> {

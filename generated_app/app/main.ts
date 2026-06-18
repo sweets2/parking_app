@@ -29,6 +29,7 @@ import {
   renderGarageMarkers,
   renderSnowEmergencyRoutes,
   initStreetParity,
+  initAddressArcIndex,
   correctSignPositions,
   getRoadGeometry,
   clearCheckResults,
@@ -350,6 +351,9 @@ export async function initBrowserApp(): Promise<void> {
   }
   if (staticData.streetParity !== undefined) {
     initStreetParity(staticData.streetParity);
+  }
+  if (staticData.addressArc !== undefined) {
+    initAddressArcIndex(staticData.addressArc);
   }
   cleaningEntries = staticData.cleaningEntries;
   snowRoutesData = staticData.snowRoutes;

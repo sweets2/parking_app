@@ -5,6 +5,11 @@
  * a Record<string, 1 | -1> mapping each Hoboken street name (normalized)
  * to which perpendicular direction holds odd-numbered addresses.
  *
+ * Also produces data/address-arc.json —
+ * a Record<string, [number, number][]> mapping each street key to a
+ * sorted array of [houseNum, arcM] entries, where arcM is cumulative
+ * arc distance from the start of the flattened way path.
+ *
  * Algorithm:
  * 1. Read data/road-geometry.json for centerline geometry.
  * 2. Query Overpass API for all address nodes in Hoboken's bounding box.
@@ -13,11 +18,12 @@
  *    odd + dot < 0 → vote −1; even flips sign.
  * 4. Emit parity (1 | -1) only for streets with ≥ 3 net votes.
  * 5. Write data/street-parity.json.
+ * 6. Write data/address-arc.json.
  */
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { RoadGeometry } from "../shared/types";
+import type { RoadGeometry, AddressArcIndex } from "../shared/types";
 
 const DATA_DIR = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -76,65 +82,113 @@ export function normalizeStreet(s: string): string {
 // ─── Geometry helpers ─────────────────────────────────────────────────────────
 
 /**
- * Given a set of ways for a street, find the nearest road segment to the
- * given point. Returns the perpendicular direction (dot product sign) of the
- * point relative to that segment's left-perpendicular.
+ * Concatenates all ways in order into one flat points array.
+ * cumArc[i] = cumulative arc-length in metres from points[0] to points[i].
+ * wayEnds[w] = index of the last point of way w in the flat array.
+ * Uses flat-earth distance: 111320 m/degree lat, 111320 * cos(lat) m/degree lng.
  *
- * Returns 0 if no segment is found or the distance is too large (> 50 m).
+ * CRITICAL: This function must be IDENTICAL to flattenWaysToArcPath in app/map.ts.
+ * Both copies must produce the same arcM for the same input — this is the contract
+ * that makes build-time arcM values usable at runtime.
  */
-function computeDotForPoint(
+function flattenWaysToArcPath(
+  ways: [number, number][][]
+): { points: [number, number][]; cumArc: number[]; wayEnds: number[] } {
+  const points: [number, number][] = [];
+  const cumArc: number[] = [];
+  const wayEnds: number[] = [];
+
+  let arc = 0;
+  for (const way of ways) {
+    for (let i = 0; i < way.length; i++) {
+      const pt = way[i];
+      if (pt === undefined) continue;
+      points.push(pt);
+      if (points.length === 1) {
+        cumArc.push(0);
+      } else {
+        const prev = points[points.length - 2];
+        if (prev === undefined) {
+          cumArc.push(arc);
+        } else {
+          const cosLat = Math.cos(prev[0] * Math.PI / 180);
+          const dy = (pt[0] - prev[0]) * 111320;
+          const dx = (pt[1] - prev[1]) * 111320 * cosLat;
+          arc += Math.sqrt(dy * dy + dx * dx);
+          cumArc.push(arc);
+        }
+      }
+    }
+    wayEnds.push(points.length - 1);
+  }
+
+  return { points, cumArc, wayEnds };
+}
+
+/**
+ * Given a set of ways for a street, snap the address node to the road centerline.
+ * Returns the dot product (for parity voting), distance from road, and arc position.
+ *
+ * Returns null if no segment is found or the distance is too large (> 50 m).
+ */
+function snapAddressNodeToRoad(
   ways: [number, number][][],
-  pointLat: number,
-  pointLng: number
-): number {
-  const cosLat = Math.cos(pointLat * Math.PI / 180);
+  lat: number,
+  lng: number
+): { dot: number; distanceM: number; arcM: number } | null {
+  const { points, cumArc } = flattenWaysToArcPath(ways);
+
+  const cosLat = Math.cos(lat * Math.PI / 180);
   let bestDist = Infinity;
   let bestDot = 0;
+  let bestArcM = 0;
 
-  for (const way of ways) {
-    for (let si = 0; si < way.length - 1; si++) {
-      const A = way[si];
-      const B = way[si + 1];
-      if (A === undefined || B === undefined) continue;
+  for (let i = 0; i < points.length - 1; i++) {
+    const A = points[i];
+    const B = points[i + 1];
+    if (A === undefined || B === undefined) continue;
 
-      const ax = (A[0] - pointLat) * 111320;
-      const ay = (A[1] - pointLng) * 111320 * cosLat;
-      const bx = (B[0] - pointLat) * 111320;
-      const by = (B[1] - pointLng) * 111320 * cosLat;
-      const abx = bx - ax;
-      const aby = by - ay;
-      const ab2 = abx * abx + aby * aby;
-      if (ab2 === 0) continue;
+    const ax = (A[0] - lat) * 111320;
+    const ay = (A[1] - lng) * 111320 * cosLat;
+    const bx = (B[0] - lat) * 111320;
+    const by = (B[1] - lng) * 111320 * cosLat;
+    const abx = bx - ax;
+    const aby = by - ay;
+    const ab2 = abx * abx + aby * aby;
+    if (ab2 === 0) continue;
 
-      const t = Math.max(0, Math.min(1, -(ax * abx + ay * aby) / ab2));
-      const px = ax + t * abx;
-      const py = ay + t * aby;
-      const d = Math.sqrt(px * px + py * py);
+    const t = Math.max(0, Math.min(1, -(ax * abx + ay * aby) / ab2));
+    const px = ax + t * abx;
+    const py = ay + t * aby;
+    const d = Math.sqrt(px * px + py * py);
 
-      if (d < bestDist) {
-        bestDist = d;
-        // Road direction vector
-        const dY = B[0] - A[0];
-        const dX = (B[1] - A[1]) * cosLat;
-        const len = Math.sqrt(dY * dY + dX * dX);
-        if (len === 0) continue;
-        // Right-perpendicular unit vector (90° CW from road dir)
-        // Matches the convention in offsetPolylinePoints: dir=1 → right-perp
-        const perpX = dY / len;
-        const perpY = -dX / len;
-        // Sign displacement from projected point
-        const projLat = A[0] + t * (B[0] - A[0]);
-        const projLng = A[1] + t * (B[1] - A[1]);
-        const signDY = (pointLat - projLat) * 111320;
-        const signDX = (pointLng - projLng) * 111320 * cosLat;
-        bestDot = signDX * perpX + signDY * perpY;
-      }
+    if (d < bestDist) {
+      bestDist = d;
+      // Road direction vector
+      const dY = B[0] - A[0];
+      const dX = (B[1] - A[1]) * cosLat;
+      const len = Math.sqrt(dY * dY + dX * dX);
+      if (len === 0) continue;
+      // Right-perpendicular unit vector (90° CW from road dir)
+      const perpX = dY / len;
+      const perpY = -dX / len;
+      // Sign displacement from projected point
+      const projLat = A[0] + t * (B[0] - A[0]);
+      const projLng = A[1] + t * (B[1] - A[1]);
+      const signDY = (lat - projLat) * 111320;
+      const signDX = (lng - projLng) * 111320 * cosLat;
+      bestDot = signDX * perpX + signDY * perpY;
+
+      // Arc position = arc at A + t * (arc at B - arc at A)
+      const arcA = cumArc[i] ?? 0;
+      const arcB = cumArc[i + 1] ?? 0;
+      bestArcM = arcA + t * (arcB - arcA);
     }
   }
 
   // Ignore nodes more than 50 m from the nearest road segment
-  if (bestDist > 50) return 0;
-  return bestDot;
+  if (bestDist > 50) return null;
+  return { dot: bestDot, distanceM: bestDist, arcM: bestArcM };
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -169,9 +223,11 @@ out body;`;
   const data = (await response.json()) as OverpassResponse;
   console.log(`Received ${data.elements.length} address nodes.`);
 
-  // Step 3: Vote for each street
+  // Step 3: Vote for each street and accumulate arc entries
   // netVotes[street] = sum of votes (positive = dir 1, negative = dir -1)
   const netVotes: Record<string, number> = {};
+  // arcEntries[street] = [[houseNum, arcM], ...] (raw, may have duplicates)
+  const arcEntriesRaw = new Map<string, [number, number][]>();
 
   for (const node of data.elements) {
     if (node.type !== "node") continue;
@@ -194,11 +250,14 @@ out body;`;
     const ways = roadGeometry[streetKey];
     if (ways === undefined || ways.length === 0) continue;
 
-    const dot = computeDotForPoint(ways, node.lat, node.lon);
+    const snapResult = snapAddressNodeToRoad(ways, node.lat, node.lon);
+    if (snapResult === null) continue;
+
+    const { dot, arcM } = snapResult;
     if (dot === 0) continue;
 
     const isOdd = houseNum % 2 === 1;
-    // If odd address and dot > 0 → vote +1 (odd side is left-perp = dir 1)
+    // If odd address and dot > 0 → vote +1 (odd side is right-perp = dir 1)
     // If odd address and dot < 0 → vote -1
     // Even address flips the sign
     const vote = isOdd ? (dot > 0 ? 1 : -1) : (dot > 0 ? -1 : 1);
@@ -207,6 +266,14 @@ out body;`;
       netVotes[streetKey] = 0;
     }
     netVotes[streetKey] += vote;
+
+    // Accumulate arc entry
+    const existing = arcEntriesRaw.get(streetKey);
+    if (existing !== undefined) {
+      existing.push([houseNum, arcM]);
+    } else {
+      arcEntriesRaw.set(streetKey, [[houseNum, arcM]]);
+    }
   }
 
   // Step 4: Emit parity only for streets with ≥ 3 net votes
@@ -217,11 +284,44 @@ out body;`;
     }
   }
 
-  // Step 5: Write output
-  const outPath = path.join(DATA_DIR, "street-parity.json");
-  await fs.writeFile(outPath, JSON.stringify(parity, null, 2), "utf-8");
+  // Step 5: Collapse duplicate house numbers by median arcM, sort, build AddressArcIndex
+  const addressArcResult: AddressArcIndex = {};
 
-  console.log(`Wrote parity for ${Object.keys(parity).length} streets to ${outPath}`);
+  for (const [streetKey, entries] of arcEntriesRaw) {
+    // Group by houseNum
+    const byHouseNum = new Map<number, number[]>();
+    for (const [houseNum, arcM] of entries) {
+      const existing = byHouseNum.get(houseNum);
+      if (existing !== undefined) {
+        existing.push(arcM);
+      } else {
+        byHouseNum.set(houseNum, [arcM]);
+      }
+    }
+
+    // Collapse by median arcM
+    const collapsed: [number, number][] = [];
+    for (const [houseNum, arcMs] of byHouseNum) {
+      const sorted = [...arcMs].sort((a, b) => a - b);
+      const medianArcM = sorted[Math.floor(sorted.length / 2)] ?? 0;
+      collapsed.push([houseNum, medianArcM]);
+    }
+
+    // Sort by houseNum ascending
+    collapsed.sort((a, b) => a[0] - b[0]);
+    addressArcResult[streetKey] = collapsed;
+  }
+
+  // Step 6: Write output files
+  const parityPath = path.join(DATA_DIR, "street-parity.json");
+  await fs.writeFile(parityPath, JSON.stringify(parity, null, 2), "utf-8");
+  console.log(`Wrote parity for ${Object.keys(parity).length} streets to ${parityPath}`);
+
+  // address-arc.json is computed against the current road-geometry.json.
+  // If road-geometry.json is regenerated, re-run build-street-parity to keep arcM values valid.
+  const arcPath = path.join(DATA_DIR, "address-arc.json");
+  await fs.writeFile(arcPath, JSON.stringify(addressArcResult, null, 2), "utf-8");
+  console.log(`Wrote arc index for ${Object.keys(addressArcResult).length} streets to ${arcPath}`);
 }
 
 // ─── Run guard ────────────────────────────────────────────────────────────────

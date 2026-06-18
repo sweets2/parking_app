@@ -8,7 +8,7 @@
  * In Node tests the global `L` is mocked before this module is imported.
  */
 
-import type { Sign, StreetCleaningEntry, RoadGeometry, Garage, SnowRoute, CheckResultSegment, RulesInspectionSection } from "../shared/types";
+import type { Sign, StreetCleaningEntry, RoadGeometry, Garage, SnowRoute, CheckResultSegment, RulesInspectionSection, AddressArcIndex } from "../shared/types";
 import type { SavedSpot } from "../shared/storage";
 import { formatTime, isScheduleActiveNow, isScheduleUpcomingSoon, isSignActive } from "../shared/parking-logic";
 import { track } from "./analytics";
@@ -121,6 +121,7 @@ let _garageMarkersVisible: boolean = true;
 let _snowRouteLayers: LeafletLayer[] = [];
 let _snowRoutesVisible: boolean = true;
 let _streetParity: Record<string, 1 | -1> = {};
+let _addressArcIndex: AddressArcIndex = {};
 let _lastCleaningEntries: StreetCleaningEntry[] = [];
 let _lastNowForHighlights: Date | null = null;
 let _pinchSuppressUntil: number | null = null;
@@ -214,6 +215,7 @@ export function initMap(): LeafletMap {
   _snowRouteLayers = [];
   _snowRoutesVisible = true;
   _streetParity = {};
+  _addressArcIndex = {};
   _lastCleaningEntries = [];
   _lastNowForHighlights = null;
   _checkLayers.clear();
@@ -1819,6 +1821,362 @@ function arcPosToLatLng(ways: [number, number][][], arcPos: number): [number, nu
 
 export function getRoadGeometry(): RoadGeometry {
   return _roadGeometry;
+}
+
+// ─── CF-16 Address Arc Index ──────────────────────────────────────────────────
+
+/**
+ * Concatenates all ways in order into one flat points array.
+ * cumArc[i] = cumulative arc-length in metres from points[0] to points[i].
+ * wayEnds[w] = index of the last point of way w in the flat array.
+ * Uses flat-earth distance: 111320 m/degree lat, 111320 * cos(lat) m/degree lng.
+ *
+ * CRITICAL: This function must be IDENTICAL to flattenWaysToArcPath in
+ * fetcher/build-street-parity.ts. Both copies must produce the same arcM for
+ * the same input — this is the contract that makes build-time arcM values
+ * usable at runtime.
+ */
+export function flattenWaysToArcPath(
+  ways: [number, number][][]
+): { points: [number, number][]; cumArc: number[]; wayEnds: number[] } {
+  const points: [number, number][] = [];
+  const cumArc: number[] = [];
+  const wayEnds: number[] = [];
+
+  let arc = 0;
+  for (const way of ways) {
+    for (let i = 0; i < way.length; i++) {
+      const pt = way[i];
+      if (pt === undefined) continue;
+      points.push(pt);
+      if (points.length === 1) {
+        cumArc.push(0);
+      } else {
+        const prev = points[points.length - 2];
+        if (prev === undefined) {
+          cumArc.push(arc);
+        } else {
+          const cosLat = Math.cos(prev[0] * Math.PI / 180);
+          const dy = (pt[0] - prev[0]) * 111320;
+          const dx = (pt[1] - prev[1]) * 111320 * cosLat;
+          arc += Math.sqrt(dy * dy + dx * dx);
+          cumArc.push(arc);
+        }
+      }
+    }
+    wayEnds.push(points.length - 1);
+  }
+
+  return { points, cumArc, wayEnds };
+}
+
+/**
+ * Store the address arc index fetched from data/address-arc.json.
+ * Called once during app initialization after the file is fetched.
+ */
+export function initAddressArcIndex(data: AddressArcIndex): void {
+  _addressArcIndex = data;
+}
+
+/**
+ * Interpolate a house number to an arc position in metres along the street.
+ * Returns null if the street is not in the index or the index is empty.
+ * Returns { arcM, clamped: true } when houseNum is outside the known range.
+ * Returns { arcM, clamped: false } when houseNum is within the known range.
+ */
+export function interpolateHouseNumToArcM(
+  streetKey: string,
+  houseNum: number
+): { arcM: number; clamped: boolean } | null {
+  const entries = _addressArcIndex[streetKey];
+  if (entries === undefined || entries.length === 0) return null;
+
+  const first = entries[0];
+  const last = entries[entries.length - 1];
+  if (first === undefined || last === undefined) return null;
+
+  // Clamp below minimum
+  if (houseNum <= first[0]) {
+    return { arcM: first[1], clamped: houseNum < first[0] };
+  }
+
+  // Clamp above maximum
+  if (houseNum >= last[0]) {
+    return { arcM: last[1], clamped: houseNum > last[0] };
+  }
+
+  // Linear interpolation between bracketing entries
+  for (let i = 1; i < entries.length; i++) {
+    const lo = entries[i - 1];
+    const hi = entries[i];
+    if (lo === undefined || hi === undefined) continue;
+    if (houseNum >= lo[0] && houseNum <= hi[0]) {
+      const range = hi[0] - lo[0];
+      const t = range > 0 ? (houseNum - lo[0]) / range : 0;
+      return { arcM: lo[1] + t * (hi[1] - lo[1]), clamped: false };
+    }
+  }
+
+  // Should not reach here if entries is sorted, but fallback to last
+  return { arcM: last[1], clamped: true };
+}
+
+/**
+ * Clip a set of ways to the arc range [fromArcM, toArcM] (metres).
+ * Internally applies Math.min/max so argument order does not matter.
+ * Never emits a segment that spans two disconnected ways (way-boundary-safe).
+ * Only returns segments with ≥2 points.
+ */
+export function clipWaysToArcRange(
+  ways: [number, number][][],
+  fromArcM: number,
+  toArcM: number
+): [number, number][][] {
+  const lo = Math.min(fromArcM, toArcM);
+  const hi = Math.max(fromArcM, toArcM);
+
+  const { points, cumArc, wayEnds } = flattenWaysToArcPath(ways);
+  const result: [number, number][][] = [];
+
+  if (points.length === 0) return result;
+
+  // Build a Set of way-end indices for O(1) lookup
+  const wayEndSet = new Set(wayEnds);
+
+  let current: [number, number][] = [];
+  let wayIdx = 0;
+
+  for (let i = 0; i < points.length; i++) {
+    const pt = points[i];
+    if (pt === undefined) continue;
+    const ptArc = cumArc[i] ?? 0;
+
+    // Check if previous point index was a way-end → close current segment and start new one
+    if (i > 0 && wayEndSet.has(i - 1)) {
+      // We've crossed a way boundary — flush current segment
+      if (current.length >= 2) {
+        result.push(current);
+      }
+      current = [];
+      wayIdx++;
+    }
+
+    const inside = ptArc >= lo && ptArc <= hi;
+    const prevPt = i > 0 ? points[i - 1] : undefined;
+    const prevArc = i > 0 ? (cumArc[i - 1] ?? 0) : undefined;
+
+    // Check if previous point was in a different way (already handled above by wayEndSet)
+    // but still need to check for inside/outside transitions
+    if (inside) {
+      // Interpolate entry point if previous point was outside (and in same way)
+      if (
+        prevPt !== undefined &&
+        prevArc !== undefined &&
+        prevArc < lo &&
+        !wayEndSet.has(i - 1) // not crossing a way boundary
+      ) {
+        const segArcLen = ptArc - prevArc;
+        if (segArcLen > 0) {
+          const t = (lo - prevArc) / segArcLen;
+          current.push([
+            prevPt[0] + t * (pt[0] - prevPt[0]),
+            prevPt[1] + t * (pt[1] - prevPt[1]),
+          ]);
+        }
+      } else if (
+        prevPt !== undefined &&
+        prevArc !== undefined &&
+        prevArc > hi &&
+        !wayEndSet.has(i - 1)
+      ) {
+        // Entry from above (should not happen when iterating forward, but handle)
+        const segArcLen = ptArc - prevArc;
+        if (segArcLen !== 0) {
+          const t = (hi - prevArc) / segArcLen;
+          current.push([
+            prevPt[0] + t * (pt[0] - prevPt[0]),
+            prevPt[1] + t * (pt[1] - prevPt[1]),
+          ]);
+        }
+      }
+      current.push(pt);
+    } else {
+      // Point is outside range — but check two sub-cases
+      const crossingBoundary = i > 0 && wayEndSet.has(i - 1);
+      if (
+        prevPt !== undefined &&
+        prevArc !== undefined &&
+        !crossingBoundary
+      ) {
+        if (prevArc >= lo && prevArc <= hi) {
+          // Exiting the range — interpolate exit point
+          const segArcLen = ptArc - prevArc;
+          if (segArcLen !== 0) {
+            const t = (hi - prevArc) / segArcLen;
+            current.push([
+              prevPt[0] + t * (pt[0] - prevPt[0]),
+              prevPt[1] + t * (pt[1] - prevPt[1]),
+            ]);
+          }
+          if (current.length >= 2) {
+            result.push(current);
+          }
+          current = [];
+        } else if (prevArc < lo && ptArc > hi) {
+          // Segment spans entire range — emit interpolated entry and exit
+          const segArcLen = ptArc - prevArc;
+          const tEntry = (lo - prevArc) / segArcLen;
+          const tExit  = (hi - prevArc) / segArcLen;
+          result.push([
+            [prevPt[0] + tEntry * (pt[0] - prevPt[0]), prevPt[1] + tEntry * (pt[1] - prevPt[1])],
+            [prevPt[0] + tExit  * (pt[0] - prevPt[0]), prevPt[1] + tExit  * (pt[1] - prevPt[1])],
+          ]);
+        }
+      }
+    }
+  }
+
+  // Flush any remaining segment
+  if (current.length >= 2) {
+    result.push(current);
+  }
+
+  // Suppress unused variable warning
+  void wayIdx;
+
+  return result;
+}
+
+/**
+ * Render a highlighted polyline for a given address range on a street.
+ * Returns an array of LeafletPolyline objects (may be empty if geometry not found).
+ *
+ * If arc interpolation succeeds for both fromNum and toNum, clips the road geometry
+ * to the arc range and offsets to the curb side.
+ * Falls back to a subsegment centred on the fallback lat/lng if provided.
+ */
+export function renderAddressRangeHighlight(
+  street: string,
+  fromNum: number,
+  toNum: number,
+  color: string,
+  opacity: number,
+  opts?: {
+    side?: "East" | "West" | "North" | "South";
+    fallbackLat?: number;
+    fallbackLng?: number;
+  }
+): LeafletPolyline[] {
+  if (_map === null) return [];
+  const L = getL();
+
+  const streetKey = normalizeToGeometryKey(street);
+  const allWays = _roadGeometry[streetKey];
+  if (allWays === undefined || allWays.length === 0) return [];
+
+  const from = interpolateHouseNumToArcM(streetKey, fromNum);
+  const to = interpolateHouseNumToArcM(streetKey, toNum);
+
+  let merged: [number, number][][];
+
+  if (from !== null && to !== null) {
+    const loArc = Math.min(from.arcM, to.arcM);
+    const hiArc = Math.max(from.arcM, to.arcM);
+    const clipped = clipWaysToArcRange(allWays, loArc, hiArc);
+    merged = mergeWays(clipped);
+  } else if (
+    opts?.fallbackLat !== undefined &&
+    opts?.fallbackLng !== undefined
+  ) {
+    const addrRange = Math.max(0, toNum - fromNum);
+    const halfLengthM = Math.max(5, (addrRange / 2 + 1) * 4);
+    merged = [getSubsegment(allWays, opts.fallbackLat, opts.fallbackLng, halfLengthM)];
+  } else {
+    return [];
+  }
+
+  // Determine forcedDir from side, fallback lat/lng dot product, or parity table
+  let forcedDir: 1 | -1 | undefined;
+
+  if (opts?.side !== undefined) {
+    // Derive from explicit side
+    // Right-perpendicular convention: for an E-W street, north = dir -1, south = dir 1;
+    // for a N-S street, east = dir 1, west = dir -1.
+    // We use the road direction from the first merged segment to determine orientation.
+    const firstSeg = merged[0];
+    if (firstSeg !== undefined && firstSeg.length >= 2) {
+      const firstPt = firstSeg[0];
+      const lastPt = firstSeg[firstSeg.length - 1];
+      if (firstPt !== undefined && lastPt !== undefined) {
+        const cosLat = Math.cos(firstPt[0] * Math.PI / 180);
+        const dY = (lastPt[0] - firstPt[0]) * 111320;
+        const dX = (lastPt[1] - firstPt[1]) * 111320 * cosLat;
+        const len = Math.sqrt(dY * dY + dX * dX);
+        if (len > 0) {
+          // Right-perpendicular unit vector
+          const perpX = dY / len; // east component
+          const perpY = -dX / len; // north component
+          // Map side to a reference displacement
+          let refDX = 0;
+          let refDY = 0;
+          if (opts.side === "East") { refDX = 1; refDY = 0; }
+          else if (opts.side === "West") { refDX = -1; refDY = 0; }
+          else if (opts.side === "North") { refDX = 0; refDY = 1; }
+          else if (opts.side === "South") { refDX = 0; refDY = -1; }
+          const dot = refDX * perpX + refDY * perpY;
+          if (Math.abs(dot) >= 1e-9) {
+            forcedDir = dot > 0 ? 1 : -1;
+          }
+        }
+      }
+    }
+  }
+
+  if (forcedDir === undefined && opts?.fallbackLat !== undefined && opts?.fallbackLng !== undefined) {
+    // Dot-product from fallback lat/lng against the road
+    const firstSeg = merged[0];
+    if (firstSeg !== undefined && firstSeg.length >= 2) {
+      const firstPt = firstSeg[0];
+      const lastPt = firstSeg[firstSeg.length - 1];
+      if (firstPt !== undefined && lastPt !== undefined) {
+        const cosLat = Math.cos(firstPt[0] * Math.PI / 180);
+        const dY = (lastPt[0] - firstPt[0]) * 111320;
+        const dX = (lastPt[1] - firstPt[1]) * 111320 * cosLat;
+        const len = Math.sqrt(dY * dY + dX * dX);
+        if (len > 0) {
+          const perpX = dY / len;
+          const perpY = -dX / len;
+          const midLat = (firstPt[0] + lastPt[0]) / 2;
+          const midLng = (firstPt[1] + lastPt[1]) / 2;
+          const signDY = (opts.fallbackLat - midLat) * 111320;
+          const signDX = (opts.fallbackLng - midLng) * 111320 * cosLat;
+          const dot = signDX * perpX + signDY * perpY;
+          if (Math.abs(dot) >= 1e-9) {
+            forcedDir = dot > 0 ? 1 : -1;
+          }
+        }
+      }
+    }
+  }
+
+  if (forcedDir === undefined) {
+    // Last resort: parity table + parity of fromNum
+    const oddDir = _streetParity[streetKey];
+    if (oddDir !== undefined) {
+      const isOdd = fromNum % 2 === 1;
+      forcedDir = isOdd ? oddDir : (oddDir === 1 ? -1 : 1);
+    }
+  }
+
+  const result: LeafletPolyline[] = [];
+  for (const pts of merged) {
+    if (pts.length < 2) continue;
+    const refLat = opts?.fallbackLat ?? pts[0][0];
+    const refLng = opts?.fallbackLng ?? pts[0][1];
+    const offset = offsetPolylinePoints(pts, refLat, refLng, LATERAL_OFFSET_M, forcedDir);
+    result.push(L.polyline(offset, { color, weight: 4, opacity }));
+  }
+  return result;
 }
 
 /**

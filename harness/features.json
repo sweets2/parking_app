@@ -740,5 +740,36 @@
       "app/style.css"
     ],
     "run_tests": false
+  },
+  {
+    "id": "CF-16",
+    "name": "Address Arc Index",
+    "status": "DONE",
+    "order": 35,
+    "spec_file": "specs/v2/CF-16.md",
+    "depends_on": [
+      "CF-02",
+      "CF-07",
+      "CF-10",
+      "CF-11"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "fetcher/build-street-parity.ts",
+      "app/data-loader.ts",
+      "app/map.ts",
+      "app/main.ts",
+      "package.json"
+    ],
+    "output_files": [
+      "shared/types.ts",
+      "fetcher/build-street-parity.ts",
+      "app/data-loader.ts",
+      "app/map.ts",
+      "app/main.ts",
+      "package.json",
+      "tests/unit/address-arc.test.ts"
+    ],
+    "post_build_command": "npm run build-street-parity"
   }
 ]
