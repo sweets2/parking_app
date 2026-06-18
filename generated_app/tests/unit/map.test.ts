@@ -1681,6 +1681,51 @@ describe("F-34 violation highlights", () => {
       expect(latlngs[latlngs.length - 1][1]).toBeCloseTo(-74.0409, 5);
     },
   );
+
+  it("GIVEN inactive cleaning schedule (not active or upcoming), WHEN renderViolationHighlights, THEN green polyline rendered", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({ "BLOOMFIELD ST": [[[40.745, -74.044], [40.746, -74.044]]] });
+    // 3 pm – 5 pm is neither active (noon) nor upcoming (starts >60 min away)
+    const SAFE_CLEANING: StreetCleaningEntry = {
+      street: "Bloomfield Street",
+      side: "West",
+      schedule: "Monday through Friday   3 pm – 5 pm",
+      location: "1st St. to 14th St.",
+    };
+    renderViolationHighlights([SAFE_CLEANING], NOW_STABLE);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    const colors = (L.polyline.mock.calls as [unknown, { color: string }][]).map(([, opts]) => opts.color);
+    expect(colors).toContain("#22c55e");
+  });
+
+  it("GIVEN street with unparseable location (falls back to lat clip), WHEN way is outside Hoboken lat range, THEN that way is excluded from render", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    // One way inside Hoboken (40.740), one way outside (40.765 — JC Heights)
+    initRoadGeometry({
+      "BLOOMFIELD ST": [
+        [[40.740, -74.044], [40.741, -74.044]],   // inside Hoboken lat range
+        [[40.765, -74.044], [40.766, -74.044]],   // outside Hoboken lat max (40.760)
+      ],
+    });
+    const SAFE_CLEANING: StreetCleaningEntry = {
+      street: "Bloomfield Street",
+      side: "Both",
+      schedule: "Monday through Friday   3 pm – 5 pm",
+      location: "Observer Hwy. to north boundary",  // unparseable → null bounds → lat clip
+    };
+    renderViolationHighlights([SAFE_CLEANING], NOW_STABLE);
+    const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
+    expect(L.polyline.mock.calls.length).toBeGreaterThan(0);
+    // All rendered latlngs must be within Hoboken lat range
+    for (const call of L.polyline.mock.calls as [[[number, number][]], unknown][]) {
+      for (const [lat] of call[0]) {
+        expect(lat).toBeGreaterThanOrEqual(40.728);
+        expect(lat).toBeLessThanOrEqual(40.760);
+      }
+    }
+  });
 });
 
 // ─── F-35 upcoming sign rendering ────────────────────────────────────────────

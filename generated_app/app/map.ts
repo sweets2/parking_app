@@ -1388,7 +1388,7 @@ export function renderViolationHighlights(
   clearViolationHighlights();
   if (_map === null) return;
 
-  const blockStatus = new Map<string, "active" | "upcoming">();
+  const blockStatus = new Map<string, "active" | "upcoming" | "safe">();
 
   for (const entry of cleaningEntries) {
     const street = normalizeToGeometryKey(entry.street);
@@ -1399,8 +1399,17 @@ export function renderViolationHighlights(
       if (blockStatus.get(key) !== "active") {
         blockStatus.set(key, "upcoming");
       }
+    } else {
+      if (!blockStatus.has(key)) {
+        blockStatus.set(key, "safe");
+      }
     }
   }
+
+  // Hoboken bounding box — used to clip ways when location bounds cannot be parsed,
+  // preventing Jersey City ways (included in the OSM bbox) from lighting up.
+  const HOBOKEN_LAT_MIN = 40.728;
+  const HOBOKEN_LAT_MAX = 40.760;
 
   for (const [key, status] of blockStatus) {
     const [street = "", side = "Both", location = ""] = key.split("|||");
@@ -1410,11 +1419,11 @@ export function renderViolationHighlights(
     const bounds = parseLocationBounds(location, street);
     const ways = bounds !== null
       ? clipWaysToBounds(allWays, bounds.min, bounds.max, bounds.axis)
-      : allWays;
+      : clipWaysToBounds(allWays, HOBOKEN_LAT_MIN, HOBOKEN_LAT_MAX, "lat");
     if (ways.length === 0) continue;
 
-    const color   = status === "active" ? "#ef4444" : "#f97316";
-    const opacity = status === "active" ? 0.58 : 0.48;
+    const color   = status === "active" ? "#ef4444" : status === "upcoming" ? "#f97316" : "#22c55e";
+    const opacity = status === "active" ? 0.58 : status === "upcoming" ? 0.48 : 0.35;
     drawWaysHighlight(ways, color, opacity, side !== "Both" ? side : null);
   }
 }
