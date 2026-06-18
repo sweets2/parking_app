@@ -2062,6 +2062,100 @@ describe("CF-17 parseLocationBounds fallthrough", () => {
   });
 });
 
+// ─── CF-18 getCrossStreetCoord range contamination filter ────────────────────
+
+describe("CF-18 getCrossStreetCoord range contamination filter (Madison / Monroe)", () => {
+  // Madison St — N-S, single way spanning the full lat range so clipping produces
+  // a polyline that reaches above 40.750.
+  const GEO_MADISON_ST: [number, number][][] = [
+    [[40.737, -74.044], [40.756, -74.044]],
+  ];
+  // Monroe St — N-S, single way spanning lat 40.737–40.750.
+  const GEO_MONROE_ST: [number, number][][] = [
+    [[40.737, -74.041], [40.750, -74.041]],
+  ];
+  // Newark St — E-W reference street used by both tests.
+  const GEO_NEWARK_ST: [number, number][][] = [
+    [[40.737, -74.050], [40.737, -74.030]],
+  ];
+  // 15TH ST: contaminated way (lat 40.732, south of Newark) + real way (lat 40.756).
+  // Each is a two-point segment to avoid zero-length geometry.
+  const GEO_15TH_ST: [number, number][][] = [
+    [[40.732, -74.045], [40.732, -74.043]],  // contaminated — outside Madison's lat range
+    [[40.756, -74.045], [40.756, -74.043]],  // real
+  ];
+  // 11TH ST: contaminated way (lat 40.729) + real way (lat 40.750).
+  const GEO_11TH_ST: [number, number][][] = [
+    [[40.729, -74.042], [40.729, -74.040]],  // contaminated — outside Monroe's lat range
+    [[40.750, -74.042], [40.750, -74.040]],  // real
+  ];
+
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN Madison St. (N-S) with contaminated 15TH ST geometry south of Newark, WHEN renderViolationHighlights at active time, THEN polylines span the full block range and the contaminated point (lat 40.732) does not define the bounds", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "MADISON ST": GEO_MADISON_ST,
+      "NEWARK ST": GEO_NEWARK_ST,
+      "15TH ST": GEO_15TH_ST,
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Madison St.",
+      side: "East",
+      schedule: "Monday through Friday   11 am – 1 pm",
+      location: "Newark St. to Fifteenth St.",
+    };
+    renderViolationHighlights([entry], new Date("2026-06-09T16:00:00.000Z")); // noon ET = active
+    const polylines = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    );
+    expect(polylines.length).toBeGreaterThan(0);
+    const allLats = polylines.flatMap(
+      (l) => (l as unknown as { _options: { _latlngs: [number, number][] } })._options["_latlngs"]
+        .map((pt: [number, number]) => pt[0])
+    );
+    // All lats above contaminated point — assertions are loose to allow for side offset
+    for (const lat of allLats) {
+      expect(lat).toBeGreaterThan(40.734);
+    }
+    // Upper bound must reach near 15th St, not collapse near Newark
+    expect(Math.max(...allLats)).toBeGreaterThan(40.750);
+  });
+
+  it("GIVEN Monroe St. (N-S) with contaminated 11TH ST geometry south of Newark, WHEN renderViolationHighlights at active time, THEN polylines are rendered and the contaminated point (lat 40.729) does not define the bounds", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "MONROE ST": GEO_MONROE_ST,
+      "11TH ST": GEO_11TH_ST,
+      "NEWARK ST": GEO_NEWARK_ST,
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Monroe St.",
+      side: "East",
+      schedule: "Monday through Friday   11 am – 1 pm",
+      location: "Eleventh St. to Newark St.",
+    };
+    renderViolationHighlights([entry], new Date("2026-06-09T16:00:00.000Z")); // noon ET = active
+    const polylines = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    );
+    expect(polylines.length).toBeGreaterThan(0);
+    const allLats = polylines.flatMap(
+      (l) => (l as unknown as { _options: { _latlngs: [number, number][] } })._options["_latlngs"]
+        .map((pt: [number, number]) => pt[0])
+    );
+    // All lats above contaminated point — loose to allow for side offset
+    for (const lat of allLats) {
+      expect(lat).toBeGreaterThan(40.734);
+    }
+  });
+});
+
 // ─── F-35 upcoming sign rendering ────────────────────────────────────────────
 
 describe("F-35 upcoming sign rendering", () => {

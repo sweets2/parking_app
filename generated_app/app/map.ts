@@ -1122,6 +1122,10 @@ function getCrossStreetCoord(
   crossKey: string,
   mainCoord: number,
   axis: "lat" | "lng",
+  // Contamination filter: skip candidates whose returned coordinate falls outside
+  // the main street's own extent. Prevents JC Heights geometry from winning when
+  // its longitude happens to be close to the main street's.
+  validRange?: [number, number],
 ): number | null {
   const ways = _roadGeometry[crossKey];
   if (ways === undefined || ways.length === 0) return null;
@@ -1129,10 +1133,12 @@ function getCrossStreetCoord(
   let bestDist = Infinity;
   for (const way of ways) {
     for (const pt of way) {
+      const returned = axis === "lat" ? pt[1] : pt[0];
+      if (validRange !== undefined && (returned < validRange[0] || returned > validRange[1])) continue;
       const dist = Math.abs((axis === "lat" ? pt[0] : pt[1]) - mainCoord);
       if (dist < bestDist) {
         bestDist = dist;
-        best = axis === "lat" ? pt[1] : pt[0];
+        best = returned;
       }
     }
   }
@@ -1176,12 +1182,19 @@ function parseLocationBounds(
   }
 
   const PAD = 0.0003;
+  // RANGE_PAD is intentionally much larger than PAD — it is a contamination filter,
+  // not a visual tolerance. Cross-street geometry from outside Hoboken can sit
+  // 0.005–0.01° outside the main street's own extent; genuine intersections are
+  // always within the main street's span, so a 0.003° pad covers rounding noise
+  // while still rejecting out-of-borough contamination.
+  const RANGE_PAD = 0.003;
   // N-S street: lat varies more → cross streets run E-W → find their lat
   // E-W street: lng varies more → cross streets run N-S → find their lng
   if (latSpread >= lngSpread) {
     const mainLng = medianOf(lngs);
-    const coordA = getCrossStreetCoord(fromKey, mainLng, "lng") ?? getBoundaryCoord(fromKey, "lat");
-    const coordB = getCrossStreetCoord(toKey,   mainLng, "lng") ?? getBoundaryCoord(toKey,   "lat");
+    const latRange: [number, number] = [Math.min(...lats) - RANGE_PAD, Math.max(...lats) + RANGE_PAD];
+    const coordA = getCrossStreetCoord(fromKey, mainLng, "lng", latRange) ?? getBoundaryCoord(fromKey, "lat");
+    const coordB = getCrossStreetCoord(toKey,   mainLng, "lng", latRange) ?? getBoundaryCoord(toKey,   "lat");
     if (coordA !== null && coordB !== null) {
       return { axis: "lat", min: Math.min(coordA, coordB) - PAD, max: Math.max(coordA, coordB) + PAD };
     }
@@ -1190,8 +1203,9 @@ function parseLocationBounds(
     // to try E-W interpretation before giving up.
   }
   const mainLat = medianOf(lats);
-  const coordC = getCrossStreetCoord(fromKey, mainLat, "lat") ?? getBoundaryCoord(fromKey, "lng");
-  const coordD = getCrossStreetCoord(toKey,   mainLat, "lat") ?? getBoundaryCoord(toKey,   "lng");
+  const lngRange: [number, number] = [Math.min(...lngs) - RANGE_PAD, Math.max(...lngs) + RANGE_PAD];
+  const coordC = getCrossStreetCoord(fromKey, mainLat, "lat", lngRange) ?? getBoundaryCoord(fromKey, "lng");
+  const coordD = getCrossStreetCoord(toKey,   mainLat, "lat", lngRange) ?? getBoundaryCoord(toKey,   "lng");
   if (coordC === null || coordD === null) return null;
   return { axis: "lng", min: Math.min(coordC, coordD) - PAD, max: Math.max(coordC, coordD) + PAD };
 }
