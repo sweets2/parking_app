@@ -1728,6 +1728,152 @@ describe("F-34 violation highlights", () => {
   });
 });
 
+// ─── CF-17 parseLocationBounds fallthrough for JC contamination ───────────────
+
+describe("CF-17 parseLocationBounds fallthrough", () => {
+  // 2ND ST: 2 valid Hoboken ways + 1 JC Heights contamination way
+  // (the E-W branch via fallthrough must produce correct results)
+  const GEO_2ND_ST_POLLUTED: [number, number][][] = [
+    [[40.753, -74.042], [40.754, -74.038]],   // JC Heights contamination
+    [[40.739, -74.043], [40.739, -74.036]],   // Hoboken west half
+    [[40.739, -74.036], [40.739, -74.028]],   // Hoboken east half
+  ];
+  const GEO_WILLOW_AVE: [number, number][][] = [
+    [[40.736, -74.035], [40.740, -74.035], [40.746, -74.035]],
+  ];
+  const GEO_MARSHALL_ST: [number, number][][] = [
+    [[40.739, -74.043], [40.740, -74.043]],
+  ];
+  const GEO_RIVER_ST: [number, number][][] = [
+    [[40.736, -74.028], [40.740, -74.028]],
+  ];
+  // N-S test street: 6 ways spanning 40.736–40.758, clearly N-S (lat spread >> lng spread)
+  const GEO_NS_TEST_STREET: [number, number][][] = [
+    [[40.736, -74.035], [40.739, -74.035]],
+    [[40.739, -74.035], [40.742, -74.035]],
+    [[40.742, -74.035], [40.745, -74.035]],
+    [[40.745, -74.035], [40.748, -74.035]],
+    [[40.748, -74.035], [40.752, -74.035]],
+    [[40.752, -74.035], [40.758, -74.035]],
+  ];
+  // Dominant-contamination E-W street: 7 JC ways + 4 Hoboken ways, lngSpread > latSpread
+  const GEO_EW_DOMINANT_JC: [number, number][][] = [
+    // 7 JC contamination ways at lat ~40.757
+    [[40.757, -74.044], [40.757, -74.040]], [[40.757, -74.040], [40.757, -74.036]],
+    [[40.757, -74.036], [40.757, -74.032]], [[40.757, -74.032], [40.757, -74.028]],
+    [[40.757, -74.028], [40.757, -74.024]], [[40.758, -74.024], [40.758, -74.020]],
+    [[40.756, -74.020], [40.756, -74.016]],
+    // 4 Hoboken ways at lat ~40.744
+    [[40.744, -74.044], [40.744, -74.036]],
+    [[40.744, -74.036], [40.744, -74.028]],
+    [[40.744, -74.028], [40.744, -74.020]],
+    [[40.744, -74.020], [40.744, -74.016]],
+  ];
+
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it("GIVEN 2ND ST geometry with JC contamination and cross-street geometry, WHEN renderViolationHighlights at safe time (8 PM ET), THEN green polylines added to map", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "2ND ST": GEO_2ND_ST_POLLUTED,
+      "WILLOW AVE": GEO_WILLOW_AVE,
+      "MARSHALL ST": GEO_MARSHALL_ST,
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Second St.",
+      side: "North",
+      schedule: "Monday   2 pm – 3 pm",
+      location: "Willow Ave. to Marshall St.",
+    };
+    renderViolationHighlights([entry], new Date("2026-06-10T00:00:00.000Z"));
+    const greenLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#22c55e"
+    );
+    expect(greenLayers.length).toBeGreaterThan(0);
+  });
+
+  it("GIVEN 2ND ST with Willow-to-Marshall location, WHEN renderViolationHighlights, THEN rendered longitudes stay in Willow–Marshall range and exclude the River-side way at lon −74.028", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "2ND ST": GEO_2ND_ST_POLLUTED,
+      "WILLOW AVE": GEO_WILLOW_AVE,
+      "MARSHALL ST": GEO_MARSHALL_ST,
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Second St.",
+      side: "North",
+      schedule: "Monday   2 pm – 3 pm",
+      location: "Willow Ave. to Marshall St.",
+    };
+    renderViolationHighlights([entry], new Date("2026-06-10T00:00:00.000Z"));
+    const polylines = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true
+    );
+    expect(polylines.length).toBeGreaterThan(0);
+    for (const layer of polylines) {
+      const latlngs = (layer as unknown as { _options: { _latlngs: [number, number][] } })._options["_latlngs"];
+      for (const [, lon] of latlngs) {
+        // Must be west of Willow Ave (lon ≈ −74.035) + offset tolerance
+        expect(lon).toBeLessThan(-74.029);
+        // Must be east of Marshall St (lon ≈ −74.043) + offset tolerance
+        expect(lon).toBeGreaterThan(-74.048);
+      }
+    }
+  });
+
+  it("GIVEN E-W street where lngSpread > latSpread despite heavy JC contamination (7 JC / 4 Hoboken ways), WHEN renderViolationHighlights with active schedule, THEN red polylines appear (direct E-W branch used, no fallthrough)", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    // "Fifth Street" normalizes to "5TH ST" via normalizeToGeometryKey
+    initRoadGeometry({
+      "5TH ST": GEO_EW_DOMINANT_JC,
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Fifth Street",
+      side: "North",
+      schedule: "Monday through Friday   11 am – 1 pm",
+      location: "",   // unparseable → null bounds → fallback to lat clip
+    };
+    renderViolationHighlights([entry], new Date("2026-06-09T16:00:00.000Z")); // noon ET = active
+    const redLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#ef4444"
+    );
+    expect(redLayers.length).toBeGreaterThan(0);
+  });
+
+  it("GIVEN a long N-S street geometry (latSpread >> lngSpread) with cross-street geometry, WHEN renderViolationHighlights with active schedule, THEN red polylines appear (N-S branch succeeds, fallthrough not triggered)", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    const GEO_FIRST_ST: [number, number][][] = [
+      [[40.737, -74.050], [40.737, -74.020]],
+    ];
+    const GEO_TENTH_ST: [number, number][][] = [
+      [[40.752, -74.050], [40.752, -74.020]],
+    ];
+    initRoadGeometry({
+      "NS TEST ST": GEO_NS_TEST_STREET,
+      "FIRST ST": GEO_FIRST_ST,
+      "TENTH ST": GEO_TENTH_ST,
+    });
+    const entry: StreetCleaningEntry = {
+      street: "NS Test Street",
+      side: "East",
+      schedule: "Monday through Friday   11 am – 1 pm",
+      location: "First St. to Tenth St.",
+    };
+    renderViolationHighlights([entry], new Date("2026-06-09T16:00:00.000Z")); // noon ET = active
+    const redLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#ef4444"
+    );
+    expect(redLayers.length).toBeGreaterThan(0);
+  });
+});
+
 // ─── F-35 upcoming sign rendering ────────────────────────────────────────────
 
 describe("F-35 upcoming sign rendering", () => {

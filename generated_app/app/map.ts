@@ -1170,15 +1170,18 @@ function parseLocationBounds(
     const mainLng = medianOf(lngs);
     const coordA = getCrossStreetCoord(fromKey, mainLng, "lng");
     const coordB = getCrossStreetCoord(toKey,   mainLng, "lng");
-    if (coordA === null || coordB === null) return null;
-    return { axis: "lat", min: Math.min(coordA, coordB) - PAD, max: Math.max(coordA, coordB) + PAD };
-  } else {
-    const mainLat = medianOf(lats);
-    const coordA = getCrossStreetCoord(fromKey, mainLat, "lat");
-    const coordB = getCrossStreetCoord(toKey,   mainLat, "lat");
-    if (coordA === null || coordB === null) return null;
-    return { axis: "lng", min: Math.min(coordA, coordB) - PAD, max: Math.max(coordA, coordB) + PAD };
+    if (coordA !== null && coordB !== null) {
+      return { axis: "lat", min: Math.min(coordA, coordB) - PAD, max: Math.max(coordA, coordB) + PAD };
+    }
+    // Either N-S cross-street lookup failed. JC Heights contamination can inflate
+    // latSpread above lngSpread for E-W streets (confirmed for 2ND ST). Fall through
+    // to try E-W interpretation before giving up.
   }
+  const mainLat = medianOf(lats);
+  const coordC = getCrossStreetCoord(fromKey, mainLat, "lat");
+  const coordD = getCrossStreetCoord(toKey,   mainLat, "lat");
+  if (coordC === null || coordD === null) return null;
+  return { axis: "lng", min: Math.min(coordC, coordD) - PAD, max: Math.max(coordC, coordD) + PAD };
 }
 
 function resolveCheckCurbWays(street: string, location: string): [number, number][][] | null {
