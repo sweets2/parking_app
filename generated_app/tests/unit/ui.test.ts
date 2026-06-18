@@ -1039,22 +1039,23 @@ describe("F-52 Bottom Sheet Shell", () => {
     expect(sheetEl.classList.contains("bottom-sheet--rules")).toBe(false);
   });
 
-  // Given setBottomSheetMode("rules") is called
+  // Given setBottomSheetMode("current") is called
   // Then #bottom-sheet has class .bottom-sheet--rules and does not have .bottom-sheet--check.
-  it("F-52: setBottomSheetMode('rules') adds .bottom-sheet--rules and removes .bottom-sheet--check", async () => {
+  // Note: the function uses an else branch (not else-if), so "current" still applies the --rules CSS class.
+  it("F-52: setBottomSheetMode('current') adds .bottom-sheet--rules and removes .bottom-sheet--check", async () => {
     const { sheetEl } = installBottomSheetDom();
     const { setBottomSheetMode } = await import("../../app/ui");
     setBottomSheetMode("check");
-    setBottomSheetMode("rules");
+    setBottomSheetMode("current");
     expect(sheetEl.classList.contains("bottom-sheet--rules")).toBe(true);
     expect(sheetEl.classList.contains("bottom-sheet--check")).toBe(false);
   });
 
   // Additional: toggling between modes leaves no residue
-  it("F-52: setBottomSheetMode toggles between check and rules without residue", async () => {
+  it("F-52: setBottomSheetMode toggles between check and current without residue", async () => {
     const { sheetEl } = installBottomSheetDom();
     const { setBottomSheetMode } = await import("../../app/ui");
-    setBottomSheetMode("rules");
+    setBottomSheetMode("current");
     setBottomSheetMode("check");
     expect(sheetEl.classList.contains("bottom-sheet--check")).toBe(true);
     expect(sheetEl.classList.contains("bottom-sheet--rules")).toBe(false);
@@ -1083,6 +1084,6 @@ describe("F-52 Bottom Sheet Shell", () => {
     installNullDom();
     const { setBottomSheetMode } = await import("../../app/ui");
     expect(() => setBottomSheetMode("check")).not.toThrow();
-    expect(() => setBottomSheetMode("rules")).not.toThrow();
+    expect(() => setBottomSheetMode("current")).not.toThrow();
   });
 });

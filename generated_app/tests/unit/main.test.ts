@@ -156,7 +156,7 @@ let mockAppState: AppState = {
 const mockAppGetState = vi.fn<[], AppState>(() => mockAppState);
 const mockAppSetActiveMode = vi.fn<[string], void>((mode) => {
   if (mockAppState.mode === "ready") {
-    mockAppState = { ...mockAppState, activeMode: mode as "check" | "rules" };
+    mockAppState = { ...mockAppState, activeMode: mode as "check" | "current" };
   }
 });
 const mockAppSetRulesLocation = vi.fn<[number, number], void>();
@@ -837,7 +837,7 @@ describe("F-10.2 map tap sets position marker", () => {
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
     // Set up rules mode
-    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -1168,7 +1168,7 @@ describe("F-46D map click routing via initBrowserApp", () => {
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
     // App is already in rules mode
-    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
     mockGetStreetName.mockResolvedValue(null);
 
@@ -1181,8 +1181,8 @@ describe("F-46D map click routing via initBrowserApp", () => {
     expect(handler).not.toBeNull();
     if (handler === null) return;
 
-    // setActiveMode was previously called to reach rules mode
-    // (simulated by setting mockAppState.activeMode = "rules")
+    // setActiveMode was previously called to reach current mode
+    // (simulated by setting mockAppState.activeMode = "current")
     mockClearCheckResults.mockClear();
 
     await handler(40.744, -74.032);
@@ -1792,7 +1792,7 @@ describe("F-46B dev override removal", () => {
     // after cleaningEntries is populated. Must use rules mode — violation highlights
     // are suppressed in check mode by design.
     if (capturedRenderState !== null) {
-      const readyState = makeReadyState({ activeMode: "rules" });
+      const readyState = makeReadyState({ activeMode: "current" });
       capturedRenderState(readyState);
     }
 
@@ -1834,7 +1834,7 @@ describe("F-46B dev override removal", () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
 
     // Must use rules mode — scheduleViolationRefresh skips the call in check mode.
-    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
@@ -1904,7 +1904,7 @@ describe("F-47 check-controls visibility based on activeMode", () => {
 
   let checkControlsEl: { style: { display: string } };
 
-  function installDocumentMockF47(activeMode: "check" | "rules"): void {
+  function installDocumentMockF47(activeMode: "check" | "current"): void {
     checkControlsEl = { style: { display: "" } };
     const elements: Record<string, unknown> = {
       "clear-btn": makeMockButton("clear-btn"),
@@ -1987,19 +1987,19 @@ describe("F-47 check-controls visibility based on activeMode", () => {
     removeDocumentMock();
   });
 
-  it("F-47: GIVEN activeMode is 'rules', WHEN renderState fires, THEN #check-controls has display='none'", async () => {
+  it("F-47: GIVEN activeMode is 'current', WHEN renderState fires, THEN #check-controls has display='none'", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    installDocumentMockF47("rules");
+    installDocumentMockF47("current");
     const { initBrowserApp } = await import("../../app/main");
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Trigger renderState with rules mode
     if (capturedRenderState !== null) {
-      capturedRenderState(makeReadyState({ activeMode: "rules" }));
+      capturedRenderState(makeReadyState({ activeMode: "current" }));
     }
 
     expect(checkControlsEl.style.display).toBe("none");
@@ -2410,9 +2410,9 @@ describe("F-51 mode switch clears check results", () => {
     mockClearCheckResults.mockClear();
     mockRenderCheckResults.mockClear();
 
-    // Simulate renderState being called with rules mode (activeMode switch to "rules")
+    // Simulate renderState being called with current mode (activeMode switch to "current")
     if (capturedRenderState !== null) {
-      capturedRenderState(makeReadyState({ activeMode: "rules" }));
+      capturedRenderState(makeReadyState({ activeMode: "current" }));
     }
 
     expect(mockRenderCheckResults).toHaveBeenCalledOnce();
@@ -2554,7 +2554,7 @@ describe("violation highlights vs check mode conflict (bug fix)", () => {
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -2569,7 +2569,7 @@ describe("violation highlights vs check mode conflict (bug fix)", () => {
     mockRenderCheckResults.mockClear();
 
     if (capturedRenderState !== null) {
-      capturedRenderState(makeReadyState({ activeMode: "rules" }));
+      capturedRenderState(makeReadyState({ activeMode: "current" }));
     }
 
     expect(mockRenderViolationHighlights).toHaveBeenCalled();
@@ -2612,7 +2612,7 @@ describe("violation highlights vs check mode conflict (bug fix)", () => {
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response)
     );
 
-    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -2632,13 +2632,13 @@ describe("violation highlights vs check mode conflict (bug fix)", () => {
     expect(mockRenderViolationHighlights).toHaveBeenCalled();
   });
 
-  it("initial F-34 render with activeMode='check' (default): renderViolationHighlights NOT called on startup", async () => {
+  it("initial F-34 render with activeMode='current' (default): renderViolationHighlights IS called on startup", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    // App defaults to activeMode: "check"
-    mockAppState = makeReadyState({ activeMode: "check" });
+    // App defaults to activeMode: "current"
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -2648,7 +2648,7 @@ describe("violation highlights vs check mode conflict (bug fix)", () => {
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(mockRenderViolationHighlights).not.toHaveBeenCalled();
+    expect(mockRenderViolationHighlights).toHaveBeenCalled();
   });
 });
 
@@ -2701,7 +2701,7 @@ describe("F-53 rules mode time selector", () => {
   let rulesControlsEl: { style: { display: string } };
   let rulesLayerPanelEl: { style: { display: string } };
 
-  function installDocumentMockF53(activeMode: "check" | "rules"): void {
+  function installDocumentMockF53(activeMode: "check" | "current"): void {
     rulesControlsEl = { style: { display: "" } };
     rulesLayerPanelEl = { style: { display: "" } };
     rulesTimeNowBtn = makeMockButton("rules-time-now");
@@ -2719,7 +2719,7 @@ describe("F-53 rules mode time selector", () => {
       "check-query-input": { value: "", addEventListener: vi.fn() },
       "check-run-button": makeMockButton("check-run-button"),
       "check-until-input": { value: "", addEventListener: vi.fn() },
-      "rules-controls": rulesControlsEl,
+      "current-controls": rulesControlsEl,
       "rules-time-now": rulesTimeNowBtn,
       "rules-time-custom": rulesTimeCustomBtn,
       "rules-time-input": rulesTimeInput,
@@ -2793,24 +2793,24 @@ describe("F-53 rules mode time selector", () => {
     removeDocumentMock();
   });
 
-  it("F-53: GIVEN activeMode is 'rules', WHEN renderState fires, THEN #rules-controls has display != 'none'", async () => {
+  it("F-53: GIVEN activeMode is 'current', WHEN renderState fires, THEN #current-controls has display != 'none'", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    installDocumentMockF53("rules");
+    installDocumentMockF53("current");
     const { initBrowserApp } = await import("../../app/main");
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     if (capturedRenderState !== null) {
-      capturedRenderState(makeReadyState({ activeMode: "rules" }));
+      capturedRenderState(makeReadyState({ activeMode: "current" }));
     }
 
     expect(rulesControlsEl.style.display).not.toBe("none");
   });
 
-  it("F-53: GIVEN activeMode is 'check', WHEN renderState fires, THEN #rules-controls has display='none'", async () => {
+  it("F-53: GIVEN activeMode is 'check', WHEN renderState fires, THEN #current-controls has display='none'", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
@@ -2827,12 +2827,12 @@ describe("F-53 rules mode time selector", () => {
     expect(rulesControlsEl.style.display).toBe("none");
   });
 
-  it("F-53: GIVEN activeMode is 'rules', WHEN rulesTime state is read, THEN rulesTime.mode is 'now' by default", async () => {
+  it("F-53: GIVEN activeMode is 'current', WHEN rulesTime state is read, THEN rulesTime.mode is 'now' by default", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    installDocumentMockF53("rules");
+    installDocumentMockF53("current");
     const { initBrowserApp } = await import("../../app/main");
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2849,7 +2849,7 @@ describe("F-53 rules mode time selector", () => {
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    installDocumentMockF53("rules");
+    installDocumentMockF53("current");
     const { initBrowserApp } = await import("../../app/main");
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2863,7 +2863,7 @@ describe("F-53 rules mode time selector", () => {
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    installDocumentMockF53("rules");
+    installDocumentMockF53("current");
     const { initBrowserApp } = await import("../../app/main");
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2884,7 +2884,7 @@ describe("F-53 rules mode time selector", () => {
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    installDocumentMockF53("rules");
+    installDocumentMockF53("current");
     const { initBrowserApp } = await import("../../app/main");
     await initBrowserApp();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2907,7 +2907,7 @@ describe("F-53 rules mode time selector", () => {
     expect(callArgs.selectedTime.getMinutes()).toBe(30);
   });
 
-  it("F-53: GIVEN the mode switches to 'rules', WHEN renderState fires with rules mode, THEN #rules-controls is visible", async () => {
+  it("F-53: GIVEN the mode switches to 'current', WHEN renderState fires with current mode, THEN #current-controls is visible", async () => {
     const signsPayload = { fetched_at: "2026-06-09T12:00:00Z", signs: [] };
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
@@ -2920,7 +2920,7 @@ describe("F-53 rules mode time selector", () => {
 
     // Simulate a switch to rules mode via renderState
     if (capturedRenderState !== null) {
-      capturedRenderState(makeReadyState({ activeMode: "rules" }));
+      capturedRenderState(makeReadyState({ activeMode: "current" }));
     }
 
     expect(rulesControlsEl.style.display).not.toBe("none");
@@ -2959,7 +2959,7 @@ describe("F-55 rules inspection UI", () => {
       "check-duration-120": makeMockButton("check-duration-120"),
       "check-query-input": { value: "", addEventListener: vi.fn() },
       "check-run-button": makeMockButton("check-run-button"),
-      "rules-controls": { style: { display: "none" } },
+      "current-controls": { style: { display: "none" } },
       "rules-time-now": makeMockButton("rules-time-now"),
       "rules-time-custom": makeMockButton("rules-time-custom"),
       "rules-time-input": { value: "", addEventListener: vi.fn() },
@@ -2992,7 +2992,7 @@ describe("F-55 rules inspection UI", () => {
     mockCorrectSignPositions.mockImplementation((signs: unknown[]) => signs);
     mockGetRoadGeometry.mockImplementation(() => ({}));
 
-    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
     capturedRenderState = null;
     mockCreateApp.mockImplementation((deps: { renderState: (state: AppState) => void }) => {
@@ -3030,7 +3030,7 @@ describe("F-55 rules inspection UI", () => {
     };
     mockInspectRulesAtLocation.mockReturnValue([section]);
 
-    mockAppState = makeReadyState({ activeMode: "rules", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
+    mockAppState = makeReadyState({ activeMode: "current", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -3061,7 +3061,7 @@ describe("F-55 rules inspection UI", () => {
     mockBuildParkingSegmentCatalog.mockReturnValue([]);
 
     mockAppState = makeReadyState({
-      activeMode: "rules",
+      activeMode: "current",
       rulesTime: { mode: "now", selectedTime: NOW_STABLE },
       parkingSegments: [],
     });
@@ -3101,7 +3101,7 @@ describe("F-55 rules inspection UI", () => {
     ];
     mockInspectRulesAtLocation.mockReturnValue(twoSections);
 
-    mockAppState = makeReadyState({ activeMode: "rules", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
+    mockAppState = makeReadyState({ activeMode: "current", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -3130,7 +3130,7 @@ describe("F-55 rules inspection UI", () => {
     mockFetchImpl = () =>
       Promise.resolve({ ok: true, json: async () => signsPayload } as Response);
 
-    mockAppState = makeReadyState({ activeMode: "rules" });
+    mockAppState = makeReadyState({ activeMode: "current" });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -3161,7 +3161,7 @@ describe("F-55 rules inspection UI", () => {
     };
     mockInspectRulesAtLocation.mockReturnValue([noMatchSection]);
 
-    mockAppState = makeReadyState({ activeMode: "rules", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
+    mockAppState = makeReadyState({ activeMode: "current", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");
@@ -3195,7 +3195,7 @@ describe("F-55 rules inspection UI", () => {
     };
     mockInspectRulesAtLocation.mockReturnValue([sectionWithNext]);
 
-    mockAppState = makeReadyState({ activeMode: "rules", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
+    mockAppState = makeReadyState({ activeMode: "current", rulesTime: { mode: "now", selectedTime: NOW_STABLE } });
     mockAppGetState.mockImplementation(() => mockAppState);
 
     const { initBrowserApp } = await import("../../app/main");

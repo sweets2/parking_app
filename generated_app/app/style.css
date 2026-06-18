@@ -1023,8 +1023,8 @@ html, body {
   }
 }
 
-/* ─── Rules controls panel ─────────────────────────────────── */
-#rules-controls {
+/* ─── Current controls panel ───────────────────────────────── */
+#current-controls {
   position: fixed;
   bottom: 56px;
   left: 0;
@@ -1096,7 +1096,7 @@ html, body {
 }
 
 @media (min-width: 768px) {
-  #rules-controls {
+  #current-controls {
     left: 50%;
     right: auto;
     transform: translateX(-50%);
@@ -1373,8 +1373,8 @@ html, body {
     flex-shrink: 0;
   }
 
-  /* Rules controls: static, full-width, no centering */
-  #rules-controls {
+  /* Current controls: static, full-width, no centering */
+  #current-controls {
     position: static;
     width: 100%;
     border-radius: 0;

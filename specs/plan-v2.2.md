@@ -1,4 +1,4 @@
-# Plan: v2.2 Feature Specs — Check / Rules / Alerts UX
+# Plan: v2.2 Feature Specs — Check / Current / Alerts UX
 
 ## Context
 
@@ -17,7 +17,7 @@ The app has three modes:
 | Mode   | User intent                                                 | Map click meaning                                                                                                                                   |
 | ------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Check  | "Where can I park for this duration?"                       | Select/evaluate a highlighted parking segment for the chosen duration. Do not save a spot.                                                          |
-| Rules  | "What are the exact rules for this road section right now?" | Drop an inspection dot, snap to the nearest side-specific segment, highlight that exact side/section, and show its rules below. Do not save a spot. |
+| Current | "What are the exact rules for this road section right now?" | Drop an inspection dot, snap to the nearest side-specific segment, highlight that exact side/section, and show its rules below. Do not save a spot. |
 | Alerts | "Remember where I parked so I can check it later."          | Save or move the watched parking spot.                                                                                                              |
 
 "Check" is preferred over "Find" in the UI because the core user action is checking whether parking is safe for a time window. Internal type names may remain `findQuery`, `findResults`, etc. if renaming them would create extra churn, but visible labels should use "Check."
@@ -45,7 +45,7 @@ Delete or supersede these old specs:
 * `specs/F-48.md` — Window Conflict Evaluator
 * `specs/F-49.md` — Parking Segment Catalog
 * `specs/F-50.md` — Side-Specific Check Result Renderer
-* `specs/F-51.md` — Rules Mode Inspector Panel
+* `specs/F-51.md` — Current Mode Inspector Panel
 * `specs/F-52.md` — Check Bottom Sheet
 * `specs/F-53.md` — Alerts / Saved Spot Panel Polish
 
@@ -72,7 +72,7 @@ Delete or supersede these old specs:
 | --------------------------- | ---------: | --------------------------------------------------------------- |
 | `shared/query-parser.ts`    |      F-46B | `createDurationQuery`, then F-47 adds `parseParkingQuery`       |
 | `shared/segment-catalog.ts` |       F-49 | Build/evaluate side-specific parking segments                   |
-| `shared/rules-inspector.ts` |       F-51 | Convert clicked segment into exact current rules for Rules mode |
+| `shared/rules-inspector.ts` |       F-51 | Convert clicked segment into exact current rules for Current mode |
 
 ---
 
@@ -82,7 +82,7 @@ Add or refine these types in `shared/types.ts`.
 
 ```ts
 // AppMode uses "check" as the canonical runtime string — visible UI label is also "Check"
-export type AppMode = "check" | "rules" | "alerts";
+export type AppMode = "check" | "current" | "alerts";
 
 export type ParkingStatus =
   | "safe"
@@ -222,17 +222,17 @@ Migration behavior:
 Mode switching:
 
 * Switching to Check:
-  * clear Rules inspection marker/highlight/panel state
+  * clear Current inspection marker/highlight/panel state
   * keep saved spot
   * show Check duration bar and Check result layers
-* Switching to Rules:
+* Switching to Current:
   * clear selected Check bottom sheet if needed
   * hide Check duration bar
-  * preserve Rules layer toggle states
+  * preserve Current layer toggle states
   * allow road-section inspection clicks
 * Switching to Alerts:
   * clear Check result selection
-  * clear Rules inspection marker/highlight
+  * clear Current inspection marker/highlight
   * show saved-spot panel
   * clicks save/move watched spot
 
@@ -242,7 +242,7 @@ Mode switching:
 
 All map clicks must go through a single dispatcher function in `main.ts`. Do not let F-46A, F-51, and F-53 each register their own `map.on("click")` handler — that would result in multiple conflicting handlers on the same event.
 
-Add this pattern in F-46A (or update it in F-51 as the rules handler is implemented):
+Add this pattern in F-46A (or update it in F-51 as the current handler is implemented):
 
 ```ts
 function handleMapClick(lat: number, lng: number): void {
@@ -251,7 +251,7 @@ function handleMapClick(lat: number, lng: number): void {
 
   if (state.activeTab === "check") {
     handleCheckClick(lat, lng);
-  } else if (state.activeTab === "rules") {
+  } else if (state.activeTab === "current") {
     handleRulesInspectionClick(lat, lng);
   } else if (state.activeTab === "alerts") {
     handleSaveSpotClick(lat, lng);
@@ -311,7 +311,7 @@ Washington Street is the canonical hard case. The following scenarios must have 
 3. `side === "Both"` → produces either a `Both` segment or two side-specific segments; either way no segment is silently dropped
 4. Short one-block segment (single cleaning entry) → one segment, correct ID
 5. Clicked point near West side → does not select East side segment
-6. Rules mode: second click replaces first `RulesInspection` result (previous marker and highlight are removed)
+6. Current mode: second click replaces first `RulesInspection` result (previous marker and highlight are removed)
 
 ---
 
@@ -366,7 +366,7 @@ If a dev override remains useful, it must be gated behind an explicit build-time
 
 **Add types to `shared/types.ts`** — `AppMode`, `ParkingStatus`, `ParkingSide`, `FindQuery`, `ParkingWindowConflict`, `SegmentGeometry`, `ParkingSegment`, `FindResultSegment`, `RulesInspection`.
 
-**Bottom navigation** — add a fixed bottom nav with three buttons: Check, Rules, Alerts. The active button reflects `state.activeTab`. Tapping a button calls a new `setActiveTab(tab: AppMode)` transition on the app.
+**Bottom navigation** — add a fixed bottom nav with three buttons: Check, Current, Alerts. The active button reflects `state.activeTab`. Tapping a button calls a new `setActiveTab(tab: AppMode)` transition on the app.
 
 **Central click dispatcher** — register exactly one `map.on("click")` handler that calls `handleMapClick(lat, lng)`. The three per-mode handlers (`handleCheckClick`, `handleRulesInspectionClick`, `handleSaveSpotClick`) are stubs in this feature; they gain real behavior in F-50, F-51, and this feature (alerts/save), respectively.
 
@@ -453,7 +453,7 @@ A simple drawer behind the hamburger button (☰ in the Check duration bar and/o
 
 Drawer content:
 
-* Links/buttons: Check, Rules, Alerts (switch tabs, close drawer)
+* Links/buttons: Check, Current, Alerts (switch tabs, close drawer)
 * Data freshness line
 
 Data freshness:
@@ -633,7 +633,7 @@ Must include:
 * `side === "Both"` → no segment silently dropped
 * Short one-block segment → correct ID
 * Clicked point near West side → does not select East side segment (if geometry is available)
-* Rules mode second click replaces first `RulesInspection` (test in `rules-inspector.test.ts`, referenced here as the canonical acceptance scenario)
+* Current mode second click replaces first `RulesInspection` (test in `rules-inspector.test.ts`, referenced here as the canonical acceptance scenario)
 
 ### Acceptance criteria
 
@@ -701,13 +701,13 @@ Clicking a Check result segment:
 ### Acceptance criteria
 
 * Clearing Check results removes all Check layers.
-* Rules layers and `_violationLayers` are unaffected by `clearFindResults()`.
+* Current mode layers and `_violationLayers` are unaffected by `clearFindResults()`.
 * Selecting a segment visually emphasizes only that segment.
 * Map click in Check mode does not create or move a saved spot.
 
 ---
 
-## F-51 — Rules Mode Inspector Panel
+## F-51 — Current Mode Inspector Panel
 
 ### Output files
 
@@ -722,20 +722,20 @@ Clicking a Check result segment:
 
 ### Requirements
 
-Rules mode is an inspection mode. It preserves the existing ability to click the map and inspect parking rules, but ties the result to a specific side/section using the segment catalog.
+Current mode is an inspection mode. It preserves the existing ability to click the map and inspect parking rules, but ties the result to a specific side/section using the segment catalog.
 
-### Rules mode click behavior
+### Current mode click behavior
 
 `handleRulesInspectionClick(lat, lng)` (stubbed in F-46A, implemented here):
 
 1. Drop or move a temporary inspection dot at the clicked location.
 2. Snap to the nearest side-specific `ParkingSegment` from `_segmentCatalog` when possible.
 3. Highlight the exact inspected side/section using `_rulesInspectionLayers`.
-4. Render a Rules panel below the map.
+4. Render a Current mode panel below the map.
 5. Each new click replaces the previous inspection (remove old dot, old highlight, update panel).
 6. Does not save or move the watched parking spot.
 
-### Rules panel content
+### Current mode panel content
 
 * Street name
 * Location / between-streets text
@@ -765,7 +765,7 @@ If the snap fails (no segment close enough), fall back to the existing nearby-si
 
 ### Layer toggles
 
-Move existing layer toggles (tow, upcoming, violation, garage, snow) into a panel visible only in Rules mode. Preserve toggle on/off state across mode switches using module-scope booleans.
+Move existing layer toggles (tow, upcoming, violation, garage, snow) into a panel visible only in Current mode. Preserve toggle on/off state across mode switches using module-scope booleans.
 
 ### Layer arrays
 
@@ -799,8 +799,8 @@ buildRulesInspection(
 
 ### Acceptance criteria
 
-* In Rules mode, each map click updates the inspected segment and replaces the previous marker/highlight.
-* Rules panel updates on each click.
+* In Current mode, each map click updates the inspected segment and replaces the previous marker/highlight.
+* Current mode panel updates on each click.
 * Click does not save a spot.
 * Existing layer toggles still work.
 * Toggle state survives mode switches.
@@ -838,7 +838,7 @@ Decision-first titles:
 
 Buttons:
 
-* `Full rules` → switches to Rules mode, calls `handleRulesInspectionClick` at the segment's centroid or nearest geometry point, so the Rules panel opens on the same segment
+* `Full rules` → switches to Current mode, calls `handleRulesInspectionClick` at the segment's centroid or nearest geometry point, so the Current mode panel opens on the same segment
 * `Save spot` → switches to Alerts mode, saves the clicked/selected location
 
 Avoid "Set alert" — the web app cannot promise background notification behavior.
@@ -846,7 +846,7 @@ Avoid "Set alert" — the web app cannot promise background notification behavio
 ### Acceptance criteria
 
 * Selecting a Check segment opens the correct bottom sheet state.
-* "Full rules" switches to Rules mode and triggers an inspection on the same segment.
+* "Full rules" switches to Current mode and triggers an inspection on the same segment.
 * "Save spot" switches to Alerts mode and saves the selected location.
 * Copy does not imply background push alerts.
 
@@ -902,12 +902,12 @@ After F-52 / F-53:
 2. Check mode shows green/red/yellow/gray segment highlights for the selected duration.
 3. Clicking a Check segment opens the Check bottom sheet with correct status title.
 4. Check click does not save a spot.
-5. Tapping Rules hides Check duration UI and shows Rules controls / layer toggles.
-6. In Rules mode, clicking a road section drops/moves an inspection dot.
-7. Rules mode highlights the inspected side/section and shows exact rules below.
+5. Tapping Current hides Check duration UI and shows Current controls / layer toggles.
+6. In Current mode, clicking a road section drops/moves an inspection dot.
+7. Current mode highlights the inspected side/section and shows exact rules below.
 8. Re-clicking another section replaces the previous inspection completely (old dot gone).
-9. Rules click does not save a spot.
-10. "Full rules" from Check switches to Rules and opens inspection on the same segment.
+9. Current mode click does not save a spot.
+10. "Full rules" from Check switches to Current and opens inspection on the same segment.
 11. "Save spot" from Check switches to Alerts and saves the selected location.
 12. In Alerts mode, clicking the map saves/moves the watched spot.
 13. Alerts copy does not promise background push notifications.

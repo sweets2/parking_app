@@ -1163,13 +1163,25 @@ function parseLocationBounds(
   const latSpread = Math.max(...lats) - Math.min(...lats);
   const lngSpread = Math.max(...lngs) - Math.min(...lngs);
 
+  function getBoundaryCoord(key: string, axis: "lat" | "lng"): number | null {
+    const k = key.replace(/^THE\s+/, "");
+    if (axis === "lat") {
+      if (/^NORTH(ERN)?\s+BOUNDARY$/.test(k)) return Math.max(...lats);
+      if (/^SOUTH(ERN)?\s+BOUNDARY$/.test(k)) return Math.min(...lats);
+    } else {
+      if (/^EAST(ERN)?\s+BOUNDARY$/.test(k)) return Math.max(...lngs);
+      if (/^WEST(ERN)?\s+BOUNDARY$/.test(k)) return Math.min(...lngs);
+    }
+    return null;
+  }
+
   const PAD = 0.0003;
   // N-S street: lat varies more → cross streets run E-W → find their lat
   // E-W street: lng varies more → cross streets run N-S → find their lng
   if (latSpread >= lngSpread) {
     const mainLng = medianOf(lngs);
-    const coordA = getCrossStreetCoord(fromKey, mainLng, "lng");
-    const coordB = getCrossStreetCoord(toKey,   mainLng, "lng");
+    const coordA = getCrossStreetCoord(fromKey, mainLng, "lng") ?? getBoundaryCoord(fromKey, "lat");
+    const coordB = getCrossStreetCoord(toKey,   mainLng, "lng") ?? getBoundaryCoord(toKey,   "lat");
     if (coordA !== null && coordB !== null) {
       return { axis: "lat", min: Math.min(coordA, coordB) - PAD, max: Math.max(coordA, coordB) + PAD };
     }
@@ -1178,8 +1190,8 @@ function parseLocationBounds(
     // to try E-W interpretation before giving up.
   }
   const mainLat = medianOf(lats);
-  const coordC = getCrossStreetCoord(fromKey, mainLat, "lat");
-  const coordD = getCrossStreetCoord(toKey,   mainLat, "lat");
+  const coordC = getCrossStreetCoord(fromKey, mainLat, "lat") ?? getBoundaryCoord(fromKey, "lng");
+  const coordD = getCrossStreetCoord(toKey,   mainLat, "lat") ?? getBoundaryCoord(toKey,   "lng");
   if (coordC === null || coordD === null) return null;
   return { axis: "lng", min: Math.min(coordC, coordD) - PAD, max: Math.max(coordC, coordD) + PAD };
 }

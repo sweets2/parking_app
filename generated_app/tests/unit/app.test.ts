@@ -132,12 +132,12 @@ describe("F-46D Initial state", () => {
     vi.clearAllMocks();
   });
 
-  it("Given app creation succeeds, When getState() is called, Then state.mode is 'ready' and state.activeMode is 'check'", () => {
+  it("Given app creation succeeds, When getState() is called, Then state.mode is 'ready' and state.activeMode is 'current'", () => {
     const { app } = makeApp();
     const state = app.getState();
     expect(state.mode).toBe("ready");
     if (state.mode === "ready") {
-      expect(state.activeMode).toBe("check");
+      expect(state.activeMode).toBe("current");
     }
   });
 
@@ -199,44 +199,48 @@ describe("F-46D Initial state", () => {
   });
 });
 
-describe("F-46D setActiveMode — check to rules", () => {
+describe("F-46D setActiveMode — check to current", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("Given the app is in ready/check mode (activeMode === 'check'), When setActiveMode('rules') is called, Then getState().activeMode is 'rules'", () => {
+  it("Given the app is in ready mode, When setActiveMode('current') is called, Then getState().activeMode is 'current'", () => {
     const { app } = makeApp();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     const state = app.getState();
     expect(state.mode).toBe("ready");
     if (state.mode === "ready") {
-      expect(state.activeMode).toBe("rules");
+      expect(state.activeMode).toBe("current");
     }
   });
 
-  it("Given the app is in ready/check mode, When setActiveMode('rules') is called, Then clearCheckResults was called exactly once", () => {
+  it("Given the app is in ready/check mode, When setActiveMode('current') is called, Then clearCheckResults was called exactly once", () => {
     const { app } = makeApp();
+    // App starts in "current"; switch to "check" first, then clear mocks before the real assertion
+    app.setActiveMode("check");
     mockClearCheckResults.mockClear();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     expect(mockClearCheckResults).toHaveBeenCalledTimes(1);
   });
 
-  it("Given the app is in ready/check mode, When setActiveMode('rules') is called, Then clearRulesInspection is not called", () => {
+  it("Given the app is in ready/check mode, When setActiveMode('current') is called, Then clearRulesInspection is not called", () => {
     const { app } = makeApp();
+    // App starts in "current"; switch to "check" first, then clear mocks before the real assertion
+    app.setActiveMode("check");
     mockClearRulesInspection.mockClear();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     expect(mockClearRulesInspection).not.toHaveBeenCalled();
   });
 });
 
-describe("F-46D setActiveMode — rules to check", () => {
+describe("F-46D setActiveMode — current to check", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("Given the app is in ready/rules mode (activeMode === 'rules'), When setActiveMode('check') is called, Then getState().activeMode is 'check'", () => {
+  it("Given the app is in ready/current mode (activeMode === 'current'), When setActiveMode('check') is called, Then getState().activeMode is 'check'", () => {
     const { app } = makeApp();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     app.setActiveMode("check");
     const state = app.getState();
     expect(state.mode).toBe("ready");
@@ -245,18 +249,18 @@ describe("F-46D setActiveMode — rules to check", () => {
     }
   });
 
-  it("Given the app is in ready/rules mode, When setActiveMode('check') is called, Then clearRulesInspection was called exactly once", () => {
+  it("Given the app is in ready/current mode, When setActiveMode('check') is called, Then clearRulesInspection was called exactly once", () => {
     const { app } = makeApp();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     mockClearRulesInspection.mockClear();
     mockClearCheckResults.mockClear();
     app.setActiveMode("check");
     expect(mockClearRulesInspection).toHaveBeenCalledTimes(1);
   });
 
-  it("Given the app is in ready/rules mode, When setActiveMode('check') is called, Then clearCheckResults is not called (only clearRulesInspection)", () => {
+  it("Given the app is in ready/current mode, When setActiveMode('check') is called, Then clearCheckResults is not called (only clearRulesInspection)", () => {
     const { app } = makeApp();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     mockClearCheckResults.mockClear();
     app.setActiveMode("check");
     expect(mockClearCheckResults).not.toHaveBeenCalled();
@@ -270,6 +274,8 @@ describe("F-46D setActiveMode no-op cases", () => {
 
   it("Given activeMode is 'check', When setActiveMode('check') is called again, Then clearCheckResults and clearRulesInspection are NOT called", () => {
     const { app } = makeApp();
+    // App starts in "current"; switch to "check" first, then clear mocks before no-op assertion
+    app.setActiveMode("check");
     mockClearCheckResults.mockClear();
     mockClearRulesInspection.mockClear();
     app.setActiveMode("check");
@@ -277,12 +283,12 @@ describe("F-46D setActiveMode no-op cases", () => {
     expect(mockClearRulesInspection).not.toHaveBeenCalled();
   });
 
-  it("Given activeMode is 'rules', When setActiveMode('rules') is called again, Then no clear functions are called", () => {
+  it("Given activeMode is 'current', When setActiveMode('current') is called again, Then no clear functions are called", () => {
     const { app } = makeApp();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     mockClearCheckResults.mockClear();
     mockClearRulesInspection.mockClear();
-    app.setActiveMode("rules");
+    app.setActiveMode("current");
     expect(mockClearCheckResults).not.toHaveBeenCalled();
     expect(mockClearRulesInspection).not.toHaveBeenCalled();
   });

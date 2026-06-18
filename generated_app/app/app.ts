@@ -81,7 +81,7 @@ export function createApp(
 
   let currentState: AppState = {
     mode: "ready",
-    activeMode: "check",
+    activeMode: "current",
     checkQuery: defaultCheckQuery,
     checkResults: [],
     selectedCheckSegment: null,
@@ -110,7 +110,7 @@ export function createApp(
       if (currentState.mode !== "ready") return;
       if (currentState.activeMode === mode) return;
 
-      if (mode === "rules") {
+      if (mode === "current") {
         // Switching to rules: clear check result layers
         clearCheckResults();
       } else {

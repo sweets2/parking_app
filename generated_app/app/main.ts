@@ -48,7 +48,7 @@ import {
 } from "./data-loader";
 import { wireLayerToggles } from "./layer-toggles";
 import { getCheckResults, wireCheckControls } from "./check-controller";
-import { renderRulesClickInspection, wireRulesControls } from "./rules-controller";
+import { renderRulesClickInspection, wireCurrentControls } from "./rules-controller";
 import {
   filterLoadTimeNoise,
   extractCrossStreets,
@@ -211,13 +211,13 @@ function renderState(state: AppState): void {
     // Update check-controls visibility based on activeMode
     const checkControls = document.getElementById("check-controls");
     if (checkControls !== null) {
-      checkControls.style.display = state.activeMode === "rules" ? "none" : "";
+      checkControls.style.display = state.activeMode === "current" ? "none" : "";
     }
 
-    // F-53: Update rules-controls visibility based on activeMode
-    const rulesControls = document.getElementById("rules-controls");
-    if (rulesControls !== null) {
-      rulesControls.style.display = state.activeMode === "rules" ? "" : "none";
+    // F-53: Update current-controls visibility based on activeMode
+    const currentControls = document.getElementById("current-controls");
+    if (currentControls !== null) {
+      currentControls.style.display = state.activeMode === "current" ? "" : "none";
     }
 
     // F-55: when switching to check mode, clear Rules inspection layers
@@ -239,7 +239,7 @@ function renderState(state: AppState): void {
 
     const queryBar = document.getElementById("query-bar");
     if (queryBar !== null) {
-      queryBar.style.display = state.activeMode === "rules" ? "none" : "";
+      queryBar.style.display = state.activeMode === "current" ? "none" : "";
     }
 
     const checkLegend = document.getElementById("check-legend");
@@ -411,7 +411,7 @@ export async function initBrowserApp(): Promise<void> {
     document.querySelectorAll<HTMLButtonElement>(".mode-nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const mode = btn.dataset.mode as AppMode | undefined;
-        if (mode === "check" || mode === "rules") {
+        if (mode === "check" || mode === "current") {
           app.setActiveMode(mode);
         }
       });
@@ -465,7 +465,7 @@ export async function initBrowserApp(): Promise<void> {
   }
 
   wireCheckControls(app);
-  wireRulesControls(app);
+  wireCurrentControls(app);
 
   // Wire the single map click handler — routes by activeMode.
   registerMapClickHandler((lat: number, lng: number) => {

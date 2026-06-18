@@ -36,12 +36,12 @@ export function renderRulesClickInspection(input: {
     .join("");
 
   setBottomSheetContent(html);
-  setBottomSheetMode("rules");
+  setBottomSheetMode("current");
   showBottomSheet();
   return sections;
 }
 
-export function wireRulesControls(app: App): void {
+export function wireCurrentControls(app: App): void {
   const rulesTimeNowBtn = document.getElementById("rules-time-now");
   const rulesTimeCustomBtn = document.getElementById("rules-time-custom");
   const rulesTimeInput = document.getElementById("rules-time-input") as HTMLInputElement | null;

@@ -82,7 +82,7 @@ export interface BusStop {
   lng: number;   // stop_lon
 }
 
-export type AppMode = "check" | "rules";
+export type AppMode = "check" | "current";
 
 export type ParkingStatus =
   | "safe"

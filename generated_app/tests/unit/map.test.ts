@@ -1713,7 +1713,7 @@ describe("F-34 violation highlights", () => {
       street: "Bloomfield Street",
       side: "Both",
       schedule: "Monday through Friday   3 pm – 5 pm",
-      location: "Observer Hwy. to north boundary",  // unparseable → null bounds → lat clip
+      location: "Observer Hwy. to north boundary",  // fallback lat clip because OBSERVER HWY geometry is absent
     };
     renderViolationHighlights([SAFE_CLEANING], NOW_STABLE);
     const L = (globalThis as Record<string, unknown>)["L"] as { polyline: ReturnType<typeof vi.fn> };
@@ -1724,6 +1724,194 @@ describe("F-34 violation highlights", () => {
         expect(lat).toBeGreaterThanOrEqual(40.728);
         expect(lat).toBeLessThanOrEqual(40.760);
       }
+    }
+  });
+});
+
+// ─── CF-18 boundary term location parsing ────────────────────────────────────
+
+describe("CF-18 boundary term location parsing", () => {
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  function renderedLatLngs(): [number, number][] {
+    const layers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["_isPolyline"] === true,
+    );
+    return layers.flatMap(
+      (l) => (l as unknown as { _options: { _latlngs: [number, number][] } })._options["_latlngs"],
+    );
+  }
+
+  it("GIVEN Jackson fallback with missing cross-street geometry, WHEN boundary location cannot be parsed precisely, THEN safe green fallback still renders", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "JACKSON ST": [
+        [[40.7367, -74.042], [40.741, -74.042]],
+        [[40.741, -74.042], [40.749, -74.042]],
+      ],
+    });
+    const entry: StreetCleaningEntry = {
+      street: "Jackson Street",
+      side: "East",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Newark St. to north boundary",
+    };
+
+    renderViolationHighlights([entry], new Date("2026-06-12T00:00:00.000Z"));
+
+    const greenLayers = mockMapInstance._layers.filter(
+      (l) => (l as unknown as { _options: Record<string, unknown> })._options["color"] === "#22c55e",
+    );
+    expect(greenLayers.length).toBeGreaterThan(0);
+  });
+
+  it("GIVEN N-S street with north boundary endpoint, WHEN rendered, THEN geometry is clipped from cross street to max latitude", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "JACKSON ST": [[[40.730, -74.035], [40.737, -74.035], [40.749, -74.035]]],
+      "NEWARK ST": [[[40.737, -74.038], [40.737, -74.032]]],
+    });
+    renderViolationHighlights([{
+      street: "Jackson Street",
+      side: "Both",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Newark St. to north boundary",
+    }], new Date("2026-06-12T00:00:00.000Z"));
+
+    const latlngs = renderedLatLngs();
+    expect(latlngs.length).toBeGreaterThan(0);
+    for (const [lat] of latlngs) {
+      expect(lat).toBeGreaterThanOrEqual(40.737 - 0.0003);
+      expect(lat).toBeLessThanOrEqual(40.749 + 0.0003);
+    }
+    expect(latlngs.some(([lat]) => lat < 40.735)).toBe(false);
+  });
+
+  it("GIVEN N-S street with south boundary endpoint, WHEN rendered, THEN geometry is clipped from min latitude to cross street", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "GROVE ST": [[[40.732, -74.035], [40.737, -74.035], [40.745, -74.035]]],
+      "NEWARK ST": [[[40.737, -74.038], [40.737, -74.032]]],
+    });
+    renderViolationHighlights([{
+      street: "Grove Street",
+      side: "Both",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Newark St. to south boundary",
+    }], new Date("2026-06-12T00:00:00.000Z"));
+
+    const latlngs = renderedLatLngs();
+    expect(latlngs.length).toBeGreaterThan(0);
+    for (const [lat] of latlngs) {
+      expect(lat).toBeGreaterThanOrEqual(40.732 - 0.0003);
+      expect(lat).toBeLessThanOrEqual(40.737 + 0.0003);
+    }
+    expect(latlngs.some(([lat]) => lat > 40.740)).toBe(false);
+  });
+
+  it("GIVEN E-W street with east boundary endpoint, WHEN rendered, THEN geometry is clipped from cross street to max longitude", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "9TH ST": [[[40.744, -74.040], [40.744, -74.033], [40.744, -74.025]]],
+      "WILLOW AVE": [[[40.742, -74.033], [40.746, -74.033]]],
+    });
+    renderViolationHighlights([{
+      street: "Ninth Street",
+      side: "Both",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Willow Ave. to east boundary",
+    }], new Date("2026-06-12T00:00:00.000Z"));
+
+    const latlngs = renderedLatLngs();
+    expect(latlngs.length).toBeGreaterThan(0);
+    for (const [, lng] of latlngs) {
+      expect(lng).toBeGreaterThanOrEqual(-74.033 - 0.0003);
+      expect(lng).toBeLessThanOrEqual(-74.025 + 0.0003);
+    }
+    expect(latlngs.some(([, lng]) => lng < -74.035)).toBe(false);
+  });
+
+  it("GIVEN E-W street with west boundary endpoint, WHEN rendered, THEN geometry is clipped from min longitude to cross street", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "6TH ST": [[[40.744, -74.040], [40.744, -74.033], [40.744, -74.025]]],
+      "WILLOW AVE": [[[40.742, -74.033], [40.746, -74.033]]],
+    });
+    renderViolationHighlights([{
+      street: "Sixth Street",
+      side: "Both",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Willow Ave. to west boundary",
+    }], new Date("2026-06-12T00:00:00.000Z"));
+
+    const latlngs = renderedLatLngs();
+    expect(latlngs.length).toBeGreaterThan(0);
+    for (const [, lng] of latlngs) {
+      expect(lng).toBeGreaterThanOrEqual(-74.040 - 0.0003);
+      expect(lng).toBeLessThanOrEqual(-74.033 + 0.0003);
+    }
+    expect(latlngs.some(([, lng]) => lng > -74.031)).toBe(false);
+  });
+
+  it("GIVEN THE prefix and northern/southern variants, WHEN rendered, THEN boundary terms normalize", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "HARRISON ST": [[[40.732, -74.035], [40.737, -74.035], [40.747, -74.035]]],
+      "5TH ST": [[[40.737, -74.038], [40.737, -74.032]]],
+    });
+    renderViolationHighlights([{
+      street: "Harrison Street",
+      side: "Both",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Fifth St. to the northern boundary",
+    }], new Date("2026-06-12T00:00:00.000Z"));
+
+    let latlngs = renderedLatLngs();
+    expect(latlngs.length).toBeGreaterThan(0);
+    expect(latlngs.some(([lat]) => lat < 40.735)).toBe(false);
+
+    renderViolationHighlights([{
+      street: "Harrison Street",
+      side: "Both",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Fifth St. to the southern boundary",
+    }], new Date("2026-06-12T00:00:00.000Z"));
+
+    latlngs = renderedLatLngs();
+    expect(latlngs.length).toBeGreaterThan(0);
+    expect(latlngs.some(([lat]) => lat > 40.740)).toBe(false);
+  });
+
+  it("GIVEN missing non-boundary endpoint, WHEN rendered, THEN fallback still clips to Hoboken latitude range", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } = await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "NEWARK ST": [
+        [[40.735, -74.040], [40.735, -74.030]],
+        [[40.765, -74.040], [40.765, -74.030]],
+      ],
+    });
+    renderViolationHighlights([{
+      street: "Newark Street",
+      side: "Both",
+      schedule: "Thursday   2 pm – 3 pm",
+      location: "Henderson St. to east boundary",
+    }], new Date("2026-06-12T00:00:00.000Z"));
+
+    const latlngs = renderedLatLngs();
+    expect(latlngs.length).toBeGreaterThan(0);
+    for (const [lat] of latlngs) {
+      expect(lat).toBeGreaterThanOrEqual(40.728);
+      expect(lat).toBeLessThanOrEqual(40.760);
     }
   });
 });
