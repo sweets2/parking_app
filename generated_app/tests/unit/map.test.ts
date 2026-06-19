@@ -3850,8 +3850,8 @@ describe("CF-25 cross-street segment interpolation", () => {
     const minLng = Math.min(...allLatlngs.map(([, lng]) => lng));
     const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
     expect(minLng).toBeLessThanOrEqual(-74.0347);
-    expect(maxLng).toBeGreaterThanOrEqual(-74.02435);
-    expect(maxLng).toBeLessThanOrEqual(-74.02405);
+    expect(maxLng).toBeGreaterThanOrEqual(-74.02415);
+    expect(maxLng).toBeLessThanOrEqual(-74.02395);
   });
 
   it("GIVEN 14th St north location ending at Hudson St, WHEN renderViolationHighlights runs, THEN it does not extend east to Sinatra Drive North", async () => {
@@ -3878,7 +3878,8 @@ describe("CF-25 cross-street segment interpolation", () => {
       .flatMap(call => call[0]);
     expect(allLatlngs.length).toBeGreaterThan(0);
     const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
-    expect(maxLng).toBeLessThanOrEqual(-74.0249);
+    expect(maxLng).toBeGreaterThanOrEqual(-74.0251);
+    expect(maxLng).toBeLessThanOrEqual(-74.0248);
   });
 
   it("GIVEN real 14th St geometry and north Hudson-to-Willow row, WHEN rendered, THEN it does not reach the Sinatra/Bernard end", async () => {
@@ -3912,7 +3913,8 @@ describe("CF-25 cross-street segment interpolation", () => {
       .flatMap(call => call[0]);
     expect(allLatlngs.length).toBeGreaterThan(0);
     const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
-    expect(maxLng).toBeLessThanOrEqual(-74.0249);
+    expect(maxLng).toBeGreaterThanOrEqual(-74.0251);
+    expect(maxLng).toBeLessThanOrEqual(-74.0248);
   });
 
   it(

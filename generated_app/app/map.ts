@@ -1104,9 +1104,9 @@ const LOCATION_RANGE_RE = /^(.+?)\s+to\s+(.+?)$/i;
 const LOCATION_CLIP_PAD_DEG = 0.0001;
 
 const INTERSECTION_COORD_OVERRIDES: Record<string, { lat?: number; lng?: number }> = {
-  "14TH ST|HUDSON ST": { lng: -74.0254485 },
+  "14TH ST|HUDSON ST": { lng: -74.0250105 },
   "14TH ST|SINATRA DR N": { lng: -74.0234977 },
-  "14TH ST|MIDWAY TO SINATRA DR N": { lng: -74.0242541 },
+  "14TH ST|MIDWAY TO SINATRA DR N": { lng: -74.02408 },
 };
 
 
