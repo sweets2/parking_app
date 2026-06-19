@@ -1674,9 +1674,9 @@ describe("F-34 violation highlights", () => {
       };
       expect(L.polyline.mock.calls.length).toBe(1);
       const latlngs = (L.polyline.mock.calls[0] as [[number, number][], unknown])[0];
-      // parseLocationBounds pads by 0.0003°: Monroe bound = -74.0411 - 0.0003 = -74.0414
-      // Interpolated entry should land at -74.0414, not the original -74.0416
-      expect(latlngs[0][1]).toBeCloseTo(-74.0414, 5);
+      // parseLocationBounds pads by LOCATION_CLIP_PAD_DEG=0.0001°: Monroe bound = -74.0411 - 0.0001 = -74.0412
+      // Interpolated entry should land at -74.0412, not the original -74.0416
+      expect(latlngs[0][1]).toBeCloseTo(-74.0412, 5);
       // Inside point is unchanged
       expect(latlngs[latlngs.length - 1][1]).toBeCloseTo(-74.0409, 5);
     },
@@ -3756,4 +3756,59 @@ describe("CF-19 real-data audit: numbered street cleaning contamination", () => 
     // Always pass — non-numbered leaks are warnings only
     expect(true).toBe(true);
   });
+});
+
+// ─── CF-25 cross-street segment interpolation ─────────────────────────────────
+
+describe("CF-25 cross-street segment interpolation", () => {
+  beforeEach(() => {
+    installLeafletMock();
+    vi.resetModules();
+  });
+
+  it(
+    "GIVEN Park Ave with location 'Observer Hwy. to Fourteenth St.' and diagonal 14th St geometry, " +
+    "WHEN renderViolationHighlights, " +
+    "THEN no rendered point overshoots 14th St — requires both segment interpolation and reduced PAD",
+    async () => {
+      const { initMap, initRoadGeometry, renderViolationHighlights } =
+        await import("../../app/map");
+      initMap();
+      initRoadGeometry({
+        // N-S main street extending past 14th St into 15th St territory
+        "PARK AVE": [[[40.734, -74.034], [40.748, -74.031], [40.754, -74.029], [40.757, -74.028]]],
+        // E-W southern boundary — horizontal so the south clip is exact
+        "OBSERVER HWY": [[[40.734, -74.032], [40.734, -74.027]]],
+        // 14th St: diagonal segment. Neither node sits at mainLng (-74.029).
+        // Node 1 (40.7543, -74.031) and node 2 (40.7537, -74.027) are equidistant
+        // from mainLng, so nearest-node snaps to node 1 (lat=40.7543).
+        // Segment crosses mainLng at t=0.5 → interpolated lat=40.7540.
+        //
+        // With nearest-node only + old PAD=0.0003: max=0.7543+0.0003=0.7546 → fails threshold
+        // With nearest-node only + new PAD=0.0001: max=0.7543+0.0001=0.7544 → still fails
+        // With interpolation   + new PAD=0.0001: max=0.7540+0.0001=0.7541 → passes threshold
+        "14TH ST": [[[40.7543, -74.031], [40.7537, -74.027]]],
+      });
+
+      renderViolationHighlights([{
+        street: "Park Ave.",
+        side: "East",
+        schedule: "Monday   1 pm – 2 pm",
+        location: "Observer Hwy. to Fourteenth St.",
+      }], new Date("2026-06-23T17:00:00.000Z")); // Monday 1 pm EDT = active
+
+      const L = (globalThis as Record<string, unknown>)["L"] as {
+        polyline: ReturnType<typeof vi.fn>;
+      };
+      // Each call is [pts, opts] where pts=[lat,lng][]. Flatten all pts arrays.
+      const allLatlngs = (L.polyline.mock.calls as [[number, number][], unknown][])
+        .flatMap(call => call[0]);
+      expect(allLatlngs.length).toBeGreaterThan(0);
+      // 40.754 + 0.00012 = 40.75412 — tight enough to catch the ~20 m overshoot bug
+      // (nearest-node+old-PAD clips at ~0.7546) while allowing the fix (~0.7541).
+      for (const [lat] of allLatlngs) {
+        expect(lat).toBeLessThanOrEqual(40.754 + 0.00012);
+      }
+    },
+  );
 });

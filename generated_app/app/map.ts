@@ -1097,6 +1097,12 @@ const ORDINAL_TO_NUMERIC: Record<string, string> = {
 
 const LOCATION_RANGE_RE = /^(.+?)\s+to\s+(.+?)$/i;
 
+// Small visual buffer past the exact cross-street crossing. With segment interpolation,
+// the crossing coordinate is accurate to ~1 m; 0.0001° (≈11 m) keeps the endpoint
+// visually connected to the cross street without overshooting.
+// TODO: remove when rendering switches to precomputed cleaning-segments.json arcs.
+const LOCATION_CLIP_PAD_DEG = 0.0001;
+
 
 function medianOf(arr: number[]): number {
   const s = [...arr].sort((a, b) => a - b);
@@ -1117,6 +1123,29 @@ function getCrossStreetCoord(
   let best: number | null = null;
   let bestDist = Infinity;
   for (const way of ways) {
+    // Segment-crossing pass: interpolate the exact returned coordinate where the
+    // cross-street segment crosses mainCoord on the query axis. A crossing has
+    // dist=0, which beats any nearest-node candidate. First valid crossing wins;
+    // subsequent crossings in the same way cannot improve bestDist=0.
+    for (let i = 1; i < way.length; i++) {
+      const prev = way[i - 1];
+      const curr = way[i];
+      if (prev === undefined || curr === undefined) continue;
+      const prevQuery = axis === "lat" ? prev[0] : prev[1];
+      const currQuery = axis === "lat" ? curr[0] : curr[1];
+      if (currQuery === prevQuery) continue;
+      if (mainCoord < Math.min(prevQuery, currQuery) || mainCoord > Math.max(prevQuery, currQuery)) continue;
+      const t = (mainCoord - prevQuery) / (currQuery - prevQuery);
+      const prevRet = axis === "lat" ? prev[1] : prev[0];
+      const currRet = axis === "lat" ? curr[1] : curr[0];
+      const interp = prevRet + t * (currRet - prevRet);
+      if (validRange !== undefined && (interp < validRange[0] || interp > validRange[1])) continue;
+      if (0 < bestDist) { bestDist = 0; best = interp; }
+      break;
+    }
+    // Nearest-node fallback: keeps existing behaviour for ways where no segment
+    // crosses mainCoord exactly. bestDist=0 after a crossing prevents any node
+    // from overwriting the interpolated result.
     for (const pt of way) {
       const returned = axis === "lat" ? pt[1] : pt[0];
       if (validRange !== undefined && (returned < validRange[0] || returned > validRange[1])) continue;
@@ -1169,12 +1198,11 @@ function parseLocationBounds(
     return null;
   }
 
-  const PAD = 0.0003;
-  // RANGE_PAD is intentionally much larger than PAD — it is a contamination filter,
-  // not a visual tolerance. Cross-street geometry from outside Hoboken can sit
-  // 0.005–0.01° outside the main street's own extent; genuine intersections are
-  // always within the main street's span, so a 0.003° pad covers rounding noise
-  // while still rejecting out-of-borough contamination.
+  // RANGE_PAD is intentionally much larger than LOCATION_CLIP_PAD_DEG — it is a
+  // contamination filter, not a visual tolerance. Cross-street geometry from outside
+  // Hoboken can sit 0.005–0.01° outside the main street's own extent; genuine
+  // intersections are always within the main street's span, so a 0.003° pad covers
+  // rounding noise while still rejecting out-of-borough contamination.
   const RANGE_PAD = 0.003;
   // N-S street: lat varies more → cross streets run E-W → find their lat
   // E-W street: lng varies more → cross streets run N-S → find their lng
@@ -1184,7 +1212,7 @@ function parseLocationBounds(
     const coordA = getCrossStreetCoord(fromKey, mainLng, "lng", latRange) ?? getBoundaryCoord(fromKey, "lat");
     const coordB = getCrossStreetCoord(toKey,   mainLng, "lng", latRange) ?? getBoundaryCoord(toKey,   "lat");
     if (coordA !== null && coordB !== null) {
-      return { axis: "lat", min: Math.min(coordA, coordB) - PAD, max: Math.max(coordA, coordB) + PAD };
+      return { axis: "lat", min: Math.min(coordA, coordB) - LOCATION_CLIP_PAD_DEG, max: Math.max(coordA, coordB) + LOCATION_CLIP_PAD_DEG };
     }
     // Either N-S cross-street lookup failed. JC Heights contamination can inflate
     // latSpread above lngSpread for E-W streets (confirmed for 2ND ST). Fall through
@@ -1195,7 +1223,7 @@ function parseLocationBounds(
   const coordC = getCrossStreetCoord(fromKey, mainLat, "lat", lngRange) ?? getBoundaryCoord(fromKey, "lng");
   const coordD = getCrossStreetCoord(toKey,   mainLat, "lat", lngRange) ?? getBoundaryCoord(toKey,   "lng");
   if (coordC === null || coordD === null) return null;
-  return { axis: "lng", min: Math.min(coordC, coordD) - PAD, max: Math.max(coordC, coordD) + PAD };
+  return { axis: "lng", min: Math.min(coordC, coordD) - LOCATION_CLIP_PAD_DEG, max: Math.max(coordC, coordD) + LOCATION_CLIP_PAD_DEG };
 }
 
 function resolveCheckCurbWays(street: string, location: string): [number, number][][] | null {
