@@ -3824,6 +3824,96 @@ describe("CF-25 cross-street segment interpolation", () => {
     expect(maxLng).toBeGreaterThanOrEqual(-74.0241);
   });
 
+  it("GIVEN 14th St south location ending at Sinatra Drive North, WHEN renderViolationHighlights runs, THEN it clips using SINATRA DR N geometry", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } =
+      await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "14TH ST": [[[40.7528, -74.0235], [40.7530, -74.0295], [40.7532, -74.0348]]],
+      "SINATRA DR N": [[[40.7521, -74.0234], [40.7528, -74.0235], [40.7538, -74.0241]]],
+      "WILLOW AVE": [[[40.7520, -74.0348], [40.7530, -74.0348], [40.7540, -74.0348]]],
+    });
+
+    renderViolationHighlights([{
+      street: "Fourteenth St.",
+      side: "South",
+      schedule: "Monday   8 am – 9 am",
+      location: "Willow Ave. to Sinatra Drive North",
+    }], new Date("2026-06-22T12:30:00.000Z")); // Monday 8:30 am EDT = active
+
+    const L = (globalThis as Record<string, unknown>)["L"] as {
+      polyline: ReturnType<typeof vi.fn>;
+    };
+    const allLatlngs = (L.polyline.mock.calls as [[number, number][], unknown][])
+      .flatMap(call => call[0]);
+    expect(allLatlngs.length).toBeGreaterThan(0);
+    const minLng = Math.min(...allLatlngs.map(([, lng]) => lng));
+    const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
+    expect(minLng).toBeLessThanOrEqual(-74.0347);
+    expect(maxLng).toBeGreaterThanOrEqual(-74.0241);
+  });
+
+  it("GIVEN 14th St north location ending at Hudson St, WHEN renderViolationHighlights runs, THEN it does not extend east to Sinatra Drive North", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } =
+      await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "14TH ST": [[[40.7528, -74.0235], [40.7530, -74.0250], [40.7530, -74.0295], [40.7532, -74.0348]]],
+      "HUDSON ST": [[[40.7520, -74.0252], [40.7530, -74.0250], [40.7540, -74.0248]]],
+      "WILLOW AVE": [[[40.7520, -74.0348], [40.7530, -74.0348], [40.7540, -74.0348]]],
+    });
+
+    renderViolationHighlights([{
+      street: "Fourteenth St.",
+      side: "North",
+      schedule: "Wednesday   8 am – 9 am",
+      location: "Hudson St. to Willow Ave.",
+    }], new Date("2026-06-24T12:30:00.000Z")); // Wednesday 8:30 am EDT = active
+
+    const L = (globalThis as Record<string, unknown>)["L"] as {
+      polyline: ReturnType<typeof vi.fn>;
+    };
+    const allLatlngs = (L.polyline.mock.calls as [[number, number][], unknown][])
+      .flatMap(call => call[0]);
+    expect(allLatlngs.length).toBeGreaterThan(0);
+    const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
+    expect(maxLng).toBeLessThanOrEqual(-74.0248);
+  });
+
+  it("GIVEN real 14th St geometry and north Hudson-to-Willow row, WHEN rendered, THEN it does not reach the Sinatra/Bernard end", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const geoPath = path.resolve("data/road-geometry.json");
+
+    let geoData: RoadGeometry;
+    try {
+      geoData = JSON.parse(fs.readFileSync(geoPath, "utf8")) as RoadGeometry;
+    } catch {
+      return;
+    }
+
+    const { initMap, initRoadGeometry, renderViolationHighlights } =
+      await import("../../app/map");
+    initMap();
+    initRoadGeometry(geoData);
+
+    renderViolationHighlights([{
+      street: "Fourteenth St.",
+      side: "North",
+      schedule: "Wednesday   8 am – 9 am",
+      location: "Hudson St. to Willow Ave.",
+    }], new Date("2026-06-24T12:30:00.000Z")); // Wednesday 8:30 am EDT = active
+
+    const L = (globalThis as Record<string, unknown>)["L"] as {
+      polyline: ReturnType<typeof vi.fn>;
+    };
+    const allLatlngs = (L.polyline.mock.calls as [[number, number][], unknown][])
+      .flatMap(call => call[0]);
+    expect(allLatlngs.length).toBeGreaterThan(0);
+    const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
+    expect(maxLng).toBeLessThanOrEqual(-74.0243);
+  });
+
   it(
     "GIVEN Park Ave with location 'Observer Hwy. to Fourteenth St.' and diagonal 14th St geometry, " +
     "WHEN renderViolationHighlights, " +

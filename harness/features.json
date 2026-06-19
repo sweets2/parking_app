@@ -963,7 +963,7 @@
   },
   {
     "id": "CF-26",
-    "name": "11th and 12th Street Sinatra Drive North Source Correction",
+    "name": "Side-Specific Sinatra Drive North Source Correction",
     "status": "DONE",
     "order": 45,
     "spec_file": "specs/v2/CF-26.md",

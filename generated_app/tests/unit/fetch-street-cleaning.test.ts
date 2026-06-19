@@ -163,6 +163,16 @@ const TWELFTH_NORTH_OVERRIDE: StreetCleaningEntryOverride = {
   reason: "Road geometry shows 12th St. reaches Sinatra Drive North.",
 };
 
+const FOURTEENTH_SOUTH_OVERRIDE: StreetCleaningEntryOverride = {
+  match: {
+    street: "Fourteenth St.",
+    side: "South",
+    location: "Willow Ave. to Hudson St.",
+  },
+  replace: { location: "Willow Ave. to Sinatra Drive North" },
+  reason: "Observed ground rules show 14th St. south reaches Sinatra Drive North.",
+};
+
 describe("applyStreetCleaningOverrides", () => {
   it("Test 1 — Monroe West (spelled-out ordinal) override is applied", () => {
     const entry: StreetCleaningEntry = {
@@ -266,5 +276,29 @@ describe("applyStreetCleaningOverrides", () => {
     const { entries, applied } = applyStreetCleaningOverrides([entry], [TWELFTH_NORTH_OVERRIDE]);
     expect(entries[0].location).toBe("Willow Ave. to Sinatra Drive North");
     expect(applied).toHaveLength(1);
+  });
+
+  it("applies the Fourteenth St south override through Sinatra Drive North", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Fourteenth St.",
+      side: "South",
+      schedule: "Monday   8 am – 9 am",
+      location: "Willow Ave. to Hudson St.",
+    };
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [FOURTEENTH_SOUTH_OVERRIDE]);
+    expect(entries[0].location).toBe("Willow Ave. to Sinatra Drive North");
+    expect(applied).toHaveLength(1);
+  });
+
+  it("leaves the Fourteenth St north Hudson-to-Willow row unchanged", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Fourteenth St.",
+      side: "North",
+      schedule: "Wednesday   8 am – 9 am",
+      location: "Hudson St. to Willow Ave.",
+    };
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [FOURTEENTH_SOUTH_OVERRIDE]);
+    expect(entries[0].location).toBe("Hudson St. to Willow Ave.");
+    expect(applied).toHaveLength(0);
   });
 });

@@ -64,5 +64,16 @@
       "location": "Willow Ave. to Sinatra Drive North"
     },
     "reason": "Road geometry shows 12th St. continues east from Hudson St. to Sinatra Drive North; Hoboken website currently lists Hudson St."
+  },
+  {
+    "match": {
+      "street": "Fourteenth St.",
+      "side": "South",
+      "location": "Willow Ave. to Hudson St."
+    },
+    "replace": {
+      "location": "Willow Ave. to Sinatra Drive North"
+    },
+    "reason": "Observed ground rules show the south side of 14th St. continues east from Hudson St. to Sinatra Drive North; Hoboken website currently lists Hudson St."
   }
 ]
