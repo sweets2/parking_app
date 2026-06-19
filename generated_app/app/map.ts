@@ -1103,6 +1103,12 @@ const LOCATION_RANGE_RE = /^(.+?)\s+to\s+(.+?)$/i;
 // TODO: remove when rendering switches to precomputed cleaning-segments.json arcs.
 const LOCATION_CLIP_PAD_DEG = 0.0001;
 
+const INTERSECTION_COORD_OVERRIDES: Record<string, { lat?: number; lng?: number }> = {
+  "14TH ST|HUDSON ST": { lng: -74.0250105 },
+  "14TH ST|SINATRA DR N": { lng: -74.0234977 },
+  "14TH ST|MIDWAY TO SINATRA DR N": { lng: -74.0242541 },
+};
+
 
 function medianOf(arr: number[]): number {
   const s = [...arr].sort((a, b) => a - b);
@@ -1206,11 +1212,17 @@ function parseLocationBounds(
   const RANGE_PAD = 0.003;
   // N-S street: lat varies more → cross streets run E-W → find their lat
   // E-W street: lng varies more → cross streets run N-S → find their lng
+  function getIntersectionOverrideCoord(key: string, axis: "lat" | "lng"): number | null {
+    const override = INTERSECTION_COORD_OVERRIDES[`${streetKey}|${key}`];
+    if (override === undefined) return null;
+    return axis === "lat" ? (override.lat ?? null) : (override.lng ?? null);
+  }
+
   if (latSpread >= lngSpread) {
     const mainLng = medianOf(lngs);
     const latRange: [number, number] = [Math.min(...lats) - RANGE_PAD, Math.max(...lats) + RANGE_PAD];
-    const coordA = getCrossStreetCoord(fromKey, mainLng, "lng", latRange) ?? getBoundaryCoord(fromKey, "lat");
-    const coordB = getCrossStreetCoord(toKey,   mainLng, "lng", latRange) ?? getBoundaryCoord(toKey,   "lat");
+    const coordA = getIntersectionOverrideCoord(fromKey, "lat") ?? getCrossStreetCoord(fromKey, mainLng, "lng", latRange) ?? getBoundaryCoord(fromKey, "lat");
+    const coordB = getIntersectionOverrideCoord(toKey,   "lat") ?? getCrossStreetCoord(toKey,   mainLng, "lng", latRange) ?? getBoundaryCoord(toKey,   "lat");
     if (coordA !== null && coordB !== null) {
       return { axis: "lat", min: Math.min(coordA, coordB) - LOCATION_CLIP_PAD_DEG, max: Math.max(coordA, coordB) + LOCATION_CLIP_PAD_DEG };
     }
@@ -1220,8 +1232,8 @@ function parseLocationBounds(
   }
   const mainLat = medianOf(lats);
   const lngRange: [number, number] = [Math.min(...lngs) - RANGE_PAD, Math.max(...lngs) + RANGE_PAD];
-  const coordC = getCrossStreetCoord(fromKey, mainLat, "lat", lngRange) ?? getBoundaryCoord(fromKey, "lng");
-  const coordD = getCrossStreetCoord(toKey,   mainLat, "lat", lngRange) ?? getBoundaryCoord(toKey,   "lng");
+  const coordC = getIntersectionOverrideCoord(fromKey, "lng") ?? getCrossStreetCoord(fromKey, mainLat, "lat", lngRange) ?? getBoundaryCoord(fromKey, "lng");
+  const coordD = getIntersectionOverrideCoord(toKey,   "lng") ?? getCrossStreetCoord(toKey,   mainLat, "lat", lngRange) ?? getBoundaryCoord(toKey,   "lng");
   if (coordC === null || coordD === null) return null;
   return { axis: "lng", min: Math.min(coordC, coordD) - LOCATION_CLIP_PAD_DEG, max: Math.max(coordC, coordD) + LOCATION_CLIP_PAD_DEG };
 }

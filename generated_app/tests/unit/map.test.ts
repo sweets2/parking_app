@@ -3824,7 +3824,7 @@ describe("CF-25 cross-street segment interpolation", () => {
     expect(maxLng).toBeGreaterThanOrEqual(-74.0241);
   });
 
-  it("GIVEN 14th St south location ending at Sinatra Drive North, WHEN renderViolationHighlights runs, THEN it clips using SINATRA DR N geometry", async () => {
+  it("GIVEN 14th St south location ending midway to Sinatra Drive North, WHEN renderViolationHighlights runs, THEN it stops before SINATRA DR N", async () => {
     const { initMap, initRoadGeometry, renderViolationHighlights } =
       await import("../../app/map");
     initMap();
@@ -3838,7 +3838,7 @@ describe("CF-25 cross-street segment interpolation", () => {
       street: "Fourteenth St.",
       side: "South",
       schedule: "Monday   8 am – 9 am",
-      location: "Willow Ave. to Sinatra Drive North",
+      location: "Willow Ave. to Midway to Sinatra Drive North",
     }], new Date("2026-06-22T12:30:00.000Z")); // Monday 8:30 am EDT = active
 
     const L = (globalThis as Record<string, unknown>)["L"] as {
@@ -3850,7 +3850,8 @@ describe("CF-25 cross-street segment interpolation", () => {
     const minLng = Math.min(...allLatlngs.map(([, lng]) => lng));
     const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
     expect(minLng).toBeLessThanOrEqual(-74.0347);
-    expect(maxLng).toBeGreaterThanOrEqual(-74.0241);
+    expect(maxLng).toBeGreaterThanOrEqual(-74.02435);
+    expect(maxLng).toBeLessThanOrEqual(-74.02405);
   });
 
   it("GIVEN 14th St north location ending at Hudson St, WHEN renderViolationHighlights runs, THEN it does not extend east to Sinatra Drive North", async () => {
@@ -3911,7 +3912,7 @@ describe("CF-25 cross-street segment interpolation", () => {
       .flatMap(call => call[0]);
     expect(allLatlngs.length).toBeGreaterThan(0);
     const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
-    expect(maxLng).toBeLessThanOrEqual(-74.0243);
+    expect(maxLng).toBeLessThanOrEqual(-74.0248);
   });
 
   it(

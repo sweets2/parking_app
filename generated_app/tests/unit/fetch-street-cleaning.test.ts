@@ -169,8 +169,8 @@ const FOURTEENTH_SOUTH_OVERRIDE: StreetCleaningEntryOverride = {
     side: "South",
     location: "Willow Ave. to Hudson St.",
   },
-  replace: { location: "Willow Ave. to Sinatra Drive North" },
-  reason: "Observed ground rules show 14th St. south reaches Sinatra Drive North.",
+  replace: { location: "Willow Ave. to Midway to Sinatra Drive North" },
+  reason: "Observed ground rules show 14th St. south reaches halfway to Sinatra Drive North.",
 };
 
 describe("applyStreetCleaningOverrides", () => {
@@ -286,7 +286,7 @@ describe("applyStreetCleaningOverrides", () => {
       location: "Willow Ave. to Hudson St.",
     };
     const { entries, applied } = applyStreetCleaningOverrides([entry], [FOURTEENTH_SOUTH_OVERRIDE]);
-    expect(entries[0].location).toBe("Willow Ave. to Sinatra Drive North");
+    expect(entries[0].location).toBe("Willow Ave. to Midway to Sinatra Drive North");
     expect(applied).toHaveLength(1);
   });
 
