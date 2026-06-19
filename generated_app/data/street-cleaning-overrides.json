@@ -1,0 +1,24 @@
+[
+  {
+    "match": {
+      "street": "Monroe St.",
+      "side": "West",
+      "location": "Eleventh St. to Newark St."
+    },
+    "replace": {
+      "location": "Twelfth St. to Newark St."
+    },
+    "reason": "Posted Monroe St. signs and road geometry show the Monday 1-2 pm cleaning zone extends to 12th St.; Hoboken website currently lists 11th St."
+  },
+  {
+    "match": {
+      "street": "Monroe St.",
+      "side": "East",
+      "location": "Eleventh St. to Newark St."
+    },
+    "replace": {
+      "location": "Twelfth St. to Newark St."
+    },
+    "reason": "Posted Monroe St. signs and road geometry show the Tuesday 1-2 pm cleaning zone extends to 12th St.; Hoboken website currently lists 11th St."
+  }
+]

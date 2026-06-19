@@ -1,7 +1,7 @@
 import * as nodePath from "path";
 import * as nodeFs from "fs";
 import { parse } from "node-html-parser";
-import type { StreetCleaningEntry, StreetCleaningData } from "../shared/types";
+import type { StreetCleaningEntry, StreetCleaningData, StreetCleaningEntryOverride } from "../shared/types";
 import type { FsBackend } from "./fetch";
 
 const SOURCE_URL =
@@ -134,6 +134,82 @@ export function parseCleaningHtml(html: string): StreetCleaningEntry[] {
   return entries;
 }
 
+/**
+ * Canonicalizes text for fuzzy matching. Handles spelled-out ordinals vs. numerics,
+ * missing periods, and "Street" vs. "St.".
+ */
+function normalizeOverrideText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/\bstreet\b/g, "st")
+    .replace(/\beleventh\b/g, "11th")
+    .replace(/\btwelfth\b/g, "12th")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Pure function — no logging, no I/O. Returns patched entries and log lines for the caller.
+ */
+export function applyStreetCleaningOverrides(
+  entries: StreetCleaningEntry[],
+  overrides: readonly StreetCleaningEntryOverride[]
+): { entries: StreetCleaningEntry[]; applied: string[] } {
+  const applied: string[] = [];
+  const patched: StreetCleaningEntry[] = [];
+
+  for (const entry of entries) {
+    const normStreet = normalizeOverrideText(entry.street);
+    const normSide = normalizeOverrideText(entry.side);
+    const normLocation = normalizeOverrideText(entry.location);
+
+    const matches = overrides.filter(
+      (ov) =>
+        normalizeOverrideText(ov.match.street) === normStreet &&
+        normalizeOverrideText(ov.match.side) === normSide &&
+        normalizeOverrideText(ov.match.location) === normLocation
+    );
+
+    if (matches.length === 0) {
+      patched.push(entry);
+    } else if (matches.length >= 2) {
+      throw new Error(
+        `Multiple overrides match ${entry.street} ${entry.side} "${entry.location}" - please remove the duplicate`
+      );
+    } else {
+      const ov = matches[0];
+      const oldLocation = entry.location;
+      const updated: StreetCleaningEntry = { ...entry, ...ov.replace };
+      patched.push(updated);
+      const newLocation = updated.location;
+      applied.push(
+        `[street-cleaning override] ${entry.street} ${entry.side}: "${oldLocation}" -> "${newLocation}"`
+      );
+    }
+  }
+
+  return { entries: patched, applied };
+}
+
+/**
+ * Reads and validates data/street-cleaning-overrides.json.
+ * Returns [] if the file does not exist.
+ * Throws if the file contains invalid JSON or if the parsed value is not an array.
+ */
+function loadStreetCleaningOverrides(
+  fs: FsBackend,
+  dataDir: string
+): StreetCleaningEntryOverride[] {
+  const p = nodePath.join(dataDir, "street-cleaning-overrides.json");
+  if (!fs.existsSync(p)) return [];
+  const parsed = JSON.parse(fs.readFileSync(p, "utf8")) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error("street-cleaning-overrides.json must contain an array");
+  }
+  return parsed as StreetCleaningEntryOverride[];
+}
+
 const realFs: FsBackend = {
   writeFileSync: (p, data) => nodeFs.writeFileSync(p, data, "utf8"),
   existsSync: (p) => nodeFs.existsSync(p),
@@ -156,10 +232,13 @@ export async function runScraper(fs: FsBackend = realFs): Promise<void> {
   const html = await response.text();
 
   const entries = parseCleaningHtml(html);
+  const overrides = loadStreetCleaningOverrides(fs, DATA_DIR);
+  const { entries: patched, applied } = applyStreetCleaningOverrides(entries, overrides);
+  for (const line of applied) console.log(line);
 
   const output: StreetCleaningData = {
     fetched_at: new Date().toISOString(),
-    entries,
+    entries: patched,
   };
 
   const json = JSON.stringify(output, null, 2);

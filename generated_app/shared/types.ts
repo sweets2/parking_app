@@ -53,6 +53,16 @@ export interface StreetCleaningData {
   entries:    StreetCleaningEntry[];
 }
 
+export interface StreetCleaningEntryOverride {
+  match: {
+    street: string;   // human-readable scraped value; matched after normalization
+    side: string;     // human-readable scraped value; matched after normalization
+    location: string; // human-readable scraped value; matched after normalization
+  };
+  replace: Partial<Pick<StreetCleaningEntry, "location" | "schedule">>;
+  reason: string;
+}
+
 export type RoadGeometry = Record<string, [number, number][][]>;
 
 export interface Garage {

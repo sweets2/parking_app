@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseCleaningHtml } from "../../fetcher/fetch-street-cleaning";
-import type { StreetCleaningEntry } from "../../shared/types";
+import { parseCleaningHtml, applyStreetCleaningOverrides } from "../../fetcher/fetch-street-cleaning";
+import type { StreetCleaningEntry, StreetCleaningEntryOverride } from "../../shared/types";
 
 // ---------------------------------------------------------------------------
 // Helpers: build minimal HTML fixture
@@ -116,5 +116,111 @@ describe("parseCleaningHtml", () => {
       expect(entry.street).not.toBe("HIDDEN");
       expect(entry.street).toBe("Adams St.");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyStreetCleaningOverrides tests
+// ---------------------------------------------------------------------------
+
+const MONROE_OVERRIDE_WEST: StreetCleaningEntryOverride = {
+  match: {
+    street: "Monroe St.",
+    side: "West",
+    location: "Eleventh St. to Newark St.",
+  },
+  replace: { location: "Twelfth St. to Newark St." },
+  reason: "Posted signs show 12th St.",
+};
+
+const MONROE_OVERRIDE_EAST: StreetCleaningEntryOverride = {
+  match: {
+    street: "Monroe St.",
+    side: "East",
+    location: "Eleventh St. to Newark St.",
+  },
+  replace: { location: "Twelfth St. to Newark St." },
+  reason: "Posted signs show 12th St.",
+};
+
+describe("applyStreetCleaningOverrides", () => {
+  it("Test 1 — Monroe West (spelled-out ordinal) override is applied", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Monroe St.",
+      side: "West",
+      schedule: "Monday   1 pm - 2 pm",
+      location: "Eleventh St. to Newark St.",
+    };
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [MONROE_OVERRIDE_WEST]);
+    expect(entries[0].location).toBe("Twelfth St. to Newark St.");
+    expect(applied.length).toBe(1);
+    expect(applied[0]).toContain("Twelfth St. to Newark St.");
+  });
+
+  it("Test 2 — Monroe East (spelled-out ordinal) override is applied", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Monroe St.",
+      side: "East",
+      schedule: "Tuesday   1 pm - 2 pm",
+      location: "Eleventh St. to Newark St.",
+    };
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [MONROE_OVERRIDE_EAST]);
+    expect(entries[0].location).toBe("Twelfth St. to Newark St.");
+    expect(applied.length).toBe(1);
+  });
+
+  it("Test 3 — numeric variant '11th St.' triggers the same override", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Monroe St.",
+      side: "West",
+      schedule: "Monday   1 pm - 2 pm",
+      location: "11th St. to Newark St.",
+    };
+    // Override uses spelled-out "Eleventh St. to Newark St."
+    const { entries } = applyStreetCleaningOverrides([entry], [MONROE_OVERRIDE_WEST]);
+    expect(entries[0].location).toBe("Twelfth St. to Newark St.");
+  });
+
+  it("Test 4 — idempotent when data already has the correct location", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Monroe St.",
+      side: "West",
+      schedule: "Monday   1 pm - 2 pm",
+      location: "Twelfth St. to Newark St.",
+    };
+    // Override matches "Eleventh St.", not "Twelfth St." — should not apply
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [MONROE_OVERRIDE_WEST]);
+    expect(applied.length).toBe(0);
+    expect(entries.length).toBe(1);
+    expect(entries[0].location).toBe("Twelfth St. to Newark St.");
+  });
+
+  it("Test 5 — non-Monroe entry with 'Eleventh St.' in location is untouched", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Adams St.",
+      side: "West",
+      schedule: "Monday   11 am – 12 pm",
+      location: "Eleventh St. to Newark St.",
+    };
+    // Monroe override won't match because street is "Adams St." not "Monroe St."
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [MONROE_OVERRIDE_WEST]);
+    expect(applied.length).toBe(0);
+    expect(entries[0].location).toBe("Eleventh St. to Newark St.");
+  });
+
+  it("Test 6 — duplicate overrides that both match the same entry throw", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Monroe St.",
+      side: "West",
+      schedule: "Monday   1 pm - 2 pm",
+      location: "Eleventh St. to Newark St.",
+    };
+    const dup: StreetCleaningEntryOverride = {
+      ...MONROE_OVERRIDE_WEST,
+      reason: "Duplicate override",
+    };
+    expect(() => applyStreetCleaningOverrides([entry], [MONROE_OVERRIDE_WEST, dup])).toThrow(
+      /remove the duplicate/
+    );
   });
 });

@@ -14,3 +14,4 @@ generated_app/app/sw.js
 !generated_app/data/street-parity.json
 !generated_app/data/cross-streets.json
 !generated_app/data/future.json
+!generated_app/data/street-cleaning-overrides.json

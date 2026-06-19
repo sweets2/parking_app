@@ -828,5 +828,118 @@
       "tests/unit/map.test.ts"
     ],
     "run_tests": true
+  },
+  {
+    "id": "CF-20",
+    "name": "Extract Shared Cleaning Geometry Utilities",
+    "status": "DONE",
+    "order": 39,
+    "spec_file": "specs/v2/CF-20.md",
+    "depends_on": [
+      "CF-19"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "shared/types.ts"
+    ],
+    "output_files": [
+      "shared/cleaning-geometry.ts",
+      "app/map.ts"
+    ],
+    "run_tests": true
+  },
+  {
+    "id": "CF-24",
+    "name": "Street-Cleaning Source Override",
+    "status": "DONE",
+    "order": 40,
+    "spec_file": "specs/v2/CF-24.md",
+    "depends_on": [
+      "CF-20"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "fetcher/fetch-street-cleaning.ts",
+      "tests/unit/fetch-street-cleaning.test.ts"
+    ],
+    "output_files": [
+      "shared/types.ts",
+      "fetcher/fetch-street-cleaning.ts",
+      "data/street-cleaning-overrides.json",
+      "tests/unit/fetch-street-cleaning.test.ts"
+    ],
+    "run_tests": true
+  },
+  {
+    "id": "CF-21",
+    "name": "Build-Time Cleaning Segment Generator",
+    "status": "TODO",
+    "order": 41,
+    "spec_file": "specs/v2/CF-21.md",
+    "depends_on": [
+      "CF-20",
+      "CF-24"
+    ],
+    "context_files": [
+      "shared/cleaning-geometry.ts",
+      "shared/types.ts",
+      "package.json"
+    ],
+    "output_files": [
+      "shared/types.ts",
+      "scripts/build-cleaning-segments.ts",
+      "data/cleaning-segment-overrides.json",
+      "tests/unit/build-cleaning-segments.test.ts",
+      "package.json"
+    ],
+    "run_tests": true,
+    "post_build_command": "npm run build-cleaning-segments"
+  },
+  {
+    "id": "CF-22",
+    "name": "Runtime Rendering from Precomputed Cleaning Segments",
+    "status": "TODO",
+    "order": 42,
+    "spec_file": "specs/v2/CF-22.md",
+    "depends_on": [
+      "CF-21"
+    ],
+    "context_files": [
+      "shared/types.ts",
+      "shared/cleaning-geometry.ts",
+      "app/map.ts",
+      "app/data-loader.ts",
+      "app/main.ts",
+      "tests/unit/map.test.ts",
+      "package.json"
+    ],
+    "output_files": [
+      "app/map.ts",
+      "app/data-loader.ts",
+      "app/main.ts",
+      "tests/unit/map.test.ts",
+      "package.json"
+    ],
+    "run_tests": true
+  },
+  {
+    "id": "CF-23",
+    "name": "Remove Old Runtime Geometry Inference",
+    "status": "TODO",
+    "order": 43,
+    "spec_file": "specs/v2/CF-23.md",
+    "depends_on": [
+      "CF-22"
+    ],
+    "context_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts",
+      "shared/cleaning-geometry.ts"
+    ],
+    "output_files": [
+      "app/map.ts",
+      "tests/unit/map.test.ts"
+    ],
+    "run_tests": true
   }
 ]
