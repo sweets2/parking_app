@@ -3878,7 +3878,7 @@ describe("CF-25 cross-street segment interpolation", () => {
       .flatMap(call => call[0]);
     expect(allLatlngs.length).toBeGreaterThan(0);
     const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
-    expect(maxLng).toBeLessThanOrEqual(-74.0248);
+    expect(maxLng).toBeLessThanOrEqual(-74.0249);
   });
 
   it("GIVEN real 14th St geometry and north Hudson-to-Willow row, WHEN rendered, THEN it does not reach the Sinatra/Bernard end", async () => {
@@ -3912,7 +3912,7 @@ describe("CF-25 cross-street segment interpolation", () => {
       .flatMap(call => call[0]);
     expect(allLatlngs.length).toBeGreaterThan(0);
     const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
-    expect(maxLng).toBeLessThanOrEqual(-74.0248);
+    expect(maxLng).toBeLessThanOrEqual(-74.0249);
   });
 
   it(
