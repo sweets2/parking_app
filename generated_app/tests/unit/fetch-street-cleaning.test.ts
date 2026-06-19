@@ -143,6 +143,26 @@ const MONROE_OVERRIDE_EAST: StreetCleaningEntryOverride = {
   reason: "Posted signs show 12th St.",
 };
 
+const ELEVENTH_NORTH_OVERRIDE: StreetCleaningEntryOverride = {
+  match: {
+    street: "Eleventh St.",
+    side: "North",
+    location: "Hudson St. to Willow Ave.",
+  },
+  replace: { location: "Sinatra Drive North to Willow Ave." },
+  reason: "Road geometry shows 11th St. reaches Sinatra Drive North.",
+};
+
+const TWELFTH_NORTH_OVERRIDE: StreetCleaningEntryOverride = {
+  match: {
+    street: "Twelfth St.",
+    side: "North",
+    location: "Willow Ave. to Hudson St.",
+  },
+  replace: { location: "Willow Ave. to Sinatra Drive North" },
+  reason: "Road geometry shows 12th St. reaches Sinatra Drive North.",
+};
+
 describe("applyStreetCleaningOverrides", () => {
   it("Test 1 — Monroe West (spelled-out ordinal) override is applied", () => {
     const entry: StreetCleaningEntry = {
@@ -222,5 +242,29 @@ describe("applyStreetCleaningOverrides", () => {
     expect(() => applyStreetCleaningOverrides([entry], [MONROE_OVERRIDE_WEST, dup])).toThrow(
       /remove the duplicate/
     );
+  });
+
+  it("applies the Eleventh St north override through Sinatra Drive North", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Eleventh St.",
+      side: "North",
+      schedule: "Tuesday   10 am – 11 am",
+      location: "Hudson St. to Willow Ave.",
+    };
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [ELEVENTH_NORTH_OVERRIDE]);
+    expect(entries[0].location).toBe("Sinatra Drive North to Willow Ave.");
+    expect(applied).toHaveLength(1);
+  });
+
+  it("applies the Twelfth St north override through Sinatra Drive North", () => {
+    const entry: StreetCleaningEntry = {
+      street: "Twelfth St.",
+      side: "North",
+      schedule: "Tuesday   10 am – 11 am",
+      location: "Willow Ave. to Hudson St.",
+    };
+    const { entries, applied } = applyStreetCleaningOverrides([entry], [TWELFTH_NORTH_OVERRIDE]);
+    expect(entries[0].location).toBe("Willow Ave. to Sinatra Drive North");
+    expect(applied).toHaveLength(1);
   });
 });

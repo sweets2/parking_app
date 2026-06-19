@@ -77,13 +77,13 @@
       "street": "Eleventh St.",
       "side": "North",
       "schedule": "Tuesday   10 am – 11 am",
-      "location": "Hudson St. to Willow Ave."
+      "location": "Sinatra Drive North to Willow Ave."
     },
     {
       "street": "Eleventh St.",
       "side": "South",
       "schedule": "Wednesday   2 pm – 3 pm",
-      "location": "Willow Ave. to Hudson St."
+      "location": "Willow Ave. to Sinatra Drive North"
     },
     {
       "street": "Eleventh St.",
@@ -647,13 +647,13 @@
       "street": "Twelfth St.",
       "side": "North",
       "schedule": "Tuesday   10 am – 11 am",
-      "location": "Willow Ave. to Hudson St."
+      "location": "Willow Ave. to Sinatra Drive North"
     },
     {
       "street": "Twelfth St.",
       "side": "South",
       "schedule": "Wednesday   2 pm – 3 pm",
-      "location": "Willow Ave. to Hudson St."
+      "location": "Willow Ave. to Sinatra Drive North"
     },
     {
       "street": "Twelfth St.",

@@ -50,6 +50,7 @@ const STATIC_COORDS: Record<string, { lat: number; lng: number }> = {
   "east boundary":         { lat: 40.7450, lng: -74.0190 },
   "west boundary":         { lat: 40.7450, lng: -74.0510 },
   "henderson street":      { lat: 40.7360, lng: -74.0365 },
+  "sinatra drive north":   { lat: 40.7494, lng: -74.0240 },
 };
 
 // In Hoboken, numbered streets (1st–19th) run east-west, as do Observer Hwy,

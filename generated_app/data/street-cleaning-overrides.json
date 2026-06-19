@@ -20,5 +20,49 @@
       "location": "Twelfth St. to Newark St."
     },
     "reason": "Posted Monroe St. signs and road geometry show the Tuesday 1-2 pm cleaning zone extends to 12th St.; Hoboken website currently lists 11th St."
+  },
+  {
+    "match": {
+      "street": "Eleventh St.",
+      "side": "North",
+      "location": "Hudson St. to Willow Ave."
+    },
+    "replace": {
+      "location": "Sinatra Drive North to Willow Ave."
+    },
+    "reason": "Road geometry shows 11th St. continues east from Hudson St. to Sinatra Drive North; Hoboken website currently lists Hudson St."
+  },
+  {
+    "match": {
+      "street": "Eleventh St.",
+      "side": "South",
+      "location": "Willow Ave. to Hudson St."
+    },
+    "replace": {
+      "location": "Willow Ave. to Sinatra Drive North"
+    },
+    "reason": "Road geometry shows 11th St. continues east from Hudson St. to Sinatra Drive North; Hoboken website currently lists Hudson St."
+  },
+  {
+    "match": {
+      "street": "Twelfth St.",
+      "side": "North",
+      "location": "Willow Ave. to Hudson St."
+    },
+    "replace": {
+      "location": "Willow Ave. to Sinatra Drive North"
+    },
+    "reason": "Road geometry shows 12th St. continues east from Hudson St. to Sinatra Drive North; Hoboken website currently lists Hudson St."
+  },
+  {
+    "match": {
+      "street": "Twelfth St.",
+      "side": "South",
+      "location": "Willow Ave. to Hudson St."
+    },
+    "replace": {
+      "location": "Willow Ave. to Sinatra Drive North"
+    },
+    "reason": "Road geometry shows 12th St. continues east from Hudson St. to Sinatra Drive North; Hoboken website currently lists Hudson St."
   }
 ]

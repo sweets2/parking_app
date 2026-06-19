@@ -243,6 +243,14 @@
     "lat": 40.7495479,
     "lng": -74.0254485
   },
+  "sinatra drive north": {
+    "lat": 40.7494,
+    "lng": -74.024
+  },
+  "11th street|sinatra drive north": {
+    "lat": 40.7495479,
+    "lng": -74.024
+  },
   "11th street|willow avenue": {
     "lat": 40.7495479,
     "lng": -74.0348108
@@ -626,6 +634,10 @@
   "12th street|hudson street": {
     "lat": 40.7507564,
     "lng": -74.0254485
+  },
+  "12th street|sinatra drive north": {
+    "lat": 40.7507564,
+    "lng": -74.024
   },
   "12th street|west boundary": {
     "lat": 40.745,

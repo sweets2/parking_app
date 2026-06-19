@@ -16,7 +16,7 @@ try {
 const REQUIRED_FIELDS = ['id', 'name', 'status', 'order', 'depends_on', 'context_files', 'output_files']
 
 const OUTPUT_ALLOWED_PREFIXES = [
-  'app/', 'api/', 'shared/', 'fetcher/', 'tests/', 'data/', '.github/',
+  'app/', 'api/', 'shared/', 'fetcher/', 'scripts/', 'tests/', 'data/', '.github/',
   'harness/', 'specs/', 'docs/',
 ]
 const OUTPUT_ALLOWED_EXACT = [
@@ -24,7 +24,7 @@ const OUTPUT_ALLOWED_EXACT = [
 ]
 
 const CONTEXT_ALLOWED_PREFIXES = [
-  'app/', 'api/', 'shared/', 'fetcher/', 'tests/', 'data/', '.github/',
+  'app/', 'api/', 'shared/', 'fetcher/', 'scripts/', 'tests/', 'data/', '.github/',
   'harness/', 'specs/', 'docs/',
 ]
 const CONTEXT_ALLOWED_EXACT = [

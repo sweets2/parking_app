@@ -30,6 +30,7 @@ export function normalizeToGeometryKey(name: string): string {
     .replace(/\bDRIVE\b/g, "DR")
     .replace(/\bROAD\b/g, "RD")
     .replace(/\bTERRACE\b/g, "TER")
+    .replace(/^SINATRA DR NORTH$/, "SINATRA DR N")
     .replace(/\b(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH|THIRTEENTH|FOURTEENTH|FIFTEENTH|SIXTEENTH)\b/g, m => ORDINAL_TO_NUMERIC[m] ?? m)
     .trim();
 }

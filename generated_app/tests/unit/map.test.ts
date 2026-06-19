@@ -3766,6 +3766,64 @@ describe("CF-25 cross-street segment interpolation", () => {
     vi.resetModules();
   });
 
+  it("GIVEN 11th St location ending at Sinatra Drive North, WHEN renderViolationHighlights runs, THEN it clips using SINATRA DR N geometry", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } =
+      await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "11TH ST": [[[40.7494, -74.0240], [40.7502, -74.0290], [40.7508, -74.0348]]],
+      "SINATRA DR N": [[[40.7488, -74.0242], [40.7494, -74.0240], [40.7502, -74.0239]]],
+      "WILLOW AVE": [[[40.7488, -74.0348], [40.7498, -74.0348], [40.7510, -74.0348]]],
+    });
+
+    renderViolationHighlights([{
+      street: "Eleventh St.",
+      side: "North",
+      schedule: "Tuesday   10 am – 11 am",
+      location: "Sinatra Drive North to Willow Ave.",
+    }], new Date("2026-06-23T14:30:00.000Z")); // Tuesday 10:30 am EDT = active
+
+    const L = (globalThis as Record<string, unknown>)["L"] as {
+      polyline: ReturnType<typeof vi.fn>;
+    };
+    const allLatlngs = (L.polyline.mock.calls as [[number, number][], unknown][])
+      .flatMap(call => call[0]);
+    expect(allLatlngs.length).toBeGreaterThan(0);
+    const minLng = Math.min(...allLatlngs.map(([, lng]) => lng));
+    const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
+    expect(minLng).toBeLessThanOrEqual(-74.0347);
+    expect(maxLng).toBeGreaterThanOrEqual(-74.0241);
+  });
+
+  it("GIVEN 12th St location ending at Sinatra Drive North, WHEN renderViolationHighlights runs, THEN it clips using SINATRA DR N geometry", async () => {
+    const { initMap, initRoadGeometry, renderViolationHighlights } =
+      await import("../../app/map");
+    initMap();
+    initRoadGeometry({
+      "12TH ST": [[[40.7506, -74.0239], [40.7517, -74.0303], [40.7525, -74.0360]]],
+      "SINATRA DR N": [[[40.7502, -74.0239], [40.7506, -74.0239], [40.7522, -74.0234]]],
+      "WILLOW AVE": [[[40.7500, -74.0348], [40.7516, -74.0348], [40.7530, -74.0348]]],
+    });
+
+    renderViolationHighlights([{
+      street: "Twelfth St.",
+      side: "North",
+      schedule: "Tuesday   10 am – 11 am",
+      location: "Willow Ave. to Sinatra Drive North",
+    }], new Date("2026-06-23T14:30:00.000Z")); // Tuesday 10:30 am EDT = active
+
+    const L = (globalThis as Record<string, unknown>)["L"] as {
+      polyline: ReturnType<typeof vi.fn>;
+    };
+    const allLatlngs = (L.polyline.mock.calls as [[number, number][], unknown][])
+      .flatMap(call => call[0]);
+    expect(allLatlngs.length).toBeGreaterThan(0);
+    const minLng = Math.min(...allLatlngs.map(([, lng]) => lng));
+    const maxLng = Math.max(...allLatlngs.map(([, lng]) => lng));
+    expect(minLng).toBeLessThanOrEqual(-74.0347);
+    expect(maxLng).toBeGreaterThanOrEqual(-74.0241);
+  });
+
   it(
     "GIVEN Park Ave with location 'Observer Hwy. to Fourteenth St.' and diagonal 14th St geometry, " +
     "WHEN renderViolationHighlights, " +

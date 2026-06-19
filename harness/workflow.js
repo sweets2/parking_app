@@ -113,6 +113,7 @@ const GENERATED_PREFIXES = [
   'api/',
   'shared/',
   'fetcher/',
+  'scripts/',
   'tests/',
   'data/',
   '.github/',
